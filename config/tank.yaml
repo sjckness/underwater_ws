@@ -72,9 +72,10 @@ leak:
   pockmark_depth: 0.015
 
 plume:                          # integral buoyant-jet model (top-hat) for the liquid flow the bubbles ride on
-  entrainment_coeff: 0.08       # alpha; 0.05 (jet) .. 0.1 (bubble plume)
+  entrainment_coeff: 0.08       # alpha, Gaussian convention (as papers quote it); 0.05 (jet) .. 0.1 (bubble plume)
   jet_radius0: 0.004            # liquid jet radius where the model starts (after the gas expansion zone) [m]
-  turbulence: 0.25              # velocity fluctuation std / local centreline velocity
+  turbulence: 0.425             # velocity fluctuation std / local centreline velocity; sets the bubble cloud width.
+                                # Calibrated: bubble cloud 0.80-0.84 of the liquid plume width (Milgram 1983: 0.8-0.85)
   meander_amp: 0.3              # centreline wander / local width
   meander_time_s: 3.0
   wobble: true                  # zigzag / helical path oscillation of bubbles > 1.8 mm
@@ -115,7 +116,8 @@ sonar:
   display_db: [-6.0, 54.0]      # dB window above the noise floor mapped to 0..255
   ringdown_m: 0.08              # transducer ring-down band at near range
   multipath: [surface, walls]   # specular image paths: surface (pressure release), walls (Z of the wall material)
-  scatterer_spacing: 0.002      # surface sampling [m] for the acoustic scatterers (fixed in the world: frozen speckle)
+  scatterer_spacing: 0.002      # surface sampling [m] for the acoustic scatterers (fixed in the world: frozen speckle);
+                                # the base: scatterer_spacing_mode adaptive (profile) coarsens it far from the sonar
 
 camera:
   enabled: true

@@ -6,11 +6,17 @@ sampled on the true surface with exact normals, finer than the render/occlusion 
 """
 from __future__ import annotations
 
+import hashlib
+import json
+import os
 from dataclasses import dataclass, field
 
 import numpy as np
 
-from .config import get
+from .config import WS, ConfigError, get, sonar_mode
+
+CACHE_DIR = os.path.join(WS, "output", "cache")
+SCATTERER_CACHE_VERSION = 1         # bump when the sampling changes, so stale caches are not reused
 
 
 @dataclass
@@ -374,12 +380,53 @@ class Scatterers:
     material_names: list[str]
 
 
-def sample_scatterers(scene: Scene, spacing: float, rng: np.random.Generator,
-                      wall_spacing_factor: float = 2.0) -> Scatterers:
-    """Points on every surface the sound can reach, ~``spacing`` apart, with exact normals and areas.
+WALL_SPACING_FACTOR = 2.0          # walls are sampled at least this much coarser (they are mostly specular)
+SCATTERERS_PER_CELL = 9.0          # adaptive spacing: about 3 x 3 scatterers per sonar resolution cell
+PATCH = 0.1                        # [m] sand patches and mesh triangles share one spacing at this scale
 
-    Sand: jittered grid on the analytic height field. Meshes: area-uniform samples on the triangles.
-    Walls: only between the sand and the water surface, coarser (they are mostly specular).
+
+@dataclass
+class Spacing:
+    """Scatterer spacing rule. Fixed: ``base`` everywhere. Adaptive: at slant range R from the sonar,
+    max(base, sqrt(R dtheta dr / per_cell)), i.e. about ``per_cell`` scatterers per resolution cell (R dtheta wide,
+    dr deep) once that is coarser than ``base``. Walls never finer than ``wall_min``."""
+    base: float
+    wall_min: float
+    adaptive: bool = False
+    sonar: tuple | None = None      # acoustic centre [m]
+    dtheta: float = 0.0             # horizontal beam width [rad]
+    dr: float = 0.0                 # range resolution [m]
+    per_cell: float = SCATTERERS_PER_CELL
+
+    def at(self, p: np.ndarray, wall: bool = False) -> np.ndarray:
+        s = np.full(len(p), self.base)
+        if self.adaptive:
+            r = np.linalg.norm(np.asarray(p, float) - np.asarray(self.sonar, float), axis=1)
+            s = np.maximum(s, np.sqrt(r * self.dtheta * self.dr / self.per_cell))
+        return np.maximum(s, self.wall_min) if wall else s
+
+
+def spacing_from_config(cfg: dict) -> Spacing:
+    """``sonar.scatterer_spacing`` (base) and ``sonar.scatterer_spacing_mode`` (fixed | adaptive, from the profile);
+    the adaptive rule uses the sonar position and the active mode's beam width and range resolution."""
+    base = float(get(cfg, "sonar.scatterer_spacing"))
+    mode = get(cfg, "sonar.scatterer_spacing_mode")
+    if mode == "fixed":
+        return Spacing(base=base, wall_min=WALL_SPACING_FACTOR * base)
+    if mode != "adaptive":
+        raise ConfigError(f"sonar.scatterer_spacing_mode must be fixed or adaptive, got {mode!r}")
+    son = sonar_mode(cfg)
+    return Spacing(base=base, wall_min=WALL_SPACING_FACTOR * base, adaptive=True,
+                   sonar=tuple(float(v) for v in son["position"]), dtheta=float(np.radians(son["beamwidth_h_deg"])),
+                   dr=float(son["range_resolution"]))
+
+
+def sample_scatterers(scene: Scene, spacing: Spacing, rng: np.random.Generator) -> Scatterers:
+    """Points on every surface the sound can reach, with exact normals and the area each one stands for.
+
+    Sand: jittered grid on the analytic height field, one spacing per ~10 cm patch. Meshes: triangles subdivided
+    to <= 10 cm, random points with density 1/spacing^2 and area weight spacing^2 (total areas kept, unbiased).
+    Walls: only their inner faces between the sand and the water surface.
     """
     names: list[str] = []
     out_p, out_n, out_a, out_m = [], [], [], []
@@ -390,16 +437,12 @@ def sample_scatterers(scene: Scene, spacing: float, rng: np.random.Generator,
         return names.index(name)
 
     L, W, _ = scene.size
-    # sand
-    nx, ny = int(L / spacing), int(W / spacing)
-    gx, gy = np.meshgrid((np.arange(nx) + 0.5) * spacing, (np.arange(ny) + 0.5) * spacing, indexing="ij")
-    x = (gx + rng.uniform(-0.5, 0.5, gx.shape) * spacing).ravel()
-    y = (gy + rng.uniform(-0.5, 0.5, gy.shape) * spacing).ravel()
+    x, y, cell = _sand_grid(scene, spacing, rng)
     chunks = np.array_split(np.arange(len(x)), max(1, len(x) // 400000))
     for idx in chunks:
         h, g = scene.sand.height_grad(x[idx], y[idx])
         n = np.stack([-g[:, 0], -g[:, 1], np.ones(len(idx))], 1)
-        dA = spacing * spacing * np.linalg.norm(n, axis=1)
+        dA = cell[idx] * np.linalg.norm(n, axis=1)
         n /= np.linalg.norm(n, axis=1, keepdims=True)
         out_p.append(np.stack([x[idx], y[idx], h], 1))
         out_n.append(n)
@@ -409,16 +452,22 @@ def sample_scatterers(scene: Scene, spacing: float, rng: np.random.Generator,
     for m in scene.meshes:
         if m.role == "sand":
             continue
-        sp = spacing * (wall_spacing_factor if m.role == "wall" else 1.0)
-        p, n, a = _sample_triangles(m.points.astype(float), m.faces, sp, rng)
-        if m.role == "wall":
+        wall = m.role == "wall"
+        tri = m.points.astype(float)[m.faces]
+        if wall:   # only the inner faces: vertical, inside the tank, normal pointing into it
+            nrm = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+            cen = tri.mean(1)
+            c = np.array([L / 2, W / 2])
+            inside = ((cen[:, 0] >= -1e-6) & (cen[:, 0] <= L + 1e-6) & (cen[:, 1] >= -1e-6)
+                      & (cen[:, 1] <= W + 1e-6))
+            facing = np.einsum("ij,ij->i", nrm[:, :2], c[None, :] - cen[:, :2]) > 0
+            tri = tri[inside & facing & (np.abs(nrm[:, 2]) < 0.5 * np.linalg.norm(nrm, axis=1))]
+            if len(tri) == 0:       # the floor slab: all under the sand
+                continue
+        p, n, a = _sample_triangles(_subdivide(tri, PATCH), spacing, wall, rng)
+        if wall:
             keep = (p[:, 2] < scene.water_level) & (p[:, 2] > scene.sand.height(
                 np.clip(p[:, 0], 0, L), np.clip(p[:, 1], 0, W)) - 0.01)
-            inside = (p[:, 0] >= -1e-6) & (p[:, 0] <= L + 1e-6) & (p[:, 1] >= -1e-6) & (p[:, 1] <= W + 1e-6)
-            # only the inner faces of the walls: normal pointing into the tank
-            c = np.array([L / 2, W / 2])
-            facing = np.einsum("ij,ij->i", n[:, :2], c[None, :] - p[:, :2]) > 0
-            keep &= inside & facing & (np.abs(n[:, 2]) < 0.5)
             p, n, a = p[keep], n[keep], a[keep]
         else:   # drop the parts buried in the sand (they are behind the sand surface anyway)
             keep = p[:, 2] > scene.sand.height(np.clip(p[:, 0], 0, L), np.clip(p[:, 1], 0, W)) - 0.005
@@ -440,16 +489,83 @@ def sample_scatterers(scene: Scene, spacing: float, rng: np.random.Generator,
                       phase=rng.uniform(0, 2 * np.pi, len(pos)).astype(np.float32), material_names=names)
 
 
-def _sample_triangles(pts, faces, spacing, rng):
-    a, b, c = pts[faces[:, 0]], pts[faces[:, 1]], pts[faces[:, 2]]
+def _sand_grid(scene: Scene, spacing: Spacing, rng: np.random.Generator):
+    """x, y and cell area of a jittered grid over the tank floor; each ~PATCH patch has its own spacing."""
+    L, W, _ = scene.size
+    nx, ny = max(1, round(L / PATCH)), max(1, round(W / PATCH))
+    px, py = L / nx, W / ny
+    cx, cy = np.meshgrid((np.arange(nx) + 0.5) * px, (np.arange(ny) + 0.5) * py, indexing="ij")
+    cx, cy = cx.ravel(), cy.ravel()
+    s = spacing.at(np.stack([cx, cy, scene.sand.height(cx, cy)], 1))
+    mx = np.maximum(1, np.round(px / s)).astype(int)
+    my = np.maximum(1, np.round(py / s)).astype(int)
+    xs, ys, cell = [], [], []
+    for i in range(len(cx)):
+        ix, iy = np.meshgrid(np.arange(mx[i]), np.arange(my[i]), indexing="ij")
+        n = mx[i] * my[i]
+        xs.append(cx[i] - px / 2 + (ix.ravel() + rng.uniform(size=n)) * (px / mx[i]))
+        ys.append(cy[i] - py / 2 + (iy.ravel() + rng.uniform(size=n)) * (py / my[i]))
+        cell.append(np.full(n, px * py / n))
+    return np.concatenate(xs), np.concatenate(ys), np.concatenate(cell)
+
+
+def _subdivide(tri: np.ndarray, max_edge: float) -> np.ndarray:
+    """Split triangles (M, 3, 3) at the midpoint of their longest edge until no edge exceeds ``max_edge``."""
+    done = []
+    while len(tri):
+        e = np.linalg.norm(tri[:, [1, 2, 0]] - tri, axis=2)     # edges 0-1, 1-2, 2-0
+        k = np.argmax(e, 1)
+        big = e[np.arange(len(tri)), k] > max_edge
+        done.append(tri[~big])
+        t, k = tri[big], k[big]
+        t = np.take_along_axis(t, np.stack([k, (k + 1) % 3, (k + 2) % 3], 1)[:, :, None], 1)  # longest edge 0-1
+        mid = 0.5 * (t[:, 0] + t[:, 1])
+        tri = np.concatenate([np.stack([t[:, 0], mid, t[:, 2]], 1), np.stack([mid, t[:, 1], t[:, 2]], 1)])
+    return np.concatenate(done)
+
+
+def _sample_triangles(tri: np.ndarray, spacing: Spacing, wall: bool, rng: np.random.Generator):
+    a, b, c = tri[:, 0], tri[:, 1], tri[:, 2]
     cr = np.cross(b - a, c - a)
     area = 0.5 * np.linalg.norm(cr, axis=1)
     nrm = cr / np.maximum(2 * area, 1e-12)[:, None]
-    total = area.sum()
-    n = max(1, int(total / (spacing * spacing)))
-    tri = rng.choice(len(faces), size=n, p=area / total)
+    s = spacing.at(tri.mean(1), wall)
+    # area / s^2 points per triangle, rounded up or down at random so that the expected count is exact; each point
+    # stands for s^2, so the total area is kept without bias (and with less noise than drawing triangles at random)
+    count = np.floor(area / (s * s) + rng.uniform(size=len(tri))).astype(int)
+    k = np.repeat(np.arange(len(tri)), count)
+    n = len(k)
     u, v = rng.uniform(size=n), rng.uniform(size=n)
     flip = u + v > 1
     u[flip], v[flip] = 1 - u[flip], 1 - v[flip]
-    p = a[tri] + u[:, None] * (b[tri] - a[tri]) + v[:, None] * (c[tri] - a[tri])
-    return p, nrm[tri], np.full(n, total / n)
+    p = a[k] + u[:, None] * (b[k] - a[k]) + v[:, None] * (c[k] - a[k])
+    return p, nrm[k], s[k] ** 2
+
+
+def _cache_key(cfg: dict, spacing: Spacing) -> str:
+    leak = get(cfg, "leak")
+    inputs = {"version": SCATTERER_CACHE_VERSION, "seed": cfg["seed"],
+              **{k: get(cfg, k) for k in ("tank", "sand", "rocks", "pipe")},
+              "leak": {k: leak[k] for k in ("enabled", "position_along", "clock_deg", "vents", "vent_spread",
+                                            "pockmark_radius", "pockmark_depth")},
+              "spacing": spacing.__dict__}
+    return hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def scatterers(cfg: dict, scene: Scene | None = None, cache_dir: str = CACHE_DIR) -> Scatterers:
+    """The scatterers for ``cfg``: read from ``cache_dir`` when the same geometry and spacing were sampled before,
+    else sampled and cached there (npz keyed by a hash of the geometry and spacing inputs)."""
+    spacing = spacing_from_config(cfg)
+    path = os.path.join(cache_dir, f"scatterers_{_cache_key(cfg, spacing)}.npz")
+    if os.path.isfile(path):
+        with np.load(path) as z:
+            return Scatterers(pos=z["pos"], normal=z["normal"], area=z["area"], mat=z["mat"], phase=z["phase"],
+                              material_names=[str(s) for s in z["material_names"]])
+    scene = scene if scene is not None else build_scene(cfg)
+    sc = sample_scatterers(scene, spacing, np.random.default_rng([int(cfg["seed"]), 2]))
+    os.makedirs(cache_dir, exist_ok=True)
+    tmp = f"{path[:-4]}.{os.getpid()}.tmp.npz"
+    np.savez(tmp, pos=sc.pos, normal=sc.normal, area=sc.area, mat=sc.mat, phase=sc.phase,
+             material_names=np.array(sc.material_names))
+    os.replace(tmp, path)
+    return sc

@@ -18,6 +18,8 @@ for `~/isaac_ws`; this repo never builds or pulls it), through `scripts/uw.sh`:
 
 On the host, `pytest` runs the same tests without Warp (pure Python/numpy); the Warp tests are skipped there.
 
+Tools (run with `uw.sh py`): `tools/plume_preview.py` simulates the bubble plume for both pipe presets and writes side/top views, centreline profiles against the literature and a stats file. What the models were checked against, and where they disagree: [docs/validation.md](docs/validation.md).
+
 The first `uw.sh test` installs pytest 7.4.4 (the host's version) into `~/.cache/uw_pydeps`, which needs network
 once; the image has no pytest.
 
@@ -49,10 +51,10 @@ in every case; `docker ps -a --filter name=uw-` should list nothing after a run.
 
 ## Where things go
 
-- `output/`: everything the tools write (previews, datasets); not in git.
+- `output/`: everything the tools write; not in git. `output/plume_preview/<preset>/`: plume previews;
+  `output/cache/`: acoustic scatterers, one npz per geometry + spacing (rebuilt automatically when those change).
 - `~/.cache/uw_warp`: Warp kernel cache (not `~/.cache/isaac-sim/cache`, which is root-owned).
 - `~/.cache/uw_pydeps`: pytest for the container.
-- Scatterer caches (`*.npz`) are regenerated from the config; not in git.
 
 The container runs as your user (plus the image's `isaac-sim` group, to read `/isaac-sim`), so all of these
 stay owned by you.

@@ -37,8 +37,8 @@ Bigger is not automatically more realistic, and it does not remove the need for 
 | `tank` (default) | 3×3×3 m | Matches typical lab test tanks; near-field regime; fastest |
 | `basin` | 8×5×4 m | Ranges beyond the ~5 m Fraunhofer distance (far-field check), longer plume rise, less wall clutter |
 
-- Plume: deeper water lets the jet→plume transition and centreline meander develop; at 3 m depth the plume is dominated by the near-source jet. That is the main physical argument for `basin`.
-- Cost: at fixed 2 mm spacing, `basin` would need ~20 M+ scatterers (too much for 8 GB). So spacing becomes **adaptive**: per surface patch, spacing = min(2 mm, cell/3), where the resolution cell at range R is ≈ R·Δθ × 4 mm, so each cell keeps several scatterers (needed for fully developed speckle). Near the sonar it stays 2 mm; far away it grows. Areas are rescaled so the backscattered energy is unchanged.
+- Plume: deeper water lets the jet→plume transition and centreline meander develop; at 3 m depth (z/D ≤ 0.7) the plume never reaches the slip-dominated far field. That is the main physical argument for `basin`.
+- Cost: at fixed 2 mm spacing, `basin` would need ~20 M+ scatterers (too much for 8 GB). So spacing becomes **adaptive**: per surface patch, spacing = max(2 mm, sqrt(R·Δθ·Δr/9)), where the resolution cell at range R is ≈ R·Δθ × Δr (Δr ≈ 4 mm), so each cell keeps about 3 × 3 scatterers (needed for fully developed speckle). Near the sonar it stays 2 mm; far away it grows. Areas are rescaled so the backscattered energy is unchanged.
 - Rule: develop and validate on `tank`; add `basin` at M2 once adaptive spacing passes the speckle test.
 
 ## Hardware profiles
@@ -73,7 +73,7 @@ A single geometry source (numpy) feeds two consumers:
   config/tank.yaml          all parameters (+ presets: exposed, buried; tank, basin); --set a.b=c overrides
   docker/compose.yaml       same image, host net, nvidia runtime, mounts ~/underwater_ws, Warp cache ~/.cache/uw_warp
   scripts/uw.sh             host wrapper: `uw.sh sim [--gui]`, `uw.sh sonar-only`, `uw.sh py tools/x.py`, `uw.sh test`
-  uw/config.py  water.py  geometry.py  bubbles.py  scattering.py  sonar.py  camera_uw.py  usd_scene.py  ros_bridge.py  recorder.py  main.py
+  uw/config.py  water.py  plume.py  geometry.py  bubbles.py  scattering.py  sonar.py  camera_uw.py  usd_scene.py  ros_bridge.py  recorder.py  main.py
   ros/sonar_relay/          host-side Jazzy node: Image+meta -> marine_acoustic_msgs/ProjectedSonarImage
   tools/                    plume_preview.py, sonar_preview.py, compare_real.py, sweep.py
   tests/                    pure-numpy tests on the host (pytest); Warp tests via uw.sh test
@@ -146,7 +146,7 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
 - **Host pytest (pure numpy)**:
   - water properties against reference values (ρ = 1025.9 at 15 °C/35 psu, c ≈ 1506.7 m/s, α(750 kHz) ≈ 0.23 dB/m);
   - choked-flow example;
-  - Fan–Tsuchiya against the Clift contaminated curve (1 mm ≈ 0.14, 3 mm ≈ 0.23 m/s);
+  - Fan–Tsuchiya against the contaminated-bubble correlation of Grace et al. (1976), in Clift et al. (1978): 1 mm ≈ 0.12, 3 mm ≈ 0.25 m/s (FT: +20 % at 1 mm, −8 % at 3 mm);
   - pure-plume integral against the MTT similarity solution (u ∝ z^−1/3, b ∝ z);
   - bubble scattering: approximation vs Anderson modal series for ka ∈ [0.1, 20] (σ_bs within 1–2 dB on average, ka≫1 limit → a²/4, σ_ext → 2πa²);
   - sand gradient against finite differences (already 1e-9);
