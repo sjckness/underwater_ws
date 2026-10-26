@@ -1,0 +1,88 @@
+# Dataset sweep v0.2 (tools/sweep.py): every randomised parameter and its distribution. The dataset card
+# (README.md in the dataset root) is written from this file.
+# Distributions: [lo, hi] uniform; {log: [lo, hi]} log-uniform; {int: [lo, hi]} integer, both ends included;
+# {choice: {value: weight, ...}} weighted choice; {tank: ..., basin: ...} per size preset.
+# Changes from v0.1 (its sanity check): fixed views mostly aimed at the leak (v0.1 missed it in 19 % of the leak
+# scenarios), the sonar on any wall and the leak at a distance from it (v0.1: 1.5-2.3 m only), three views per scene
+# (the scene setup was 60-90 % of the time), 25 % distractors, common-mode receiver noise in half of the scenarios.
+name: v0.2
+seed: 20261027                  # the sampler's seed: the same file gives the same scenarios
+scenarios: 400
+pings: 90                       # per scenario, at sonar.ping_rate_hz (10 Hz: 9 s of sim time); fixed: 30 per view
+workers: 2                      # parallel sonar-only processes (linus: 1-2)
+splits: {train: 0.70, val: 0.15, test: 0.15}   # by scenario, stratified by kind, pipe preset and flow decade
+
+kind: {choice: {leak: 0.60, negative: 0.15, distractor: 0.25}}
+# negative: no leak; distractor: no leak, but more rocks and pipe glints (extra flanges, a smoother coating)
+
+presets:
+  size: {choice: {tank: 0.70, basin: 0.30}}
+  pipe: {choice: {exposed: 0.6, buried: 0.4}}
+  leak: {choice: {pinhole: 0.35, crack: 0.40, rupture: 0.25}}   # leak scenarios only
+
+leak:
+  flow_lpm: {log: preset}                 # log-uniform in the leak preset's flow_range_lpm (0.1-500 L/min overall)
+  profile: {choice: {constant: 0.6, ramp: 0.2, intermittent: 0.2}}
+  ramp_s: [2.0, 6.0]                      # ramp: from 0 at the first ping (no warm-up) to full flow
+  period_s: [2.0, 8.0]                    # intermittent: on for duty of each period, random phase
+  duty: [0.3, 0.7]
+  pipe_pressure_bar: {log: [1.5, 10.0]}   # sets the jet (the hole is solved for the flow)
+  clock_deg_exposed: [-80.0, 80.0]        # hole direction around the pipe, 0 = top
+  clock_deg_buried: [-60.0, 60.0]
+  position_margin_m: 0.4                  # position along the pipe: uniform, this far from the walls
+  cover_buried_m: [0.02, 0.15]            # sand over the crown (buried)
+  crown_out_exposed_m: [0.04, 0.16]       # how far the crown sticks out of the sand (exposed)
+
+sonar:
+  mobile: {choice: {fixed: 0.85, mobile: 0.15}}
+  mode: {choice: {lf: 0.7, hf: 0.3}}
+  focus: {choice: {true: 0.7, false: 0.3}}
+  noise_level_db: [46.0, 60.0]
+  speckle_sigma_rad: [0.0, 0.3]
+  speckle_time_s: [0.5, 5.0]
+  common_noise:                           # sonar.receiver_noise_common_db: a stripe at bearing 0 (an Oculus M1200d
+    share: 0.5                            #   shows +3.4 to +10 dB, docs/validation.md); in this share of the
+    db: [-20.0, -10.0]                    #   scenarios, else off. -20..-10 dB: +3 to +11 dB at broadside (LF)
+  placement:                              # where the sonar and the leak are (fixed and mobile scenarios)
+    wall: {choice: {x0: 0.55, x1: 0.15, y0: 0.15, y1: 0.15}}   # the sonar's pole; x walls look across the pipe,
+                                          #   y walls along it (the pipe runs along y)
+    leak_from_wall_m: {tank: [1.0, 2.5], basin: [2.5, 7.0]}    # the leak's distance from that wall (pipe x for an
+                                          #   x wall, leak position along the pipe for a y wall; capped by the margins)
+    pipe_margin_m: 0.5                    # pipe axis at least this far from the x walls
+    standoff_m: [0.1, 0.4]                # the sonar's distance from its wall
+    lateral_m: {tank: [-0.5, 0.5], basin: [-1.0, 1.0]}         # its sideways offset from the leak
+    z_m: {tank: [0.8, 1.6], basin: [0.8, 2.2]}
+  fixed:                                  # fixed views (static cache on_motion: recomputed at each new view)
+    poses: 3                              # views of one scene, pings / poses each, all from the same wall
+    aim: 0.8                              # share of views aimed at the leak; the rest: random pitch and yaw
+    aim_height_m: [0.0, 0.6]              # aim point above the hole (or the vents)
+    aim_bearing_frac: 0.8                 # where the aim point lands: uniform in +- this share of the half fan
+    aim_elevation_frac: 0.6               #   and of the half vertical aperture
+    pitch_deg: [10.0, 45.0]               # random views
+    yaw_deg: [-30.0, 30.0]                #   from the wall's inward direction
+    roll_deg: {choice: {0: 0.85, 90: 0.15}}
+  trajectory:                             # mobile: static cache none
+    preset: {choice: {approach: 0.4, orbit: 0.3, hover: 0.2, lawnmower: 0.1}}
+    speed: [0.05, 0.25]
+    height: {tank: [0.6, 1.6], basin: [0.6, 2.2]}
+    bearing_offset_deg: [-60.0, 60.0]     # approach: from the sonar's wall (seen from the leak) +- this
+    start_distance: {tank: [1.2, 2.5], basin: [2.0, 5.0]}
+    end_distance: [0.5, 1.0]
+    radius: {tank: [0.6, 1.2], basin: [1.0, 2.5]}             # orbit
+    start_deg: [0.0, 360.0]
+    direction: {choice: {1: 0.5, -1: 0.5}}
+    drift_m: [0.005, 0.03]                # hover (at the placed position)
+    drift_yaw_deg: [0.5, 4.0]
+    lanes: {int: [3, 5]}                  # lawnmower
+
+scene:
+  wall_rms_height_m: {log: [0.0002, 0.002]}    # each wall
+  wall_lining: 0.1                              # probability per wall
+  sand_ripple_amp: [0.0, 0.012]
+  sand_ripple_wavelength: [0.06, 0.2]
+  sand_ripple_heading_deg: [0.0, 180.0]
+  sand_undulation_amp: [0.0, 0.04]
+  rocks_count: {int: [0, 20]}
+  distractor_rocks_count: {int: [25, 40]}
+  distractor_extra_flanges: {int: [2, 4]}
+  distractor_steel_rms_height_m: 0.00001

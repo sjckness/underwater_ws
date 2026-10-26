@@ -84,3 +84,39 @@ def test_adaptive_spacing_follows_the_trajectory():
     assert s.at(probe)[0] <= fixed.at(probe)[0]
     assert s.at(probe)[0] == pytest.approx(geometry.Spacing(**{**s.__dict__, "sonar": tuple(end)}).at(probe)[0],
                                            rel=1e-3)
+
+
+@pytest.mark.parametrize("roll", [0.0, 90.0, 35.0])
+def test_aim_puts_the_target_where_asked(roll):
+    """aim() gives the pitch and yaw that put a world point at a chosen bearing and elevation, for any roll (where a
+    pitch can: a target too steep for its bearing is skipped here)."""
+    rng = np.random.default_rng(int(roll))
+    done = 0
+    for _ in range(300):
+        p, t = rng.uniform(0, 3, 3), rng.uniform(0, 3, 3)
+        b, e = rng.uniform(-60, 60), rng.uniform(-10, 10)
+        d = (t - p) / np.linalg.norm(t - p)
+        v = geometry.rot_rpy_deg([roll, 0, 0]) @ np.array([math.cos(math.radians(e)) * math.cos(math.radians(b)),
+                                                           -math.cos(math.radians(e)) * math.sin(math.radians(b)),
+                                                           math.sin(math.radians(e))])
+        if abs(d[2]) > math.hypot(v[0], v[2]) - 1e-3:
+            continue
+        pitch, yaw = pose.aim(p, t, roll, b, e)
+        r, bb, ee = pose.in_sonar_frame(p, geometry.rot_rpy_deg([roll, pitch, yaw]), t)
+        assert (bb, ee, r) == pytest.approx((b, e, np.linalg.norm(t - p)), abs=1e-9)
+        done += 1
+    assert done > 200
+    assert pose.aim([0.1, 1.5, 1.0], [1.6, 1.5, 0.4], 0.0)[0] == pytest.approx(math.degrees(math.atan2(0.6, 1.5)))
+
+
+def test_poses_hold_each_view_then_jump():
+    views = [{"position": [0.2, 1.0 + 0.5 * i, 1.2], "roll_deg": 0.0, "pitch_deg": 20.0 + i, "yaw_deg": 5.0 * i}
+             for i in range(3)]
+    cfg = config.load(overrides=["sonar.pose_source=trajectory", "sonar.static_cache=on_motion",
+                                 "sonar.trajectory.preset=poses", "sonar.trajectory.hold_s=3.0",
+                                 "sonar.trajectory.poses=" + str(views).replace("'", "")])
+    sp = pose.sensor_pose(cfg)
+    dt = 0.1
+    seen = [int(round(sp.at((i + 1) * dt).rpy_deg[1] - 20.0)) for i in range(95)]   # ping i at (i + 1) dt
+    assert seen == [0] * 30 + [1] * 30 + [2] * 35                                      # the last view is kept
+    assert sp.positions().shape == (3, 3) and sp.moving

@@ -51,6 +51,67 @@ def test_splits_by_scenario_and_stratified(sampled, tmp_path):
     assert [s["overrides"] for s in again] == [s["overrides"] for s in scenarios]   # deterministic
 
 
+@pytest.fixture(scope="module")
+def sampled_v02(tmp_path_factory):
+    sw = yaml.safe_load((WS / "config" / "sweeps" / "v0.2.yaml").read_text())
+    sw["scenarios"] = 60
+    return sw, sweep.sample(sw, tmp_path_factory.mktemp("sweep02"))
+
+
+def test_v02_places_the_sonar_on_a_wall_and_the_leak_at_a_distance(sampled_v02):
+    sw, scenarios = sampled_v02
+    pl = sw["sonar"]["placement"]
+    walls = set()
+    for sc in scenarios:
+        cfg = config.load(presets=sc["presets"], overrides=sc["overrides"])
+        config.sonar_mode(cfg)
+        L, W, _ = config.get(cfg, "tank.size")
+        size, wall = sc["params"]["size"], sc["params"]["wall"]
+        walls.add(wall)
+        px, along = config.get(cfg, "pipe.x"), config.get(cfg, "leak.position_along")
+        assert pl["pipe_margin_m"] - 1e-9 <= px <= L - pl["pipe_margin_m"] + 1e-9
+        assert 0.4 - 1e-9 <= along <= W - 0.4 + 1e-9
+        d = {"x0": px, "x1": L - px, "y0": along, "y1": W - along}[wall]
+        lo, hi = pl["leak_from_wall_m"][size]
+        assert d <= hi + 1e-9 and (d >= lo - 1e-9 or d == pytest.approx(min(lo, L - pl["pipe_margin_m"], W - 0.4)))
+        son = config.get(cfg, "sonar")
+        views = sc["params"].get("views", [])
+        for p in [son["position"]] + [v["position"] for v in views]:
+            assert 0 < p[0] < L and 0 < p[1] < W and 0.6 <= p[2] <= 2.2
+        if sc["params"]["motion"] == "mobile":
+            assert son["pose_source"] == "trajectory" and son["static_cache"] == "none"
+        else:
+            n = sw["sonar"]["fixed"]["poses"]
+            tc = son["trajectory"]
+            assert son["pose_source"] == "trajectory" and tc["preset"] == "poses" and len(tc["poses"]) == n
+            assert son["static_cache"] == "on_motion" and tc["hold_s"] * n * son["ping_rate_hz"] == sw["pings"]
+    assert walls == {"x0", "x1", "y0", "y1"}
+
+
+def test_v02_aimed_views_put_the_aim_point_inside_the_fan(sampled_v02):
+    from uw import geometry, pose
+    sw, scenarios = sampled_v02
+    aimed = 0
+    for sc in scenarios:
+        if "views" not in sc["params"]:
+            continue
+        cfg = config.load(presets=sc["presets"], overrides=sc["overrides"] + ["leak.enabled=true"])
+        mode = config.sonar_mode(cfg)
+        target = pose.leak_target(geometry.build_scene(cfg, full=False))
+        sp = pose.sensor_pose(cfg)
+        per = sw["pings"] // len(sc["params"]["views"])
+        for k, v in enumerate(sc["params"]["views"]):
+            q = sp.at((k * per + 1) / config.get(cfg, "sonar.ping_rate_hz"))       # the view's first ping
+            if not v["aimed"]:
+                continue
+            aimed += 1
+            _, b, e = pose.in_sonar_frame(q.position, q.rot, target + [0.0, 0.0, v["aim"]["height_m"]])
+            assert (b, e) == pytest.approx((v["aim"]["bearing_deg"], v["aim"]["elevation_deg"]), abs=0.05)
+            assert abs(b) <= mode["fov_h_deg"] / 2 and abs(e) <= mode["fov_v_deg"] / 2
+    n = sum(len(sc["params"].get("views", [])) for sc in scenarios)
+    assert aimed == pytest.approx(sw["sonar"]["fixed"]["aim"] * n, abs=0.12 * n)
+
+
 def _fake_dataset(root: Path):
     rng = np.random.default_rng(0)
     rows = []

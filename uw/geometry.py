@@ -306,7 +306,9 @@ def rpy_deg_of(rot) -> np.ndarray:
 
 # -------------------------------------------------------------------------------------------- scene
 
-def build_scene(cfg: dict) -> Scene:
+def build_scene(cfg: dict, full: bool = True) -> Scene:
+    """The scene of ``cfg``. ``full`` False: the sand, the pipe axis and the leak only, no meshes (fast: where the
+    leak is, e.g. to aim a sonar at it; the same as in the full scene)."""
     rng = np.random.default_rng(int(cfg["seed"]))
     size = np.asarray(get(cfg, "tank.size"), float)
     wl = float(get(cfg, "tank.water_level"))
@@ -345,6 +347,8 @@ def build_scene(cfg: dict) -> Scene:
                                        float(lc["pockmark_depth"]) * rng.uniform(0.6, 1.2)))
             vents = np.array([[vx, vy, sand.height(vx, vy)] for vx, vy in vxy])
         leak = Leak(hole=hole, direction=d, buried=buried, vents=vents)
+    if not full:
+        return Scene(size=size, water_level=wl, meshes=[], sand=sand, pipe_axis=pipe_axis, leak=leak)
 
     meshes: list[Mesh] = []
     t = float(get(cfg, "tank.wall_thickness"))

@@ -56,6 +56,8 @@ def load(root: Path):
             leak = m.get("leak") or {}
             pings.append({"scenario": sc["id"], "kind": sc["kind"], "split": sc["split"], "stem": f.stem,
                           "mode": m["sonar"]["mode"], "pose_source": m["sonar"]["pose_source"],
+                          "motion": sc.get("params", {}).get("motion")          # fixed views: pose_source poses
+                          or ("fixed" if m["sonar"]["pose_source"] == "fixed" else "mobile"),
                           "roll": m["sonar"]["roll_deg"], "pitch": m["sonar"]["pitch_deg"],
                           "yaw": m["sonar"]["yaw_deg"], "x": m["sonar"]["position"][0], "y": m["sonar"]["position"][1],
                           "z": m["sonar"]["position"][2], "flow": leak.get("flow_lpm", 0.0) if leak else 0.0,
@@ -120,8 +122,8 @@ def overview(path: Path, manifest: dict, pings: list) -> None:
     ax[0, 2].hist([p["flow"] for p in lp if p["flow"] > 0], bins=bins, alpha=0.8, label="flow now > 0")
     ax[0, 2].set(xscale="log", xlabel="flow now [L/min]",
                  title=f"leak pings: {sum(p['flow'] == 0 for p in lp)} with the leak off (ramp start, intermittent)")
-    fixed = [p for p in pings if p["pose_source"] == "fixed"]
-    mobile = [p for p in pings if p["pose_source"] != "fixed"]
+    fixed = [p for p in pings if p["motion"] == "fixed"]
+    mobile = [p for p in pings if p["motion"] != "fixed"]
     ax[1, 0].hist([p["pitch"] for p in fixed], bins=30, alpha=0.7, label="fixed")
     ax[1, 0].hist([p["pitch"] for p in mobile], bins=30, alpha=0.7, label="mobile")
     ax[1, 0].set(xlabel="pitch [deg, down]", title="pitch per ping")
@@ -175,7 +177,7 @@ def examples(path: Path, root: Path, pings: list, n: int, rng) -> list:
             if mk.any():
                 ax.contour(np.linspace(ext[0], ext[1], mk.shape[1]), np.linspace(ext[3], ext[2], mk.shape[0]),
                            mk > 0, levels=[0.5], colors=c, linewidths=0.8)
-        ax.set_title(f"{p['scenario']} {p['kind']} {p['mode']} {'mobile' if p['pose_source'] != 'fixed' else ''}\n"
+        ax.set_title(f"{p['scenario']} {p['kind']} {p['mode']} {'mobile' if p['motion'] != 'fixed' else ''}\n"
                      f"flow {p['flow']:.3g} L/min, pitch {p['pitch']:.0f}°, roll {p['roll']:.0f}°", fontsize=8)
         ax.tick_params(labelsize=6)
     for ax in np.ravel(axes)[len(chosen):]:
@@ -203,6 +205,17 @@ def main() -> int:
     done = [s for s in sc if s.get("status") == "done"]
     lp = [p for p in pings if p["kind"] == "leak"]
     never = sorted({p["scenario"] for p in lp} - {p["scenario"] for p in lp if p["geom"] > 0})
+    params = {s["id"]: s.get("params", {}) for s in done}
+    seen: dict = {}                                     # fixed views (sweeps with params.views): any ping in view?
+    for p in lp:
+        views = params[p["scenario"]].get("views")
+        if views:
+            k = int(p["stem"].split("_")[1]) * len(views) // int(manifest["pings_per_scenario"])
+            seen[p["scenario"], k] = seen.get((p["scenario"], k), False) or p["geom"] > 0
+    views_in_view = {g: [0, 0] for g in ("aimed", "random")}
+    for (sid, k), ok in seen.items():
+        g = views_in_view["aimed" if params[sid]["views"][k]["aimed"] else "random"]
+        g[0], g[1] = g[0] + ok, g[1] + 1
     stats = {
         "scenarios": {"total": len(sc), "done": len(done),
                       "failed": [s["id"] for s in sc if s.get("status") == "failed"],
@@ -214,6 +227,10 @@ def main() -> int:
         "leak_pings_in_view": sum(p["geom"] > 0 for p in lp),
         "leak_pings_leak_off": sum(p["flow"] == 0 for p in lp),
         "leak_scenarios_never_in_view": never,
+        "leak_views_in_view": {g: f"{a}/{n}" for g, (a, n) in views_in_view.items() if n},
+        "leak_range_m_p5_p50_p95": {sz: [round(float(v), 2) for v in np.nanpercentile(
+            [p["leak_range"] for p in lp if params[p["scenario"]].get("size") == sz], [5, 50, 95])]
+            for sz in sorted({params[p["scenario"]].get("size") for p in lp} - {None})},
         "leak_pings_direct_label_without_geom": sum(p["direct"] > 0 and p["geom"] == 0 for p in lp),
         "mode": dict(Counter(p["mode"] for p in pings)),
         "pose_source": dict(Counter(p["pose_source"] for p in pings)),
@@ -222,8 +239,8 @@ def main() -> int:
         "flow_decades": dict(Counter(s["stratum"].split("/")[-1] for s in done if s["kind"] == "leak")),
         "label_pixels_leak_median": {m: float(np.median([p[m] for p in lp])) if lp else 0
                                      for m in ("geom", "direct", "all")},
-        "ping_ms_mean_by_pose": {k: float(np.mean([p["ping_ms"] for p in pings if p["pose_source"] == k]))
-                                 for k in {p["pose_source"] for p in pings}},
+        "ping_ms_mean_by_motion": {k: float(np.mean([p["ping_ms"] for p in pings if p["motion"] == k]))
+                                   for k in {p["motion"] for p in pings}},
         "bytes": int(sum(s.get("bytes", 0) for s in done)),
         "worker_hours": float(sum(s.get("wall_s", 0) for s in done) / 3600),
     }

@@ -11,7 +11,9 @@ tank) with ``sonar.trajectory`` parameters:
 - lawnmower: lanes across the tank at a height, sonar looking along the lane;
 - orbit: a circle of a radius around the leak, the sonar looking at it;
 - hover: one pose with Ornstein-Uhlenbeck drift in position and yaw;
-- waypoints: the list in ``sonar.trajectory.waypoints``.
+- waypoints: the list in ``sonar.trajectory.waypoints``;
+- poses: the fixed poses in ``sonar.trajectory.poses``, each held for ``hold_s`` and then jumped to the next (several
+  views of one scene: datasets).
 Every position is kept inside the water with ``margin`` from the walls, the sand and the surface. Pitch "track" points
 the sonar's axis at the leak's height (``look_at``), else it is fixed.
 """
@@ -60,6 +62,23 @@ class FixedPose(SensorPose):
 
     def at(self, t: float) -> Pose:
         return self.pose
+
+
+class Poses(SensorPose):
+    """Fixed poses one after the other, each held for ``hold_s`` (pose i from i hold_s to (i + 1) hold_s; the last
+    one is kept)."""
+
+    def __init__(self, poses: list[Pose], hold_s: float):
+        if not poses:
+            raise ConfigError("sonar.trajectory.poses is empty")
+        self.poses, self.hold_s = poses, float(hold_s)
+
+    def at(self, t: float) -> Pose:
+        i = math.floor(t / self.hold_s - 1e-9)       # a ping exactly at the end of a hold still belongs to it
+        return self.poses[min(max(i, 0), len(self.poses) - 1)]
+
+    def positions(self, step: float = 0.05) -> np.ndarray:
+        return np.array([q.position for q in self.poses])
 
 
 def _pchip(p: np.ndarray, t: np.ndarray, x: float) -> np.ndarray:
@@ -157,6 +176,33 @@ def _look(frm, at) -> tuple[float, float]:
     return math.degrees(math.atan2(d[1], d[0])), math.degrees(math.atan2(-d[2], math.hypot(d[0], d[1])))
 
 
+def aim(position, target, roll_deg: float, bearing_deg: float = 0.0, elevation_deg: float = 0.0) -> tuple[float, float]:
+    """Pitch (nose down +) and yaw [deg] that, with ``roll_deg``, put ``target`` at ``bearing_deg`` (+ starboard)
+    and ``elevation_deg`` (+ up) in the sonar frame. Of the two pitches that do, the one nearer the plain look-at.
+    A target too steep for that bearing (no pitch reaches it; never at bearing 0) gets the nearest pitch: check with
+    ``in_sonar_frame``."""
+    d = np.asarray(target, float) - np.asarray(position, float)
+    d /= np.linalg.norm(d)
+    b, e = math.radians(bearing_deg), math.radians(elevation_deg)
+    u = np.array([math.cos(e) * math.cos(b), -math.cos(e) * math.sin(b), math.sin(e)])
+    v = rot_rpy_deg([roll_deg, 0.0, 0.0]) @ u
+    # pitch: the z of Ry(p) v, -sin p v_x + cos p v_z = rho cos(p + phi), must be d_z
+    rho, phi = math.hypot(v[0], v[2]), math.atan2(v[0], v[2])
+    c = math.acos(max(-1.0, min(1.0, d[2] / max(rho, 1e-12))))
+    look = math.atan2(-d[2], math.hypot(d[0], d[1]))
+    pitch = min(((s * c - phi + math.pi) % (2 * math.pi) - math.pi for s in (1.0, -1.0)), key=lambda q: abs(q - look))
+    w = rot_rpy_deg([roll_deg, math.degrees(pitch), 0.0]) @ u
+    yaw = math.atan2(d[1], d[0]) - math.atan2(w[1], w[0])
+    return math.degrees(pitch), (math.degrees(yaw) + 180.0) % 360.0 - 180.0
+
+
+def in_sonar_frame(position, rot, point) -> tuple[float, float, float]:
+    """Range [m], bearing (+ starboard) and elevation (+ up) [deg] of a world point seen from a sonar pose."""
+    q = np.asarray(rot, float).T @ (np.asarray(point, float) - np.asarray(position, float))
+    rng = float(np.linalg.norm(q))
+    return rng, math.degrees(math.atan2(-q[1], q[0])), math.degrees(math.asin(max(-1.0, min(1.0, q[2] / rng))))
+
+
 def leak_target(scene) -> np.ndarray:
     """What the trajectories look at: the leak (hole, or the vents' mean), else the tank centre on the sand."""
     if scene.leak is not None:
@@ -226,7 +272,8 @@ def preset_waypoints(tc: dict, scene) -> tuple[list[dict], bool]:
         return out, False
     if kind == "waypoints":
         return [dict(w) for w in tc["waypoints"]], bool(tc.get("loop", False))
-    raise ConfigError(f"sonar.trajectory.preset must be approach | lawnmower | orbit | hover | waypoints, got {kind!r}")
+    raise ConfigError("sonar.trajectory.preset must be approach | lawnmower | orbit | hover | waypoints | poses, "
+                      f"got {kind!r}")
 
 
 def sensor_pose(cfg: dict, scene=None) -> SensorPose:
@@ -240,10 +287,14 @@ def sensor_pose(cfg: dict, scene=None) -> SensorPose:
         return FixedPose(fixed)
     if src != "trajectory":
         raise ConfigError(f"sonar.pose_source must be fixed | trajectory | ros, got {src!r}")
+    tc = son["trajectory"]
+    if tc["preset"] == "poses":
+        return Poses([Pose(np.asarray(w["position"], float),
+                           np.array([w.get("roll_deg", 0.0), w.get("pitch_deg", 0.0), w.get("yaw_deg", 0.0)], float))
+                      for w in tc["poses"]], float(tc["hold_s"]))
     if scene is None:
         from .geometry import build_scene
         scene = build_scene(cfg)
-    tc = son["trajectory"]
     if tc["preset"] == "hover":
         b = Bounds(scene, float(tc["margin"]))
         p = np.clip(fixed.position, b.lo + 3 * float(tc["drift_m"]), b.hi - 3 * float(tc["drift_m"]))

@@ -137,7 +137,7 @@ sonar:
   range: 3.5                    # range setting [m], at most the mode's max_range
   ping_rate_hz: 10.0            # at most the mode's max_ping_rate_hz
   trajectory:                   # pose_source trajectory (the profile; uw/pose.py). Time 0 = end of the plume warm-up
-    preset: approach            # approach | lawnmower | orbit | hover | waypoints
+    preset: approach            # approach | lawnmower | orbit | hover | waypoints | poses
     speed: 0.15                 # [m/s] along the path
     height: 1.0                 # [m] above the tank floor (approach, orbit, lawnmower)
     pitch: track                # track: the axis points at the leak | a fixed pitch [deg, nose down]
@@ -157,6 +157,8 @@ sonar:
     drift_time_s: 3.0
     waypoints: []               # preset waypoints: [{position: [x, y, z], roll_deg, pitch_deg, yaw_deg, speed}, ...]
     loop: false
+    poses: []                   # preset poses: [{position: [x, y, z], roll_deg, pitch_deg, yaw_deg}, ...], each held
+    hold_s: 3.0                 #   for hold_s, then the next (several fixed views of one scene; static_cache on_motion)
   static_cache_motion: {position_m: 0.005, angle_deg: 0.25}   # static_cache on_motion: recompute beyond these
   ros_pose_topic: /uw/sonar_pose  # pose_source ros: geometry_msgs/PoseStamped of the sonar in the tank frame
   modes:                        # VERIFIED (datasheet): frequency, fan (h x v), beams, angular resolution (-3 dB beam

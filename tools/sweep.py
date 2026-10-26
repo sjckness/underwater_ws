@@ -1,7 +1,7 @@
 """Dataset sweeps: sample scenarios, generate them with sonar-only (resumable, parallel), write the manifest and the
 dataset card.
 
-    python3 tools/sweep.py run [--sweep config/sweeps/v0.1.yaml] [--root DIR] [--workers N] [--limit N]   (host)
+    python3 tools/sweep.py run [--sweep config/sweeps/v0.2.yaml] [--root DIR] [--workers N]             (host)
     python3 tools/sweep.py sample | status | finalize [--sweep ...] [--root DIR]                            (host)
     python -m uw py tools/sweep.py worker --root DIR [--max-scenarios N]                        (container, by run)
 
@@ -37,7 +37,7 @@ import yaml
 
 WS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WS))
-from uw import config  # noqa: E402
+from uw import config, geometry, pose  # noqa: E402
 
 F1TENTH = re.compile(r"sim_isaac\.sh|phase5_bringup|jazzy_parity|isaac_ws/launch\.sh|f1t_isaac")
 CHUNK = 20                       # scenarios per worker process (then a fresh one: no memory creep)
@@ -46,7 +46,7 @@ CHUNK = 20                       # scenarios per worker process (then a fresh on
 # ----------------------------------------------------------------------------------------------- sampling
 
 def draw(rng: np.random.Generator, spec):
-    """One value of a distribution spec (see config/sweeps/v0.1.yaml)."""
+    """One value of a distribution spec (see config/sweeps/v0.2.yaml)."""
     if isinstance(spec, list):
         return float(rng.uniform(spec[0], spec[1]))
     if isinstance(spec, dict) and "log" in spec:
@@ -68,7 +68,74 @@ def _fmt(v) -> str:
         return f"{v:.6g}"
     if isinstance(v, (list, tuple)):
         return "[" + ", ".join(_fmt(x) for x in v) + "]"
+    if isinstance(v, dict):
+        return "{" + ", ".join(f"{k}: {_fmt(x)}" for k, x in v.items()) + "}"
     return str(v)
+
+
+WALL_YAW = {"x0": 0.0, "x1": 180.0, "y0": 90.0, "y1": -90.0}     # yaw that looks into the tank from each wall
+
+
+def per_size(spec, size: str):
+    """``spec``, or its entry for the size preset when it is given per size ({tank: ..., basin: ...})."""
+    return spec[size] if isinstance(spec, dict) and size in spec else spec
+
+
+def place_leak(rng: np.random.Generator, pl: dict, size: str, dims, wall: str, leak_margin: float, sets: dict):
+    """Puts the leak ``leak_from_wall_m`` from the sonar's wall: the pipe (running along y) at that x for an x wall,
+    the leak at that place along the pipe for a y wall; capped so that the pipe or the leak keeps its margin."""
+    L, W = dims
+    lo, hi = per_size(pl["leak_from_wall_m"], size)
+    if wall in ("x0", "x1"):
+        m = float(pl["pipe_margin_m"])
+        d = float(rng.uniform(min(lo, L - m), min(hi, L - m)))
+        sets["pipe.x"] = d if wall == "x0" else L - d
+    else:
+        d = float(rng.uniform(min(lo, W - leak_margin), min(hi, W - leak_margin)))
+        sets["leak.position_along"] = d if wall == "y0" else W - d
+        sets["pipe.x"] = float(rng.uniform(float(pl["pipe_margin_m"]), L - float(pl["pipe_margin_m"])))
+
+
+def place_sonar(rng: np.random.Generator, pl: dict, size: str, dims, wall: str, leak_xy) -> list:
+    """A sonar position on a pole ``standoff_m`` from its wall, ``lateral_m`` to the side of the leak, at ``z_m``."""
+    L, W = dims
+    standoff, lateral, z = draw(rng, pl["standoff_m"]), draw(rng, per_size(pl["lateral_m"], size)), \
+        draw(rng, per_size(pl["z_m"], size))
+    if wall in ("x0", "x1"):
+        return [standoff if wall == "x0" else L - standoff, float(np.clip(leak_xy[1] + lateral, 0.3, W - 0.3)), z]
+    return [float(np.clip(leak_xy[0] + lateral, 0.3, L - 0.3)), standoff if wall == "y0" else W - standoff, z]
+
+
+def leak_site(presets: list, sets: dict) -> np.ndarray:
+    """Where the leak is (hole, or the vents' mean) in the scene drawn so far; the same place for a scenario
+    without a leak (where it would be)."""
+    cfg = config.load(presets=presets, overrides=[f"{k}={_fmt(v)}" for k, v in sets.items()] + ["leak.enabled=true"])
+    return pose.leak_target(geometry.build_scene(cfg, full=False))
+
+
+def view(rng: np.random.Generator, fx: dict, mode: dict, wall: str, position, target, aimed: bool) -> dict:
+    """One fixed view. Aimed: the leak (``aim_height_m`` above it) at a random place inside the fan, at most
+    ``aim_bearing_frac`` of the half fan and ``aim_elevation_frac`` of the half aperture off its centre (halved
+    bearing while the target is too steep for it); else random pitch and yaw from the wall's inward look."""
+    roll = float(draw(rng, fx["roll_deg"]))
+    out = {"position": [float(v) for v in position], "roll_deg": roll, "aimed": aimed}
+    if aimed:
+        b = float(rng.uniform(-1, 1)) * float(fx["aim_bearing_frac"]) * float(mode["fov_h_deg"]) / 2
+        e = float(rng.uniform(-1, 1)) * float(fx["aim_elevation_frac"]) * float(mode["fov_v_deg"]) / 2
+        h = draw(rng, fx["aim_height_m"])
+        t = np.asarray(target, float) + [0.0, 0.0, h]
+        for _ in range(10):
+            pitch, yaw = pose.aim(position, t, roll, b, e)
+            _, bb, ee = pose.in_sonar_frame(position, geometry.rot_rpy_deg([roll, pitch, yaw]), t)
+            if abs(bb - b) < 0.05 and abs(ee - e) < 0.05:
+                break
+            b *= 0.5
+        out.update(pitch_deg=pitch, yaw_deg=yaw, aim={"bearing_deg": b, "elevation_deg": e, "height_m": h})
+    else:
+        out.update(pitch_deg=draw(rng, fx["pitch_deg"]), yaw_deg=WALL_YAW[wall] + draw(rng, fx["yaw_deg"]))
+    r, b, e = pose.in_sonar_frame(position, geometry.rot_rpy_deg([roll, out["pitch_deg"], out["yaw_deg"]]), target)
+    out.update(leak_range_m=r, leak_bearing_deg=b, leak_elevation_deg=e)
+    return out
 
 
 def sample_scenario(sw: dict, index: int, rng: np.random.Generator) -> dict:
@@ -129,10 +196,18 @@ def sample_scenario(sw: dict, index: int, rng: np.random.Generator) -> dict:
     sets["sonar.noise_level_db"] = draw(rng, sn["noise_level_db"])
     sets["sonar.speckle_sigma_rad"] = draw(rng, sn["speckle_sigma_rad"])
     sets["sonar.speckle_time_s"] = draw(rng, sn["speckle_time_s"])
-    fx = sn["fixed"]
-    y0 = float(config.get(base, "sonar.position")[1])
-    position = [draw(rng, fx["x_m"]), y0 + draw(rng, fx["y_offset_m"][size]), draw(rng, fx["z_m"])]
+    fx, pl = sn["fixed"], sn.get("placement")
+    if pl is None:                      # v0.1: on a pole at the -x wall, the pipe where the config has it
+        wall = "x0"
+        y0 = float(config.get(base, "sonar.position")[1])
+        position = [draw(rng, fx["x_m"]), y0 + draw(rng, fx["y_offset_m"][size]), draw(rng, fx["z_m"])]
+    else:                               # on any wall, the leak at a distance from it
+        wall = draw(rng, pl["wall"])
+        place_leak(rng, pl, size, (L, W), wall, m, sets)
+        leak_xy = (sets.get("pipe.x", float(config.get(base, "pipe.x"))), sets["leak.position_along"])
+        position = place_sonar(rng, pl, size, (L, W), wall, leak_xy)
     sets["sonar.position"] = position
+    p["wall"] = wall
     motion = draw(rng, sn["mobile"])
     p["motion"] = motion
     if motion == "mobile":
@@ -141,23 +216,50 @@ def sample_scenario(sw: dict, index: int, rng: np.random.Generator) -> dict:
         p["trajectory"] = preset
         sets.update({"sonar.pose_source": "trajectory", "sonar.static_cache": "none",
                      "sonar.trajectory.preset": preset, "sonar.trajectory.speed": draw(rng, tr["speed"]),
-                     "sonar.trajectory.height": draw(rng, tr["height"])})
+                     "sonar.trajectory.height": draw(rng, per_size(tr["height"], size))})
         if preset == "approach":
-            for k in ("bearing_deg", "start_distance", "end_distance"):
-                sets[f"sonar.trajectory.{k}"] = draw(rng, tr[k])
+            if "bearing_offset_deg" in tr:  # from the sonar's wall, seen from the leak
+                sets["sonar.trajectory.bearing_deg"] = WALL_YAW[wall] + 180.0 + draw(rng, tr["bearing_offset_deg"])
+            else:
+                sets["sonar.trajectory.bearing_deg"] = draw(rng, tr["bearing_deg"])
+            for k in ("start_distance", "end_distance"):
+                sets[f"sonar.trajectory.{k}"] = draw(rng, per_size(tr[k], size))
         elif preset == "orbit":
             for k in ("radius", "start_deg"):
-                sets[f"sonar.trajectory.{k}"] = draw(rng, tr[k])
+                sets[f"sonar.trajectory.{k}"] = draw(rng, per_size(tr[k], size))
             sets["sonar.trajectory.direction"] = int(draw(rng, tr["direction"]))
         elif preset == "hover":
             for k in ("drift_m", "drift_yaw_deg"):
                 sets[f"sonar.trajectory.{k}"] = draw(rng, tr[k])
         elif preset == "lawnmower":
             sets["sonar.trajectory.lanes"] = draw(rng, tr["lanes"])
-    else:
+    elif int(fx.get("poses", 1)) == 1 and not fx.get("aim"):     # v0.1: one random view
         sets["sonar.pitch_deg"] = draw(rng, fx["pitch_deg"])
         sets["sonar.yaw_deg"] = draw(rng, fx["yaw_deg"])
         sets["sonar.roll_deg"] = float(draw(rng, fx["roll_deg"]))
+    else:                               # views of one scene, most of them aimed at the leak
+        n = int(fx.get("poses", 1))
+        if int(sw["pings"]) % n:
+            raise ValueError(f"pings ({sw['pings']}) must be a multiple of sonar.fixed.poses ({n})")
+        mode = config.get(base, f"sonar.modes.{sets['sonar.mode']}")
+        target = leak_site(presets, sets)
+        views = []
+        for k in range(n):
+            here = position if k == 0 else place_sonar(rng, pl, size, (L, W), wall, target[:2])
+            views.append(view(rng, fx, mode, wall, here, target, bool(rng.uniform() < float(fx.get("aim", 0.0)))))
+        p["views"] = views
+        if n == 1:
+            sets.update({"sonar.pitch_deg": views[0]["pitch_deg"], "sonar.yaw_deg": views[0]["yaw_deg"],
+                         "sonar.roll_deg": views[0]["roll_deg"]})
+        else:
+            rate = float(config.get(base, "sonar.ping_rate_hz"))
+            sets.update({"sonar.pose_source": "trajectory", "sonar.static_cache": "on_motion",
+                         "sonar.trajectory.preset": "poses", "sonar.trajectory.hold_s": int(sw["pings"]) / n / rate,
+                         "sonar.trajectory.poses": [{k: v[k] for k in ("position", "roll_deg", "pitch_deg", "yaw_deg")}
+                                                    for v in views]})
+    cn = sn.get("common_noise")
+    if cn is not None and rng.uniform() < float(cn["share"]):
+        sets["sonar.receiver_noise_common_db"] = draw(rng, cn["db"])
     flow = sets.get("leak.flow_lpm")
     decade = "none" if flow is None else f"1e{int(math.floor(math.log10(flow)))}"
     return {"id": f"s{index:04d}", "index": index, "kind": kind, "presets": presets,
@@ -412,6 +514,18 @@ def finalize(sw: dict, root: Path) -> None:
     plan = (WS / "docs" / "PLAN.md").read_text()
     gaps = re.findall(r"^- \*\*([^*]+)\*\*", plan.split("## Known gaps", 1)[1].split("\n## ", 1)[0], re.M)
     failed = [r["id"] for r in rows if r["status"] != "done"]
+    fx, pl = sw["sonar"]["fixed"], sw["sonar"].get("placement")
+    n_views = int(fx.get("poses", 1))
+    if pl is None:
+        where = "Fixed sonar poses are on a pole at the -x wall"
+    else:
+        where = ("The sonar is on a pole at one of the four walls, the leak at a distance from that wall "
+                 f"(`sonar.placement`). Fixed scenarios have {n_views} view{'s' if n_views > 1 else ''} of one scene "
+                 f"from that wall ({int(sw['pings']) // n_views} pings each), {float(fx.get('aim', 0.0)):.0%} of them "
+                 f"aimed: a point up to {fx['aim_height_m'][1]:g} m above the hole put at a random place inside the "
+                 "fan (the hole itself "
+                 "can then lie outside it); the predicted leak range, bearing and elevation of every view are in "
+                 "`params.views` of the manifest")
     card = f"""# Underwater gas-leak sonar dataset {sw['name']}
 
 Simulated Oculus M750d forward-looking sonar pings of a gas leak from a pipe in a test tank (or a larger basin),
@@ -424,7 +538,8 @@ Generated by `tools/sweep.py` from `config/sweeps/{sw['name']}.yaml`, {meta['sta
 
 ## Layout
 
-    <root>/manifest.json            every scenario: id, kind, split, presets, sampled parameters, status, sizes
+    <root>/manifest.json            every scenario: id, kind, split, presets, sampled parameters (fixed views:
+                                    params.views), status, sizes
     <root>/scenarios.json           the sampler's output (presets and --set overrides per scenario)
     <root>/<id>/manifest.json       the scenario's full config, seed, config hash, labels, per-ping file list
     <root>/<id>/ping_xxxxx.npz      polar_db (float16, dB re 1 uPa, rows = range bins from 0, columns = beams, NaN in
@@ -450,9 +565,9 @@ Load with `uw.dataset.SonarDataset(root, split)` (PyTorch): image, the three mas
 {chr(10).join(_rows('', {k: v for k, v in sw.items() if k in ('kind', 'presets', 'leak', 'sonar', 'scene')}))}
 
 Every scenario also has its own seed (sand relief, rock layout, scatterer phases, bubbles, noise). Leak presets
-(config/presets/leak): pinhole 0.1-5 L/min, crack 5-50, rupture 50-500 (flow at the hole's pressure). Fixed
-sonar poses are on a pole at the -x wall; mobile ones follow a trajectory preset (static scene recomputed every
-ping). Ramp leaks start at the first ping (no warm-up); the others are warmed up for 12 s.
+(config/presets/leak): pinhole 0.1-5 L/min, crack 5-50, rupture 50-500 (flow at the hole's pressure). {where};
+mobile ones follow a trajectory preset (static scene recomputed every ping). Ramp leaks start at the first ping (no
+warm-up); the others are warmed up for 12 s.
 
 ## Known gaps (docs/PLAN.md)
 
@@ -470,7 +585,7 @@ intermittent leak changes the gas flow. Simulation only: not yet validated again
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("command", choices=("sample", "run", "worker", "status", "finalize"))
-    ap.add_argument("--sweep", default=str(WS / "config" / "sweeps" / "v0.1.yaml"))
+    ap.add_argument("--sweep", default=str(WS / "config" / "sweeps" / "v0.2.yaml"))
     ap.add_argument("--root", default="")
     ap.add_argument("--workers", type=int, default=0, help="default: the sweep file's")
     ap.add_argument("--max-scenarios", type=int, default=CHUNK)
