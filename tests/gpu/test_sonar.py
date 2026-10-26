@@ -347,6 +347,37 @@ def test_nothing_inside_the_blind_zone():
     assert np.all(p.power[n:] > 0)                                      # noise and ring-down beyond it
 
 
+@pytest.mark.parametrize("focus", [False, True])
+def test_common_mode_noise_is_a_stripe_at_broadside(focus):
+    """Noise common to every element adds share |sum_m w_m exp(i phase_m)|^2 / sum w^2 to the beam's noise: all of
+    (sum w)^2 at broadside unfocused, less at near range when the array focuses, sidelobe level off broadside."""
+    quiet = ["sonar.reverberation=false", "sonar.ringdown=false", "sonar.speckle_sigma_rad=0", "sonar.multipath=[]"]
+    share_db = -10.0
+    off, on = (sonar.Sonar(config.load(overrides=quiet + [f"sonar.receiver_noise_common_db={c}"]))
+               for c in ("null", share_db))
+    p_off = np.mean([off.ping(focus=focus).power for _ in range(6)], axis=0)    # the same seeds: paired draws
+    p_on = np.mean([on.ping(focus=focus).power for _ in range(6)], axis=0)
+    u = on.ub.numpy().astype(float)
+    r = np.maximum(np.arange(on.n_r) * on.dr, on.dr)
+    n = math.ceil(config.sonar_mode(config.load())["min_range"] / on.dr)
+    excess = {}
+    for band, rows in (("near", slice(n, n + int(0.4 / on.dr))), ("far", slice(int(0.7 * on.n_r), on.n_r))):
+        for beams, cols in (("broadside", np.abs(on.bearing) < 0.5), ("side", np.abs(np.abs(on.bearing) - 10) < 2)):
+            rr, uu = r[rows, None, None], u[None, cols, None]
+            fresnel = 0.0 if focus else on.k * (1 - uu ** 2) / (2 * rr)
+            a = np.sum(on.w * np.exp(1j * (on.k * on.xs * uu + (fresnel - on.k / (2 * rr)) * on.xs ** 2)), axis=-1)
+            expected = 10 * np.log10(1 + 10 ** (share_db / 10) * np.mean(np.abs(a) ** 2) / np.sum(on.w ** 2))
+            got = 10 * np.log10(np.mean(p_on[rows][:, cols]) / np.mean(p_off[rows][:, cols]))
+            assert got == pytest.approx(expected, abs=0.3), (band, beams, got, expected)
+            excess[band, beams] = got
+    coherent = 10 * np.log10(1 + 10 ** (share_db / 10) * np.sum(on.w) ** 2 / np.sum(on.w ** 2))
+    assert excess["far", "broadside"] > coherent - 2.0 and excess["far", "side"] < 0.3     # +-0.5 deg: main lobe
+    if focus:
+        assert excess["near", "broadside"] < excess["far", "broadside"] - 3
+    else:
+        assert excess["near", "broadside"] == pytest.approx(excess["far", "broadside"], abs=0.5)
+
+
 def test_bubble_cross_sections_on_the_gpu_match_the_tables():
     cfg = config.load(overrides=QUIET)
     son = sonar.Sonar(cfg)

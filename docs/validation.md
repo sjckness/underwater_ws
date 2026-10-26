@@ -766,3 +766,45 @@ Sanity check (`tools/dataset_stats.py`; `stats/report.md`, `overview.png`, `exam
 - **The leak's range barely varies**: 1.5–2.3 m for most pings in view, in the basin too, because the pipe stays at
   x = 1.65 m in both sizes and the fixed sonar is always on the -x wall.
 - Distractors are few (14; the test split has one).
+
+## Real data: a stripe at bearing 0 on an Oculus M1200d (2026-10-26)
+
+DeeperSense basin-2 (Zenodo 7728089: Oculus M1200d at 2 MHz, 80° fan, published as 512 × 512 inferno-mapped
+Cartesian images) has a bright stripe straight ahead. Measured on 200 frames read back to polar
+(`compare_real.py` fan loader, `--fan-colormap inferno --fan-fov 80`): the mean intensity of the beams within ±0.5°
+of broadside over that of the beams at 3–10° on either side (± = spread between frames).
+
+| | far half (0.55–0.95 of the range) | near half (0.15–0.5) |
+|---|---|---|
+| basin-2, pixel read as amplitude (p = 1) | **+3.43 ± 0.17 dB** | +1.54 ± 0.25 dB |
+| basin-2, pixel law fitted to the background (p = 0.325) | **+10.22 ± 0.59 dB** | −1.40 ± 1.87 dB |
+| UATD (Gemini 1200ik, 20 pings at 10 m), native polar | −1.43 ± 1.24 dB | |
+| the same UATD pings after a 512 × 512 inferno fan round trip | −1.19 ± 2.35 dB | |
+
+- **It is in the sonar, not in the reading.** The fan round trip through the same loader draws no stripe on UATD,
+  and in basin-2 it holds in every frame with a 0.17 dB spread while the divers move about.
+- It is stronger in the far half, where the TVG-amplified background is closest to receiver noise, and it is about
+  as wide as a beam (0.6–0.9° at half power).
+- **Its level is not known.** It rests on the pixel law, which a 512 × 512 fan image cannot pin down: +3.4 dB if a
+  pixel is an amplitude, +10 dB at the fitted exponent.
+
+Candidate mechanism: receiver noise (or a DC offset) common to all elements, which sums coherently in the broadside
+beam. Added to the model as an option, **off by default**: `sonar.receiver_noise_common_db`, the common share of the
+per-element noise variance. Each beam's noise grows by share × |Σ w_m exp(i φ_m)|² / Σ w² (test
+`test_common_mode_noise_is_a_stripe_at_broadside`, measured against that formula within 0.3 dB). On our LF array
+(Σw)²/Σw² = 20.4 dB, so a share of −20 dB draws +3.2 dB at broadside and −10 dB draws +10.8 dB: exactly the span
+basin-2 allows, if its far-half background is receiver noise. With −10 dB:
+
+| | 0.1–0.5 m | beyond 2.5 m | beams at 8–12° |
+|---|---|---|---|
+| array not focusing | +10.1 dB | +9.9 dB | < 0.01 dB |
+| array focusing (default) | +3.1 dB | +9.1 dB | 0.6 dB near, < 0.01 dB far |
+
+A focusing array applies its focusing law to a signal that has no wavefront curvature, so it spreads the stripe at
+near range; the weaker stripe in basin-2's near half fits that, though it does not prove it.
+
+**Why off.** New physics goes in when real data shows a gap it closes. This data shows that a stripe exists, not its
+level, and on an M1200d, not on our M750d. The 16-bit lab-tank bags in the DeeperSense metadatabase
+(`2023-04_dfki_basin/2023-04-27-10-13_test_high_data_res_low_freq` and `…-10-15_test_high_data_res_high_freq`, on
+request from DFKI) settle it: raw polar beams, where the stripe at a fixed beam index can be set against the noise in
+water-only rows and the share read off directly. Until then, v0.2 randomises the share (docs/PLAN.md).

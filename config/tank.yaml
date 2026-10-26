@@ -175,6 +175,10 @@ sonar:
   source_level_db: 206.0        # dB re 1 uPa @ 1 m (assumed; only sets the SNR together with noise_level_db)
   noise_level_db: 52.0          # receiver noise spectrum level per element, dB re 1 uPa^2/Hz, over the band c/(2 dr)
                                 # and reduced by the array gain in the beams (assumed)
+  receiver_noise_common_db: null   # receiver noise common to every element, dB re the per-element noise; null: off.
+                                # It sums up in the broadside beam (a focusing array spreads it at near range): a
+                                # stripe at bearing 0. An Oculus M1200d shows one, +3.4 to +10 dB over its far-half
+                                # background (docs/validation.md, M3.6); its level on the M750d is UNVERIFIED
   tvg_db_per_decade: 30.0       # TVG: k log10(R) + 2 alpha R (30: area scattering)
   display_db: [0.0, 80.0]       # dB window above the beam noise floor mapped to 0..255 (a display gain, not physics)
   ringdown_db: 60.0             # transducer ring-down at zero range, dB above the beam noise floor (UNVERIFIED: not on the datasheet)

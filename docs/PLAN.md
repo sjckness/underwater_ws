@@ -176,6 +176,8 @@ From the v0.1 sanity check (docs/validation.md, M5):
 - Store polar_db as uint16 (0.01 dB steps) instead of float16 to shrink the npz; drop the soft shares if unused.
 - Leak flow driving the plume flow field while it changes (Known gaps).
 - Calibrate against real data first where it exists (Real-data validation).
+- Randomise `sonar.receiver_noise_common_db` over −20 to −10 dB in part of the scenarios (a stripe at bearing 0,
+  +3 to +11 dB at broadside: the span an Oculus M1200d shows, docs/validation.md) until the 16-bit bags fix it.
 
 ## Verification
 - **Host pytest (pure numpy)**:

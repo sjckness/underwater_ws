@@ -888,6 +888,8 @@ class Sonar:
         self.noise_var = 10 ** ((float(son["noise_level_db"]) + 10 * math.log10(band)) / 10)
         self.nf_db = 10 * math.log10(self.noise_var * float(np.sum(self.w ** 2)))
         self.receiver_noise = bool(son["receiver_noise"])
+        common = son["receiver_noise_common_db"]
+        self.common_noise = None if common is None else self._common_noise(10 ** (float(common) / 10))
         p = Params()
         p.pos = wp.vec3(*self.position)
         p.rot_t = wp.mat33(*self.rot.T.flatten())
@@ -1166,6 +1168,15 @@ class Sonar:
                           ri["hi"], self.dr, ri["scale"], self.alpha_db / (20 * math.log10(math.e)), ri["rep"],
                           self.rev])
 
+    def _common_noise(self, share: float):
+        """Element weights of receiver noise common to every element, ``share`` of the per-element noise variance.
+        A common signal has no wavefront curvature: it sums up in the broadside beam, and a focusing array spreads it
+        at near range with its focusing law -k x^2 / (2 R). The beamform kernel puts curvature back only when the
+        array does not focus, so the same phase here leaves the stripe unfocused then, defocused when it focuses."""
+        r = np.maximum(np.arange(self.n_r) * self.dr, self.dr)
+        ph = np.exp(-1j * self.k * self.xs[None, :] ** 2 / (2 * r[:, None]))
+        return torch.from_numpy((math.sqrt(self.noise_var * share) * ph).astype(np.complex64)).to(self.device)
+
     def _ringdown(self, son):
         """Frozen per-element ring-down: random phases, amplitude decaying with e-folding ringdown_m, at the beam
         output ringdown_db above the noise floor at zero range."""
@@ -1285,6 +1296,9 @@ class Sonar:
                 gen = torch.Generator(device=self.device).manual_seed(seed)
                 ap = ap + math.sqrt(self.noise_var) * torch.randn(ap.shape, dtype=torch.complex64, device=self.device,
                                                                   generator=gen)
+                if self.common_noise is not None:      # the same on every element: a stripe at broadside
+                    ap = ap + self.common_noise * torch.randn((ap.shape[0], 1), dtype=torch.complex64,
+                                                              device=self.device, generator=gen)
             if self.ringdown is not None:
                 ap = ap + self.ringdown
         ap = torch.view_as_real(ap.contiguous()).contiguous()
