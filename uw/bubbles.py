@@ -62,14 +62,18 @@ def list_free_kernel(free: wp.array(dtype=wp.int32), offset: wp.array(dtype=wp.i
 
 
 @wp.kernel
-def spawn_kernel(head: int, cap: int, free: wp.array(dtype=wp.int32), offset: wp.array(dtype=wp.int32),
-                 free_idx: wp.array(dtype=wp.int32),
+def spawn_kernel(step: int, heads: wp.array(dtype=wp.int32), counts: wp.array(dtype=wp.int32), cap: int,
+                 free: wp.array(dtype=wp.int32), offset: wp.array(dtype=wp.int32), free_idx: wp.array(dtype=wp.int32),
                  new_pos: wp.array(dtype=wp.vec3), new_r0: wp.array(dtype=float), new_misc: wp.array(dtype=wp.vec3),
                  p_surf: float, rho: float, water_level: float,
                  pos: wp.array(dtype=wp.vec3), r0: wp.array(dtype=float), z0: wp.array(dtype=float),
                  r: wp.array(dtype=float), alive: wp.array(dtype=wp.int32), turb: wp.array(dtype=wp.vec3),
                  misc: wp.array(dtype=wp.vec3), age: wp.array(dtype=float), stats: wp.array(dtype=wp.float64)):
+    """The ``counts[step]`` new bubbles of a substep (rows of the batch arrays) into free slots."""
     i = wp.tid()
+    if i >= counts[step]:
+        return
+    head = heads[step]
     n_free = offset[cap - 1] + free[cap - 1]
     k = int(0)
     if i < n_free:                 # a free slot
@@ -133,7 +137,8 @@ def integral_sample_kernel(cl_pos: wp.array(dtype=wp.vec3), cl_tan: wp.array(dty
 
 
 @wp.kernel
-def step_kernel(dt: float, seed: int, u_liq: wp.array(dtype=wp.vec3), scales: wp.array(dtype=wp.vec3),
+def step_kernel(dt: float, step: int, seeds: wp.array(dtype=wp.int32), u_liq: wp.array(dtype=wp.vec3),
+                scales: wp.array(dtype=wp.vec3),
                 turb_k: float, wobble: int, rho: float, mu: float, sigma: float, kb: float,
                 p_surf: float, water_level: float, size_x: float, size_y: float,
                 pos: wp.array(dtype=wp.vec3), r0: wp.array(dtype=float), z0: wp.array(dtype=float),
@@ -143,6 +148,7 @@ def step_kernel(dt: float, seed: int, u_liq: wp.array(dtype=wp.vec3), scales: wp
     i = wp.tid()
     if alive[i] == 0:
         return
+    seed = seeds[step]
     sc = scales[i]
     u_loc = sc[0]
     b_loc = sc[1]
@@ -188,13 +194,18 @@ def step_kernel(dt: float, seed: int, u_liq: wp.array(dtype=wp.vec3), scales: wp
 # -------------------------------------------------------------------------------------- flow fields
 
 class FlowField:
-    """The liquid flow the bubbles ride on (plan: FlowField = integral | lbm)."""
+    """The liquid flow the bubbles ride on (plan: FlowField = integral | lbm).
 
-    def update(self, dt: float) -> None:
-        """Advance the flow's own state by one substep."""
+    A substep has a host part, ``advance``, and a GPU part, ``sample``, which gets the host part's result already on
+    the device: BubbleSim prepares a batch of substeps on the host, uploads it at once and launches the GPU parts as
+    one CUDA graph."""
+    state_len = 0                       # vec3 values per substep that ``advance`` returns for ``sample``
+
+    def advance(self, dt: float) -> np.ndarray:
+        """Advance the flow's own state by one substep (host); returns its (state_len, 3) float32 GPU input."""
         raise NotImplementedError
 
-    def sample(self, pos: wp.array, alive: wp.array, u_liq: wp.array, scales: wp.array) -> None:
+    def sample(self, pos: wp.array, alive: wp.array, u_liq: wp.array, scales: wp.array, state: wp.array) -> None:
         """Write the liquid velocity and the turbulence scales (velocity, length, weight) at every alive bubble."""
         raise NotImplementedError
 
@@ -224,7 +235,6 @@ class IntegralFlow(FlowField):
         self.hist_len = int(self.plume["tau"][-1] / dt) + 2
         self.hist = np.zeros((self.hist_len, 2))
         self.hist_head = 0
-        self.cl_pos = wp.array(self.plume["pos"].astype(np.float32), dtype=wp.vec3, device=device)
         self.cl_tan = wp.array(self.plume["tangent"].astype(np.float32), dtype=wp.vec3, device=device)
         self.cl_u = wp.array(self.plume["u_c"].astype(np.float32), dtype=float, device=device)
         self.cl_b = wp.array(self.plume["b"].astype(np.float32), dtype=float, device=device)
@@ -237,7 +247,9 @@ class IntegralFlow(FlowField):
         self.cl_c = wp.array((u * b * np.gradient(b, s)).astype(np.float32), dtype=float, device=device)
         self.cl_pos_host = self.plume["pos"].copy()
 
-    def update(self, dt: float) -> None:
+    state_len = N_CL                    # the centreline, meandering
+
+    def advance(self, dt: float) -> np.ndarray:
         a = math.exp(-dt / self.meander_T)
         prev = self.hist[(self.hist_head - 1) % self.hist_len]
         self.hist[self.hist_head] = prev * a + math.sqrt(1 - a * a) * self.rng.normal(size=2)
@@ -250,11 +262,11 @@ class IntegralFlow(FlowField):
         off = np.concatenate([off2, np.zeros((N_CL, 1))], 1) * (self.meander_amp * pl["b"] * grow)[:, None]
         off -= np.sum(off * pl["tangent"], 1, keepdims=True) * pl["tangent"]
         self.cl_pos_host = pl["pos"] + off
-        self.cl_pos.assign(self.cl_pos_host.astype(np.float32))
+        return self.cl_pos_host.astype(np.float32)
 
-    def sample(self, pos, alive, u_liq, scales) -> None:
+    def sample(self, pos, alive, u_liq, scales, state) -> None:
         wp.launch(integral_sample_kernel, dim=len(pos), device=self.device,
-                  inputs=[self.cl_pos, self.cl_tan, self.cl_u, self.cl_b, self.cl_a, self.cl_c, N_CL,
+                  inputs=[state, self.cl_tan, self.cl_u, self.cl_b, self.cl_a, self.cl_c, N_CL,
                           pos, alive, u_liq, scales])
 
 
@@ -318,6 +330,14 @@ class BubbleSim:
         self.free = wp.zeros(cap, dtype=wp.int32, device=dev)        # slot allocation: 1 = free
         self.free_offset = wp.zeros(cap, dtype=wp.int32, device=dev)
         self.free_idx = wp.zeros(cap, dtype=wp.int32, device=dev)
+        # Substeps run in batches: the host part of every substep (vents, meander, new bubbles: all the host random
+        # numbers, in the order of one substep after the other) goes into pinned staging arrays, one upload, then the
+        # GPU part of all substeps, captured once per batch length as a CUDA graph (plume.cuda_graph). The results
+        # are bit-identical to launching every substep on its own (tests/gpu/test_bubbles.py).
+        self.use_graph = bool(pc["cuda_graph"]) and wp.get_device(dev).is_cuda
+        self.batch_max = 240
+        self.max_new = 128                           # new bubbles per substep the batch holds (grows on demand)
+        self._alloc_batch()
 
     # ---------------------------------------------------------------------------------------- info
     def summary(self) -> dict:
@@ -360,11 +380,28 @@ class BubbleSim:
             w = np.exp(1.8 * self.vent_state)
             self.vent_w = w / w.sum()
 
-    def _emit(self, dt):
+    def _alloc_batch(self):
+        n, m, dev, nf = self.batch_max, self.max_new, self.device, max(self.flow.state_len, 1)
+        self.b_state = wp.zeros((n, nf), dtype=wp.vec3, device=dev)
+        self.b_pos = wp.zeros((n, m), dtype=wp.vec3, device=dev)
+        self.b_r0 = wp.zeros((n, m), dtype=float, device=dev)
+        self.b_misc = wp.zeros((n, m), dtype=wp.vec3, device=dev)
+        self.b_count, self.b_head, self.b_seed = (wp.zeros(n, dtype=wp.int32, device=dev) for _ in range(3))
+        pinned = wp.get_device(dev).is_cuda
+        self.h = {k: wp.zeros(a.shape, dtype=a.dtype, device="cpu", pinned=pinned)
+                  for k, a in (("state", self.b_state), ("pos", self.b_pos), ("r0", self.b_r0), ("misc", self.b_misc),
+                               ("count", self.b_count), ("head", self.b_head), ("seed", self.b_seed))}
+        self.h_np = {k: a.numpy() for k, a in self.h.items()}         # zero-copy views of the staging arrays
+        self.uploaded = None                                            # event: the staging arrays may be reused
+        self.graphs = {}
+
+    def _new_bubbles(self, dt):
+        """Host part of a substep's emission: sizes, release points, path-oscillation parameters (pos, r0, misc as
+        float32), and the gas bookkeeping."""
         d = self.emitter.emit(dt)
         n = min(len(d), self.cap)
         if n == 0:
-            return
+            return None
         d = d[:n]
         rad = d / 2
         src = self.source
@@ -385,37 +422,78 @@ class BubbleSim:
         p0 = self.p_surf + self.rho * wat.G * (self.water_level - pos32[:, 2].astype(float))
         self.emitted += n
         self.emitted_gas += float(np.sum(p0 * 4.0 / 3.0 * math.pi * rad32.astype(float) ** 3))
-        # new bubbles go into free slots (prefix scan over the free flags); a live bubble is overwritten only when
-        # the pool is full
-        wp.launch(mark_free_kernel, dim=self.cap, device=self.device, inputs=[self.alive, self.free])
-        wp.utils.array_scan(self.free, self.free_offset, inclusive=False)
-        wp.launch(list_free_kernel, dim=self.cap, device=self.device,
-                  inputs=[self.free, self.free_offset, self.free_idx])
-        wp.launch(spawn_kernel, dim=n, device=self.device,
-                  inputs=[self.head, self.cap, self.free, self.free_offset, self.free_idx,
-                          wp.array(pos32, dtype=wp.vec3, device=self.device),
-                          wp.array(rad32, dtype=float, device=self.device),
-                          wp.array(misc.astype(np.float32), dtype=wp.vec3, device=self.device),
-                          self.p_surf, self.rho, self.water_level,
-                          self.pos, self.r0, self.z0, self.r, self.alive, self.turb, self.misc, self.age, self.stats])
-        self.head = (self.head + n) % self.cap
+        return pos32, rad32, misc.astype(np.float32)
 
-    def step(self, dt_total: float):
-        src = self.source
-        n_sub = max(1, int(round(dt_total / self.dt)))
-        for _ in range(n_sub):
+    def _prepare(self, k: int) -> None:
+        """Host parts of the next k substeps into the staging arrays (grown if a substep emits more than fits)."""
+        if self.uploaded is not None:
+            wp.synchronize_event(self.uploaded)
+        rows = []
+        for j in range(k):
             self._update_vents()
-            self.flow.update(self.dt)
-            self._emit(self.dt)
-            self.flow.sample(self.pos, self.alive, self.u_liq, self.scales)
-            wp.launch(step_kernel, dim=self.cap, device=self.device,
-                      inputs=[self.dt, self.seed + self.step_count, self.u_liq, self.scales, self.turb_k, self.wobble,
+            state = self.flow.advance(self.dt)
+            rows.append((state, self._new_bubbles(self.dt), self.head, (self.seed + self.step_count) % 2 ** 31))
+            n = 0 if rows[-1][1] is None else len(rows[-1][1][0])
+            self.head = (self.head + n) % self.cap
+            self.t += self.dt
+            self.step_count += 1
+        biggest = max((len(r[1][0]) for r in rows if r[1] is not None), default=0)
+        if biggest > self.max_new:
+            self.max_new = 1 << (biggest - 1).bit_length()
+            self._alloc_batch()
+        h = self.h_np
+        for j, (state, new, head, seed) in enumerate(rows):
+            if state is not None:
+                h["state"][j] = state
+            h["count"][j] = 0 if new is None else len(new[0])
+            h["head"][j], h["seed"][j] = head, seed
+            if new is not None:
+                n = len(new[0])
+                h["pos"][j, :n], h["r0"][j, :n], h["misc"][j, :n] = new
+        for key in ("state", "pos", "r0", "misc"):        # only the k rows used
+            dst = getattr(self, f"b_{key}")
+            wp.copy(dst, self.h[key], count=k * dst.shape[1])
+        for key in ("count", "head", "seed"):
+            wp.copy(getattr(self, f"b_{key}"), self.h[key], count=k)
+        self.uploaded = wp.record_event()
+
+    def _launch(self, k: int) -> None:
+        """GPU parts of k prepared substeps: free-slot list, spawn, flow sample, move."""
+        src, dev, cap = self.source, self.device, self.cap
+        for j in range(k):
+            wp.launch(mark_free_kernel, dim=cap, device=dev, inputs=[self.alive, self.free])
+            wp.utils.array_scan(self.free, self.free_offset, inclusive=False)
+            wp.launch(list_free_kernel, dim=cap, device=dev, inputs=[self.free, self.free_offset, self.free_idx])
+            wp.launch(spawn_kernel, dim=self.max_new, device=dev,
+                      inputs=[j, self.b_head, self.b_count, cap, self.free, self.free_offset, self.free_idx,
+                              self.b_pos[j], self.b_r0[j], self.b_misc[j], self.p_surf, self.rho, self.water_level,
+                              self.pos, self.r0, self.z0, self.r, self.alive, self.turb, self.misc, self.age,
+                              self.stats])
+            self.flow.sample(self.pos, self.alive, self.u_liq, self.scales, self.b_state[j])
+            wp.launch(step_kernel, dim=cap, device=dev,
+                      inputs=[self.dt, j, self.b_seed, self.u_liq, self.scales, self.turb_k, self.wobble,
                               self.rho, src.mu, src.sigma, src.kb, self.p_surf, self.water_level,
                               float(self.size[0]), float(self.size[1]),
                               self.pos, self.r0, self.z0, self.r, self.alive, self.turb, self.misc, self.age,
                               self.vel, self.stats])
-            self.t += self.dt
-            self.step_count += 1
+
+    def step(self, dt_total: float):
+        """round(dt_total / plume.dt) substeps, in batches of up to 240."""
+        n_sub = max(1, int(round(dt_total / self.dt)))
+        while n_sub > 0:
+            k = min(n_sub, self.batch_max)
+            self._prepare(k)
+            if self.use_graph:
+                if k not in self.graphs:
+                    wp.capture_begin(self.device)
+                    try:
+                        self._launch(k)
+                    finally:
+                        self.graphs[k] = wp.capture_end(self.device)
+                wp.capture_launch(self.graphs[k])
+            else:
+                self._launch(k)
+            n_sub -= k
 
     def warmup(self, seconds: float):
         self.step(seconds)

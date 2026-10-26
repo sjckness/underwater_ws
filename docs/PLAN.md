@@ -1,6 +1,6 @@
 # Underwater gas-leak tank in Isaac Sim: FLS (+ camera) simulation
 
-> **Status (2026-10-26):** M0–M3 done (infra and launcher; scene, bubble plume, adaptive scatterers; bubble scattering, sonar standalone, minimal recorder; Isaac integration with the bubble instancer, sonar in the loop, GUI overlay, ROS 2 topics and the host relay; checks in `docs/validation.md`). Next: M4 camera underwater model.
+> **Status (2026-10-26):** M0–M3 done (infra and launcher; scene, bubble plume, adaptive scatterers; bubble scattering, sonar standalone, minimal recorder; Isaac integration with the bubble instancer, sonar in the loop, GUI overlay, ROS 2 topics and the host relay; M3.1 geometric plume label and CUDA graph bubble substeps; checks in `docs/validation.md`). Next: M4 camera underwater model.
 > Runs on **linus** for now.
 
 ## Changes in this revision (2026-10-26)
@@ -131,7 +131,7 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
    - From inside Isaac (internal Jazzy rclpy, own ROS_DOMAIN_ID): `/oculus/polar` (mono8 range×beam), `/oculus/polar_db` (32FC1), `/oculus/fan` (Cartesian mono8), `/camera/image_raw` + `camera_info`, `/sim/leak` (PoseStamped hole + flow), `/sim/plume` (MarkerArray, decimated), TF, `/clock`.
    - Host relay `ros/sonar_relay` (host Jazzy, `ros-jazzy-marine-acoustic-msgs` 2.1.0) republishes as `ProjectedSonarImage`, the message the Oculus ROS drivers use.
 10. **Dataset recorder** (`recorder.py`, `tools/sweep.py`):
-    - Per ping: raw dB polar (npz), 8-bit polar and fan PNG, per-pixel plume label (bubble energy share above a threshold), leak range/bearing in the sonar frame, metadata (config + seed).
+    - Per ping: raw dB polar (npz), 8-bit polar and fan PNG, per-pixel plume labels (bubble energy share above a threshold: all paths, direct path; geometric: main-lobe cells of visible bubbles), leak range/bearing in the sonar frame, metadata (config + seed).
     - Camera: frames + plume mask from instancer semantics.
     - Sweeps randomize seed, leak rate, hole clock angle, cover depth, sonar tilt, noise, speckle dynamics, focus mode and tank preset.
 
@@ -196,12 +196,15 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
   against ka and scattering angle (modal series, 2-D table), use it on the TX-via-mirror and RX-via-mirror paths, and
   add the wall paths (about 4x the bubble paths). M5, or M6 if it breaks the ping budget on linus.
 - **Real time with the camera on linus.** Headless with the RTX camera and the 62 k rendered bubbles the sim runs at
-  0.75 x real time (without the camera 1.0), with the GUI at 0.47 (docs/validation.md, M3). Per 100 ms of sim time:
-  bubble substeps 25 ms of Python/launch overhead (each substep uploads small arrays from pageable memory, which
-  serialises CPU and GPU), ping 53 ms, RTX render 30 ms (of which about 20 ms is the instancer's per-frame rebuild),
-  camera read 7–10 ms. Candidate fixes: recorded Warp launches and pinned, double-buffered uploads for the substep;
-  pipelining the ping's download behind the next substeps; asynchronous rendering with the camera stamped one frame
-  late. Not needed on the workstation profile.
+  0.75 x real time with the ROS sink (0.86 unpaced, no sink; without the camera 1.4), with the GUI at 0.47
+  (docs/validation.md, M3 and M3.1). The bubble substeps are no longer the limit (CUDA graph: 27 → 5 ms per
+  ping period); the GPU is: per camera frame the ping waits about 40 ms for the RTX render's GPU work and the render
+  call takes 24 ms more, ping 36 ms. Fewer rendered bubbles (`sim.bubble_stride=2`) or a 5 Hz instancer
+  (`sim.bubble_render_hz=5`) do not help, so it is the camera render itself, sharing the GPU with CUDA. Candidates:
+  a smaller camera image or fewer RTX features (M4 decides the camera pipeline anyway), asynchronous rendering with
+  the camera stamped one frame late, or the workstation profile.
+- **The per-ping sonar kernels are not a CUDA graph.** The ping is GPU-bound (plume-box paths 27 of 36 ms) and has
+  torch FFTs between its Warp kernels; a graph would save well under 1 ms of launches. Revisit for M7 (latency).
 - **Sidelobe rings from strong near-normal echoes.** With the fan vertical (roll 90°), the sand straight below and the
   plume column in the fan plane leak through the array's sidelobes into every beam at their ranges: concentric rings
   across the fan (docs/validation.md, M3 addendum). The beamformer matches Taylor theory to 0.1 dB, so this is the
@@ -209,10 +212,8 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
   recording: the M750d's actual sidelobe level (−40 dB removes most of the rings), and the sand's backscatter near
   normal incidence (Kirchhoff with rms slope 0.25 gives about −1 dB at normal incidence, likely 10 dB more than real
   sand).
-- **Plume labels include the sidelobe leakage.** A pixel is plume when the bubbles carry most of its energy, so the
-  leakage arcs of a strong plume echo are labelled too (with the fan vertical, an annulus across all beams). Right for
-  "what the bubbles cause in the image"; a detector trained on it learns the arcs as plume. Option for M5: a second,
-  geometric label (pixels whose resolution cell contains bubbles).
+- ~~**Plume labels include the sidelobe leakage.**~~ The energy labels (mask_all, mask_direct) do by definition;
+  done in M3.1: a third, geometric label mask_geom (main-lobe cells of visible bubbles, no echo levels).
 - **Plume intermittency.** The plume echo is steadier than real seep footage suggests (energy ±0.4 dB from ping to
   ping): constant flow, slow meander and small-scale OU turbulence only, no large eddies or bubble clusters. To check
   against a real recording (M2 goal) before tuning; candidate fix with the LBM flow field (M6).

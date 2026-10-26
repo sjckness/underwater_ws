@@ -25,7 +25,7 @@ On the host, `pytest` runs the same tests without Warp (pure Python/numpy); the 
 `python -m uw test --isaac` also runs `tests/isaac/` (starts the Kit app, about a minute): the in-Isaac sonar gives
 bit-identical pings to `sonar-only` for the same config and seed.
 
-Tools (run with `python -m uw py`): `tools/plume_preview.py` (bubble plume, both pipe presets), `tools/sonar_preview.py` (sonar images, static and with the plume, focused and unfocused, timing; `--video N`: an H.264 MP4 of N pings with axes in metres, the pose, the ground-truth plume outline and a side view of the tank), `tools/compare_real.py` (speckle, sidelobes, blind zone, TVG profile of a recording). On the host: `python3 tools/gpu_mem.py OUT.json` samples the peak GPU memory of the running `uw` processes (nvidia-smi) until Ctrl-C. What the models were checked against, and where they disagree: [docs/validation.md](docs/validation.md).
+Tools (run with `python -m uw py`): `tools/plume_preview.py` (bubble plume, both pipe presets), `tools/sonar_preview.py` (sonar images, static and with the plume, focused and unfocused, timing; `--video N`: an H.264 MP4 of N pings with axes in metres, the pose, the outlines of the plume labels and a side view of the tank), `tools/compare_real.py` (speckle, sidelobes, blind zone, TVG profile of a recording). On the host: `python3 tools/gpu_mem.py OUT.json` samples the peak GPU memory of the running `uw` processes (nvidia-smi) until Ctrl-C. What the models were checked against, and where they disagree: [docs/validation.md](docs/validation.md).
 
 The first `python -m uw test` installs pytest 7.4.4 (the host's version) into `~/.cache/uw_pydeps`, which needs network
 once; the image has no pytest.
@@ -113,7 +113,7 @@ colcon (`ros2 run sonar_relay relay`).
 
 - `output/`: everything the tools write; not in git. `output/plume_preview/<preset>/`, `output/sonar_preview/<preset>/`:
   previews; `output/datasets/<name>/`: `sonar-only` datasets (per ping: npz with raw dB and the plume shares,
-  polar PNG, two plume-label PNGs, fan PNG if `recorder.fan_png`, JSON; `manifest.json`; about 1 MB per ping); `output/cache/`: acoustic scatterers, one npz per geometry + spacing (rebuilt automatically).
+  polar PNG, three plume-label PNGs (`mask_all`, `mask_direct`: the bubbles' share of the echo energy; `mask_geom`: main-lobe cells of visible bubbles; described in the manifest), fan PNG if `recorder.fan_png`, JSON; `manifest.json`; about 1 MB per ping); `output/cache/`: acoustic scatterers, one npz per geometry + spacing (rebuilt automatically).
 - `~/.cache/uw_warp`: Warp kernel cache (not `~/.cache/isaac-sim/cache`, which is root-owned); `~/.cache/uw_cuda`: the
   CUDA driver's JIT cache.
 - `~/.cache/uw_pydeps`: pytest (and imageio-ffmpeg) for the container.

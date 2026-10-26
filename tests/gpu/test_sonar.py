@@ -154,6 +154,45 @@ def test_plume_speckle_renews_every_ping_static_sand_does_not():
     assert np.mean(sand_c) > 0.9
 
 
+def test_geometric_plume_label():
+    """mask_geom marks the main-lobe cells of visible bubbles only. Synthetic bubbles: one on a beam marks its two
+    range bins and the beams within half the beam width (in u); one above the vertical aperture, one under the sand
+    and one behind the sonar mark nothing."""
+    from types import SimpleNamespace
+    cfg = config.load(overrides=QUIET)
+    son = sonar.Sonar(cfg, geometry.build_scene(cfg))
+    beam, r = 300, 2.0123
+    pts = [target(son, r, son.bearing[beam]), target(son, 2.0, son.bearing[200], 15.0),
+           target(son, 2.5, 0.0, -9.0), son.position - 0.5 * son.rot[:, 0]]
+    assert pts[2][2] < 0.3                                        # under the sand
+    n = len(pts)
+    bub = SimpleNamespace(cap=n, pos=wp.array(np.array(pts, np.float32), dtype=wp.vec3),
+                          r=wp.full(n, 1e-3, dtype=float), alive=wp.ones(n, dtype=wp.int32))
+    got = son.ping(bubbles=bub).plume_mask_geom > 0
+    want = np.zeros_like(got)
+    u = np.sin(np.radians(son.bearing))
+    want[np.ix_([int(r / son.dr), int(r / son.dr) + 1], np.abs(u - u[beam]) <= son.u_half)] = True
+    assert np.array_equal(got, want)
+
+
+def test_geometric_label_has_no_sidelobe_leakage():
+    """Fan vertical (roll 90°), the plume column in it: the energy label spreads over every beam at the column's
+    ranges (sidelobe leakage, docs/validation.md M3), the geometric one does not; nearly all of it is in the energy
+    label too."""
+    cfg = config.load(overrides=["sonar.roll_deg=90"])
+    scene = geometry.build_scene(cfg)
+    sim = bubbles.BubbleSim(cfg, scene)
+    sim.warmup(float(config.get(cfg, "plume.warmup_s")))
+    son = sonar.Sonar(cfg, scene, geometry.scatterers(cfg, scene), plume=sonar.plume_region(sim))
+    sim.step(0.1)
+    p = son.ping(bubbles=sim)
+    geom, direct = p.plume_mask_geom > 0, p.plume_mask_direct > 0
+    n_b = len(son.bearing)
+    assert direct.sum(1).max() > 0.9 * n_b
+    assert 0 < geom.sum(1).max() < 0.6 * n_b
+    assert np.mean(direct[geom]) > 0.8
+
+
 def test_surface_ghost_at_the_image_range():
     """Sonar 0.3 m below a calm surface, level; a point 2 m ahead. Ghosts: TX or RX via the surface at
     (|SX| + |S'X|) / 2 (the two add coherently), both via the surface at |S'X|; levels from the image geometry and

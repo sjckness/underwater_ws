@@ -21,7 +21,7 @@ or uniform sinc), horizontal fan roll-off, coherent
 sum with an energy-preserving pulse envelope over the two nearest range bins. Output: power [uPa^2] per (range bin,
 beam), raw dB re 1 uPa, TVG (k log10 R + 2 alpha R), 8-bit window above the beam noise floor, blind zone below the
 minimum range, and the bubbles' share of the energy as two plume labels: all bubble paths (direct, surface ghosts) and
-the direct path only.
+the direct path only; plus a geometric label: the cells whose main lobe contains a visible bubble.
 Echoes and the bubble extinction are summed in 64-bit fixed point, so a ping is bit-identical for the same config and
 seed (in any process: `sonar-only` and `sim` give the same images).
 Implemented (linus): StaticCache precomputed, SensorPose fixed, Beamformer fft_fresnel; the others are M6.
@@ -562,6 +562,44 @@ def point_kernel(p: Params, pl: Planes, n_planes: int, bx: Box, ext: wp.array3d(
                         deposit(grid2, p, 2.0 * lm, u_of(p, dq), a2, 2.0 * p.k * lm + PI)
 
 
+@wp.kernel
+def geom_label_kernel(p: Params, pos: wp.array(dtype=wp.vec3), alive: wp.array(dtype=wp.int32), min_bin: int,
+                      e_max: float, u_half: float, sine: int, b0: float, db: float, mask: wp.array2d(dtype=wp.uint8)):
+    """Geometric plume label: each alive bubble in line of sight marks the range bins its echo falls in (two, as
+    ``deposit``) and the beams whose main lobe contains it (|u - u_beam| <= u_half, |elevation| <= e_max). No echo
+    levels: sidelobes never mark anything."""
+    i = wp.tid()
+    if alive[i] == 0:
+        return
+    q = pos[i]
+    d = q - p.pos
+    r = wp.length(d)
+    if r <= 0.0:
+        return
+    b = p.rot_t * (d / r)
+    if b[0] <= 0.0 or wp.abs(wp.asin(wp.clamp(b[2], -1.0, 1.0))) > e_max:
+        return
+    x = r / p.dr
+    j = int(wp.floor(x))
+    if j < min_bin or j >= p.n_r:
+        return
+    if clear(p, p.pos, q) == 0:
+        return
+    u = -b[1]
+    lo = wp.clamp(u - u_half, -1.0, 1.0)
+    hi = wp.clamp(u + u_half, -1.0, 1.0)
+    if sine == 0:
+        lo = wp.asin(lo)
+        hi = wp.asin(hi)
+    n_b = mask.shape[1]
+    c0 = wp.max(int(wp.ceil((lo - b0) / db)), 0)
+    c1 = wp.min(int(wp.floor((hi - b0) / db)), n_b - 1)
+    for c in range(c0, c1 + 1):
+        mask[j, c] = wp.uint8(255)
+        if j + 1 < p.n_r and x > float(j):
+            mask[j + 1, c] = wp.uint8(255)
+
+
 # ------------------------------------------------------------------------------ per-ping grid effects
 
 @wp.kernel
@@ -688,6 +726,7 @@ class Ping:
     plume_mask_all: np.ndarray      # uint8 0/255: share > sonar.plume_mask_threshold
     plume_share_direct: np.ndarray  # ... their direct path only
     plume_mask_direct: np.ndarray
+    plume_mask_geom: np.ndarray     # uint8 0/255: a visible bubble lies in the cell's main lobe (geometry only)
     range_m: np.ndarray
     bearing_deg: np.ndarray
     timing_ms: dict = field(default_factory=dict)
@@ -878,6 +917,10 @@ class Sonar:
         self.power_d = wp.zeros((self.n_r, n_b), dtype=float, device=device)
         self.share_d = wp.zeros((self.n_r, n_b), dtype=float, device=device)
         self.mask_d = wp.zeros((self.n_r, n_b), dtype=wp.uint8, device=device)
+        self.mask_g = wp.zeros((self.n_r, n_b), dtype=wp.uint8, device=device)
+        # the geometric label's main lobe: the -3 dB receive beam width (constant in u) and the vertical edges
+        self.u_half = math.sin(math.radians(self.beamwidth_deg) / 2)
+        self.e_max = math.radians(self.fov_v_deg / 2)
         self.db = wp.zeros((self.n_r, n_b), dtype=float, device=device)
         self.img = wp.zeros((self.n_r, n_b), dtype=wp.uint8, device=device)
         self.share = wp.zeros((self.n_r, n_b), dtype=float, device=device)
@@ -1081,6 +1124,13 @@ class Sonar:
                               self.acc_b, self.acc_d, 0])
         for a, g, add_to in ((self.acc, self.grid, 1), (self.acc_b, self.grid_b, 0), (self.acc_d, self.grid_d, 0)):
             wp.launch(resolve_kernel, dim=g.shape, device=dev, inputs=[a, g, add_to])
+        self.mask_g.zero_()
+        if n_bub:
+            b0, db = ((-math.sin(self.theta_max), 2 * math.sin(self.theta_max) / (len(self.bearing) - 1)) if self.sine
+                      else (-self.theta_max, 2 * self.theta_max / (len(self.bearing) - 1)))
+            wp.launch(geom_label_kernel, dim=n_bub, device=dev,
+                      inputs=[p, bubbles.pos, bubbles.alive, int(math.ceil(self.min_range / self.dr)), self.e_max,
+                              self.u_half, int(self.sine), b0, db, self.mask_g])
         lap("bubbles_targets")
         wp.launch(reverb_kernel, dim=self.grid.shape, device=dev, inputs=[self.grid, self.rev, seed + 1])
         lap("reverberation")
@@ -1097,6 +1147,7 @@ class Sonar:
         out = Ping(power=self.power.numpy(), db=self.db.numpy(), image=self.img.numpy(),
                    plume_share_all=self.share.numpy(), plume_mask_all=self.mask.numpy(),
                    plume_share_direct=self.share_d.numpy(), plume_mask_direct=self.mask_d.numpy(),
+                   plume_mask_geom=self.mask_g.numpy(),
                    range_m=self.range_m, bearing_deg=self.bearing, timing_ms=tm)
         lap("download")
         tm["total"] = sum(tm.values())

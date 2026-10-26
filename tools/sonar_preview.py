@@ -5,8 +5,8 @@
 Without a pipe preset both run (exposed, buried); other presets (e.g. basin) apply to both. Written to
 output/sonar_preview/<preset>[+roll<deg>][+pitch<deg>][+yaw<deg>]/ (a pose angle appears when --set changes it):
 {static,plume}_{focus,nofocus}_{polar,fan}.png, overview.png, timing.json, and with --video N plume.mp4: N consecutive
-pings with the plume at the ping rate (H.264; the fan in metres, the pose in the title, the ground-truth plume_direct
-contour unless --no-contour, a side view of the tank with the sonar and its field of view) plus how the echo changes
+pings with the plume at the ping rate (H.264; the fan in metres, the pose in the title, the outlines of the plume
+labels mask_direct and mask_geom unless --no-contour, a side view of the tank with the sonar and its field of view) plus how the echo changes
 from ping to ping (timing.json "video": speckle correlation of consecutive pings in the plume and in the static
 scene, plume level statistics).
 Timing: scene and scatterers, plume warm-up, sonar setup and static precompute, then --pings pings with the plume
@@ -63,9 +63,10 @@ def side_view(ax, cfg, scene, sim, son):
 
 def video(path, cfg, scene, sim, son, n, dt, title, contour=True):
     """n consecutive pings with the plume as an H.264 MP4 (1 / dt frames per second): the fan in metres, the title
-    with the pose, the ground-truth plume_direct contour (contour=True) and a side view of the tank. Plus how the
-    echo changes from ping to ping: speckle correlation (sonar_stats.speckle_correlation) of consecutive pings in the
-    plume (direct share > 0.9) and in the static scene (share < 0.001, 20 dB over the noise floor)."""
+    with the pose, the outlines of the plume labels mask_direct and mask_geom (contour=True) and a side view of the
+    tank. Plus how the echo changes from ping to ping: speckle correlation (sonar_stats.speckle_correlation) of
+    consecutive pings in the plume (direct share > 0.9) and in the static scene (share < 0.001, 20 dB over the noise
+    floor)."""
     from uw import sonar_stats
     ffmpeg = deps.require("imageio_ffmpeg", "imageio-ffmpeg", "0.5.1").get_ffmpeg_exe()
     pings = []
@@ -79,14 +80,16 @@ def video(path, cfg, scene, sim, son, n, dt, title, contour=True):
     im = ax.imshow(first, cmap="gray", vmin=0, vmax=255, extent=ext, interpolation="bilinear")
     ax.set(xlabel="across the fan [m] (starboard +)", ylabel="along the sonar axis [m]")
     side_view(fig.add_axes([0.71, 0.45, 0.27, 0.45]), cfg, scene, sim, son)
-    fig.text(0.71, 0.36, "orange: ground-truth plume_direct label, outline\n(bubbles' direct echo > 50 % of the "
-             "pixel's energy;\nincludes their sidelobe leakage)" if contour else "", fontsize=9, color="#e67e00",
-             va="top")
+    if contour:
+        fig.text(0.71, 0.36, "orange: plume label mask_direct, outline\n(bubbles' direct echo > 50 % of the pixel's "
+                 "energy;\nincludes their sidelobe leakage)", fontsize=9, color="#e67e00", va="top")
+        fig.text(0.71, 0.26, "cyan: geometric label mask_geom, outline\n(main-lobe cells of visible bubbles)",
+                 fontsize=9, color="#0aa5c8", va="top")
     hdr = ax.set_title("")
     yy, xx = np.mgrid[0:first.shape[0], 0:first.shape[1]]
     x_m = ext[0] + (xx + 0.5) * (ext[1] - ext[0]) / first.shape[1]
     y_m = ext[3] - (yy + 0.5) * (ext[3] - ext[2]) / first.shape[0]
-    cs = None
+    cs = []
     w, h = fig.canvas.get_width_height()
     proc = subprocess.Popen([ffmpeg, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
                              "-s", f"{w}x{h}", "-r", f"{1 / dt:g}", "-i", "-", "-c:v", "libx264", "-preset", "veryfast",
@@ -94,13 +97,14 @@ def video(path, cfg, scene, sim, son, n, dt, title, contour=True):
     t0 = sim.t - n * dt
     for i, p in enumerate(pings):
         im.set_data(son.fan(p.image))
-        if cs is not None:
-            cs.remove()
-            cs = None
-        if contour and p.plume_mask_direct.any():       # the label's outline (smoothed over 9 bins x 7 beams)
-            region = sonar_stats.local_mean(p.plume_mask_direct / 255.0, (9, 7)) > 0.5
-            cs = ax.contour(x_m, y_m, son.fan(region.astype(np.uint8) * 255), levels=[127], colors="#ff8c00",
-                            linewidths=1.0)
+        for c in cs:
+            c.remove()
+        cs = []
+        for mask, colour in ((p.plume_mask_direct, "#ff8c00"), (p.plume_mask_geom, "#00d5ff")):
+            if contour and mask.any():                  # the label's outline (smoothed over 9 bins x 7 beams)
+                region = sonar_stats.local_mean(mask / 255.0, (9, 7)) > 0.5
+                cs.append(ax.contour(x_m, y_m, son.fan(region.astype(np.uint8) * 255), levels=[127], colors=colour,
+                                     linewidths=1.0))
         hdr.set_text(f"{title}   ping {i + 1}/{n}, t = {t0 + (i + 1) * dt:.1f} s")
         fig.canvas.draw()
         proc.stdin.write(np.asarray(fig.canvas.buffer_rgba())[..., :3].tobytes())
@@ -127,7 +131,8 @@ def video(path, cfg, scene, sim, son, n, dt, title, contour=True):
             "plume_level_db_std": float(level.std()),
             "plume_level_db_ping_to_ping_rms": float(np.sqrt(np.mean(np.diff(level) ** 2))),
             "label_pixels_mean": float(np.mean([q.plume_mask_direct.astype(bool).sum() for q in pings])),
-            "label_pixels_std": float(np.std([q.plume_mask_direct.astype(bool).sum() for q in pings]))}
+            "label_pixels_std": float(np.std([q.plume_mask_direct.astype(bool).sum() for q in pings])),
+            "geom_label_pixels_mean": float(np.mean([q.plume_mask_geom.astype(bool).sum() for q in pings]))}
 
 
 def run(cfg, name, n_pings, n_video=0, contour=True):
@@ -206,7 +211,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--pings", type=int, default=20, help="pings for the timing")
     ap.add_argument("--video", type=int, default=0, metavar="N", help="also write N consecutive plume pings as MP4")
-    ap.add_argument("--no-contour", action="store_true", help="video without the ground-truth plume contour")
+    ap.add_argument("--no-contour", action="store_true", help="video without the plume label outlines")
     config.add_args(ap.add_argument)
     args = ap.parse_args()
     wp.config.quiet = True

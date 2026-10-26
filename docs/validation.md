@@ -586,3 +586,49 @@ a side view of the tank with the sonar and its field of view):
 Steeper pitch sees less of the column (only its base above the pipe), so the label shrinks and the echo fluctuates
 more; it also sees more sand in front of the pipe, and fewer far-wall and plume-box paths make the ping cheaper.
 
+
+## M3.1: geometric plume label, CUDA graph for the bubble substeps (2026-10-26)
+
+### Geometric label `mask_geom`
+
+Each alive bubble in line of sight from the sonar (shadow ray against the occluders) marks the range bins its direct
+echo falls in (the two of `deposit`) and the beams whose main lobe contains it: |u − u_beam| ≤ sin(beam width / 2)
+(the −3 dB receive width, constant in u) and |elevation| ≤ fov_v / 2. No echo levels, so no sidelobe leakage; it
+also marks bubbles too weak to stand out. Stored as `<seq>_mask_geom.png` next to mask_all and mask_direct; the
+manifest's `labels` describes all three.
+
+| | mask_direct pixels | mask_geom pixels | mask_geom inside mask_direct | most beams in one range bin (direct / geom) |
+|---|---|---|---|---|
+| exposed, roll 0° (one ping) | 4963 | 1111 | 91 % | 161 / 30 |
+| exposed, roll 90° (one ping) | 88 940 | 28 676 | 89 % | 508 (all) / 227 |
+| exposed, pitch 30° (50 pings) | 1710 | 480 | | |
+
+mask_direct is 3–5 times larger: the sidelobe leakage (at roll 90° an annulus over all 512 beams), the bubbles' echo
+beyond the −3 dB main lobe, and the upper plume seen through the vertical sidelobes. In the videos mask_geom is the
+cyan outline: at roll 90° it follows the column, the orange mask_direct the annulus. Tests:
+`test_geometric_plume_label` (synthetic bubbles: on a beam, above the vertical aperture, under the sand, behind the
+sonar), `test_geometric_label_has_no_sidelobe_leakage`.
+
+### CUDA graph for the bubble substeps (`plume.cuda_graph`)
+
+A batch of substeps (up to 240; in `sim` and `sonar-only` the 24 between two pings) now runs in two parts: the host
+part of every substep in the original order (vents, meander, new bubbles: all host random numbers) into pinned
+staging arrays and one upload; then the GPU part of all substeps, captured once per batch length as a CUDA graph.
+Kernels read the per-substep values (new-bubble count, ring head, seed) from device arrays. `sim` now steps the
+bubbles only when something reads them (ping, bubble render, /sim/plume), all pending substeps at once.
+
+The bubble pool is bit-identical to the code before (both pipe presets, against a saved state), with or without
+the graph, in one batch or one substep at a time (`test_cuda_graph_and_batching_do_not_change_the_bubbles`); the
+video statistics and the sim/sonar-only identity are unchanged.
+
+| 24 substeps (one ping period) | before | batched, no graph | graph |
+|---|---|---|---|
+| `sonar-only` / standalone | 15 ms | 11 ms | 4.2–5.8 ms |
+| `sim` (Kit app) | 27 ms (launch) | | 5.4 ms |
+
+Real-time factor, `sim` headless with the camera and the ROS sink: **0.75, unchanged**. The bubbles were not the
+limit; the GPU is. Before each ping the loop now waits about 40 ms for the GPU (the camera's RTX render, queued
+asynchronously), the render call itself takes 24 ms, the ping 36 ms. Unpaced and without a sink the sim reaches
+0.86; with `sim.bubble_stride=2` 0.87 and with `sim.bubble_render_hz=5` 0.84, so neither the instance count nor the
+instancer updates matter; it is the camera render sharing the GPU with CUDA. Without the camera, unpaced: 1.41 x
+real time (before: real time at 1.0 with little margin).

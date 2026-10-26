@@ -87,6 +87,7 @@ plume:                          # integral buoyant-jet model (top-hat) for the l
   wobble: true                  # zigzag / helical path oscillation of bubbles > 1.8 mm
   max_bubbles: 150000
   dt: 0.004166667               # bubble integration step [s] (1/240)
+  cuda_graph: true              # run each batch of substeps as one captured CUDA graph (same results, less overhead)
   warmup_s: 12.0                # simulated before the first frame so the plume has reached the surface
 
 lights:                         # artificial light only (deep water)

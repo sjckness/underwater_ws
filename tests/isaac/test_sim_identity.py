@@ -37,7 +37,7 @@ def test_sim_pings_equal_sonar_only(tmp_path):
         assert a.files == b.files
         for k in a.files:
             assert np.array_equal(a[k], b[k], equal_nan=True), (i, k)
-        for png in ("polar", "mask_all", "mask_direct"):
+        for png in ("polar", "mask_all", "mask_direct", "mask_geom"):
             assert (sim / f"{i:06d}_{png}.png").read_bytes() == (so / f"{i:06d}_{png}.png").read_bytes(), (i, png)
         ja, jb = (json.loads((d / f"{i:06d}.json").read_text()) for d in (sim, so))
         ja.pop("timing_ms"), jb.pop("timing_ms")

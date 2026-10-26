@@ -65,3 +65,21 @@ def test_lbm_flow_field_is_m6():
     cfg = config.load(overrides=["plume.flow_field=lbm"])
     with pytest.raises(NotImplementedError, match="M6"):
         bubbles.BubbleSim(cfg, geometry.build_scene(cfg))
+
+
+@pytest.mark.parametrize("preset", ["exposed", "buried"])
+def test_cuda_graph_and_batching_do_not_change_the_bubbles(preset):
+    """Substeps captured as a CUDA graph or launched one by one, in one batch or one substep at a time: the same
+    random numbers in the same order, the same kernels, so bit-identical pools."""
+    states = []
+    for graph, chunks in ((True, [0.1]), (False, [0.1]), (True, [1 / 240] * 24)):
+        cfg = config.load(presets=[preset], overrides=[f"plume.cuda_graph={str(graph).lower()}"])
+        sim = bubbles.BubbleSim(cfg, geometry.build_scene(cfg))
+        sim.warmup(1.0)
+        for dt in chunks * 3:
+            sim.step(dt)
+        states.append([getattr(sim, k).numpy() for k in ("pos", "r", "alive", "vel", "turb", "stats")]
+                      + [np.array([sim.t, sim.head, sim.emitted, sim.emitted_gas])])
+    for other in states[1:]:
+        for a, b in zip(states[0], other):
+            assert np.array_equal(a, b)

@@ -4,9 +4,10 @@ RTX camera, outputs through a SensorSink (ROS 2 by default).
     python -m uw sim [--gui] [--sink ros|file|none] [--out DIR] [--duration S] [--no-realtime] [--no-camera]
         [--view side45|top|sonar] [--screenshot T]... [--stats-file F] [--profile ...] [--preset ...] [--set a.b=c]
 
-Loop: one tick = one bubble substep (plume.dt, 1/240 s). Every tick the bubbles step; every 1/sonar.ping_rate_hz the
-sonar pings (the same pings as `sonar-only` for the same config and seed); every 1/camera.rate_hz an RTX render gives
-the camera image; with --gui the viewport also renders every 1/sim.gui_fps. /clock and the other topics at their ros.*
+Loop: one tick = one bubble substep (plume.dt, 1/240 s). The bubbles step when something reads them (ping, bubble
+render, /sim/plume), all pending substeps at once as one CUDA graph; every 1/sonar.ping_rate_hz the sonar pings
+(the same pings as `sonar-only` for the same config and seed); every 1/camera.rate_hz an RTX render gives the camera
+image; with --gui the viewport also renders every 1/sim.gui_fps. /clock and the other topics at their ros.*
 rates. Sim time = time since the leak started: the plume warm-up (plume.warmup_s) runs before the first tick.
 Real time (sim.realtime, off with --no-realtime): the loop sleeps when ahead of the wall clock; the watchdog reports
 pings over sonar.ping_budget_ms.static and sim time more than sim.max_lag_s behind. It never skips work: sim time stays
@@ -189,7 +190,8 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
     stats = Stats()
     count = {"ticks": 0, "pings": 0, "renders": 0, "camera": 0, "camera_empty": 0, "over_budget": 0}
     worst = {"ping_ms": 0.0, "lag_s": 0.0}
-    k = 0
+    k = pending = 0
+    batch = max(1, int(round(1.0 / (rates["ping"] * dt))))      # substeps per ping
     wall0 = time.perf_counter()
     last_rtf = (wall0, 0.0)
     last_warn = -1e9
@@ -199,17 +201,30 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
     exit_reason = "stopped"
     try:
         while app.is_running() and not stop["flag"]:
-            t_a = time.perf_counter()
-            if sim is not None:
-                sim.step(dt)
             k += 1
+            pending += 1
             t_loop = k * dt
             t = t0 + t_loop
-            stats.add("bubble_step_launch", (time.perf_counter() - t_a) * 1e3)
+            ping_due = timers["ping"].due(t_loop)
+            cam_due = camera is not None and timers["camera"].due(t_loop)
+            gui_due = args.gui and timers["gui"].due(t_loop)
+            idle_due = camera is None and not args.gui and timers["idle"].due(t_loop)
+            bubbles_due = inst is not None and timers["bubbles"].due(t_loop)
+            plume_due = live and sim is not None and timers["plume"].due(t_loop)
+            # the bubbles step only when something reads them, all pending substeps at once (one CUDA graph)
+            if sim is not None and (ping_due or plume_due or (bubbles_due and (cam_due or gui_due))
+                                    or pending >= batch):
+                t_a = time.perf_counter()
+                sim.step(pending * dt)
+                stats.add("bubble_steps", (time.perf_counter() - t_a) * 1e3)
+                pending = 0
             if timers["clock"].due(t_loop):
                 sink.clock(t)
-            if timers["ping"].due(t_loop):
+            if ping_due:
+                t_w = time.perf_counter()
+                wp.synchronize_device(son.device)        # queued GPU work (bubble graph, last render) finishes first
                 t_b = time.perf_counter()
+                stats.add("gpu_wait_before_ping", (t_b - t_w) * 1e3)
                 ping = son.ping(bubbles=sim)
                 t_c = time.perf_counter()
                 sink.publish(recorder.sonar_message(count["pings"], sim.t if sim is not None else t, ping, son, cfg,
@@ -227,10 +242,6 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                     count["over_budget"] += 1
                     log.warning("watchdog: ping %d took %.0f ms (budget %.0f ms)", count["pings"],
                                 ping.timing_ms["total"], budget)
-            cam_due = camera is not None and timers["camera"].due(t_loop)
-            gui_due = args.gui and timers["gui"].due(t_loop)
-            idle_due = camera is None and not args.gui and timers["idle"].due(t_loop)
-            bubbles_due = inst is not None and timers["bubbles"].due(t_loop)
             if cam_due or gui_due or idle_due:
                 if bubbles_due and (cam_due or gui_due):
                     for key, v in inst.update().items():
@@ -263,7 +274,7 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                         import omni.replicator.core as rep
                         log.warning("camera: no image after %d renders (replicator %s, timeline playing %s)",
                                     count["camera_empty"], rep.orchestrator.get_status(), timeline.is_playing())
-            if live and sim is not None and timers["plume"].due(t_loop):
+            if plume_due:
                 snap = sim.snapshot()
                 sink.publish(sinks.Message("plume", k, t, arrays={"position": snap["pos"],
                                                                    "diameter": 2.0 * snap["radius"]}))
