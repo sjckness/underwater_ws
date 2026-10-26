@@ -114,6 +114,26 @@ From inside the container, through the Isaac ROS bridge's internal Jazzy (`uw/ro
 drivers (`--db`: the float dB image instead). Run it without building: `ros/sonar_relay/run.sh`; or build it with
 colcon (`ros2 run sonar_relay relay`).
 
+## Datasets (sweeps)
+
+`tools/sweep.py` generates a labelled sonar dataset from a sweep file (`config/sweeps/v0.1.yaml`: every randomised
+parameter and its distribution) with `sonar-only` workers in the container:
+
+```bash
+python3 tools/sweep.py run                    # sample (once), generate, resume where it stopped, write manifest + card
+python3 tools/sweep.py status                 # progress
+touch /HDD2T/underwater_data/v0.1/PAUSE       # pause after the current scenarios; rm to go on
+python3 tools/dataset_stats.py /HDD2T/underwater_data/v0.1     # stats/report.md, overview.png, examples.png
+```
+
+It runs on the host (plain Python) and keeps `workers` containers busy. Each scenario is a directory
+`<root>/<id>/ping_xxxxx.{npz,png,json}` + `_mask_geom/_mask_direct/_mask_all.png`; `<root>/manifest.json` lists them
+with their split (train/val/test by scenario, stratified by kind, pipe preset and flow decade) and `<root>/README.md`
+is the dataset card. It stops its workers (freeing the GPU) while an f1tenth run is active and while / has less than
+27 GB free (the f1tenth Isaac precheck needs 25 GB); the data go to `data_root` (config/runtime.yaml, the HDD on
+linus). Training: `uw.dataset.SonarDataset(root, split)` (PyTorch: image, the three masks, the energy shares, scalar
+targets such as the flow).
+
 ## Where things go
 
 - `output/`: everything the tools write; not in git. `output/plume_preview/<preset>/`, `output/sonar_preview/<preset>/`:

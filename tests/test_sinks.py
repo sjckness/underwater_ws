@@ -58,3 +58,10 @@ def test_flat_layout_for_sweeps(tmp_path):
     assert names == ["manifest.json", "ping_00007.json", "ping_00007.npz", "ping_00007.png",
                      "ping_00007_mask_geom.png"]
 
+
+def test_read_png_roundtrip(tmp_path):
+    rng = np.random.default_rng(2)
+    for img in (rng.integers(0, 256, (9, 13), dtype=np.uint8), rng.integers(0, 256, (5, 4, 3), dtype=np.uint8)):
+        sinks.write_png(tmp_path / "x.png", img)
+        assert np.array_equal(sinks.read_png(tmp_path / "x.png"), img)
+

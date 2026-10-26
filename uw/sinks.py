@@ -124,3 +124,23 @@ def write_png(path, img: np.ndarray, level: int = 3) -> None:
         return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
     Path(path).write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, colour, 0, 0, 0))
                            + chunk(b"IDAT", zlib.compress(rows.tobytes(), level)) + chunk(b"IEND", b""))
+
+
+def read_png(path) -> np.ndarray:
+    """The 8-bit PNGs ``write_png`` writes (grey, RGB, RGBA; one IDAT, filter 0 on every row), standard library only.
+    Other PNGs: Pillow."""
+    data = Path(path).read_bytes()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError(f"{path}: not a PNG")
+    w, h, depth, colour = struct.unpack(">IIBB", data[16:26])
+    idat = [i for i in range(8, len(data) - 8) if data[i:i + 4] == b"IDAT"]
+    ch = {0: 1, 2: 3, 6: 4}.get(colour)
+    if depth == 8 and ch is not None and len(idat) == 1:
+        n = struct.unpack(">I", data[idat[0] - 4:idat[0]])[0]
+        raw = np.frombuffer(zlib.decompress(data[idat[0] + 4:idat[0] + 4 + n]), np.uint8).reshape(h, 1 + w * ch)
+        if not raw[:, 0].any():
+            return raw[:, 1:].reshape(h, w, ch).squeeze(-1) if ch == 1 else raw[:, 1:].reshape(h, w, ch)
+    from PIL import Image
+    with Image.open(path) as im:
+        return np.asarray(im)
+

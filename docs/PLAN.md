@@ -1,6 +1,6 @@
 # Underwater gas-leak tank in Isaac Sim: FLS (+ camera) simulation
 
-> **Status (2026-10-26):** M0–M3 done (infra and launcher; scene, bubble plume, adaptive scatterers; bubble scattering, sonar standalone, minimal recorder; Isaac integration with the bubble instancer, sonar in the loop, GUI overlay, ROS 2 topics and the host relay; M3.1 geometric plume label and CUDA graph bubble substeps; M3.5 mobile sonar; checks in `docs/validation.md`). Next: M4 camera underwater model.
+> **Status (2026-10-26):** M0–M3.5 and M5 done (infra and launcher; scene, bubble plume, adaptive scatterers; bubble scattering, sonar standalone, minimal recorder; Isaac integration with the bubble instancer, sonar in the loop, GUI overlay, ROS 2 topics and the host relay; M3.1 geometric plume label and CUDA graph bubble substeps; M3.5 mobile sonar; M5 dataset sweeps and the first dataset v0.1; checks in `docs/validation.md`). Next: real-data validation (sources below), M4 camera underwater model.
 > Runs on **linus** for now.
 
 ## Changes in this revision (2026-10-26)
@@ -149,7 +149,7 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
 - **M3 Isaac integration**: USD stage from the geometry, lamps, bubble instancer, sonar in the loop, ROS topics plus host relay; GUI check. `sonar-only` mode feature-complete.
 - **M3.5 Mobile sonar (kinematic ROV)**: SensorPose trajectory (presets) and ros, StaticCache on_motion / none, pose per ping in the data and on /tf, the rig (sonar, camera, lamps) moving in Isaac. Done.
 - **M4 Camera underwater model**.
-- **M5 Dataset recorder + sweeps; buried-pipe sediment penetration**.
+- **M5 Dataset recorder + sweeps**: surface boil and bistatic bubble paths, leak presets and time profiles, `tools/sweep.py` (resumable, parallel, pauses for f1tenth runs), dataset layout and card, splits by scenario, `uw/dataset.py` loader, `tools/dataset_stats.py`; first generation v0.1 (docs/validation.md). Done. Buried-pipe sediment penetration (the acoustic echo of a pipe under sand) is not done: see Known gaps.
 - **M6 High-fidelity backends — conditional** (see "Real-data validation"): element-level beamformer and LBM flow field only if the real-data comparison shows a beamforming or plume-dynamics gap the current models cannot close, or if scenarios with currents are needed; bigger bubble pool when a flow range needs it. Each checked on linus with a reduced scene, and against the default backend on the same scene (same echo level and bearing within tolerance). (The mobile sonar, first planned here, is M3.5.)
 - **M7 HIL open loop**: a Jetson on Ethernet receives sonar and compressed camera (Zenoh), runs leak detection; end-to-end latency measured (sim stamp → detection).
 - **M8 HIL closed loop**: ROV dynamics model, commands from the Jetson, mobile sonar (M3.5). Needs the workstation for real time.
@@ -163,6 +163,19 @@ Sources to obtain:
 `tools/compare_real.py` gets a reader for each format as the data arrives. Every mismatch found becomes a config or model change, logged in `docs/validation.md`.
 
 Rule: new physics fidelity is added only when the real-data comparison shows a gap it would close. M6 (LBM flow, element-level beamforming) is done only if the comparison shows a plume-dynamics or beamforming gap the current models cannot close, or if scenarios with currents are needed.
+
+## Dataset v0.2 (before generating it)
+From the v0.1 sanity check (docs/validation.md, M5):
+- Aim most fixed poses at the leak (pitch and yaw so that it lies inside the 130° × 20° fan, plus jitter), keep
+  ~20 % random: v0.1 misses the leak in 19 % of the leak scenarios.
+- Vary the leak's range: pipe position across the tank (and sonar on any wall), so that the basin gives 3–7 m.
+- More distractors (25 %), and of more kinds: other strong point clouds (a fish school, suspended sediment from the
+  bottom, a second pipe), so that a detector cannot key on "anything bright above the sand".
+- Faster setup: several sonar poses per scene (the scene and scatterer sampling are 60–90 % of the time), or the
+  sampling on the GPU.
+- Store polar_db as uint16 (0.01 dB steps) instead of float16 to shrink the npz; drop the soft shares if unused.
+- Leak flow driving the plume flow field while it changes (Known gaps).
+- Calibrate against real data first where it exists (Real-data validation).
 
 ## Verification
 - **Host pytest (pure numpy)**:
@@ -198,14 +211,15 @@ Rule: new physics fidelity is added only when the real-data comparison shows a g
   roughness; checked against the analytic echo of a flat plate (docs/validation.md).
 - ~~**Wall roughness and absorption.**~~ Done in M2.2: per-wall rms roughness (Rayleigh loss of the mirror
   reflection) and an absorbing lining (reflection coefficient in config).
-- **Surface backscatter in the plume boil.** Now the water surface is only a mirror (calm 0.2 mm rms; the boil's
-  5 mm rms only weakens the coherent reflection) and scatters nothing back. Fix: scatterers on the surface inside the
-  boil disc, with a roughness-dependent backscatter (Kirchhoff / small-slope, the boil's rms height and slope) updated
-  every ping from the bubbles reaching the surface, plus the bubble layer just below it. M5.
-- **Bubble bistatic multipath.** Now the bubbles' image paths (surface only) use the backscattering cross-section
-  for bistatic angles too, and their wall paths are skipped. Fix: tabulate the gas sphere's scattering amplitude
-  against ka and scattering angle (modal series, 2-D table), use it on the TX-via-mirror and RX-via-mirror paths, and
-  add the wall paths (about 4x the bubble paths). M5, or M6 if it breaks the ping budget on linus.
+- ~~**Surface backscatter in the plume boil.**~~ Done in M5 (uw/surface.py): Kirchhoff backscatter of the patch the
+  bursts roughen, from the burst rate per surface cell, random phase per ping. Its parameters (rms slope 0.3,
+  saturation rate) are assumed; to check against a real recording of a plume reaching the surface.
+- ~~**Bubble bistatic multipath.**~~ Done in M5: the bubbles' image paths over the surface and the walls, with the
+  modal-series bistatic cross-section on the paths in and out by different routes (+3 ms per ping).
+- **The plume's liquid flow follows the nominal leak flow.** A ramp or an intermittent leak changes the gas emitted,
+  not the integral plume's flow field (computed once for the nominal flow): early in a ramp and in an intermittent
+  leak's off phases the bubbles ride a stronger flow than the actual gas flux would drive. Fix: recompute or scale
+  the integral solution with the flow of the last seconds (cheap), or the LBM flow field.
 - **Real time with the camera on linus.** Headless with the RTX camera and the 62 k rendered bubbles the sim runs at
   0.75 x real time with the ROS sink (0.86 unpaced, no sink; without the camera 1.4), with the GUI at 0.47
   (docs/validation.md, M3 and M3.1). The bubble substeps are no longer the limit (CUDA graph: 27 → 5 ms per
@@ -232,6 +246,9 @@ Rule: new physics fidelity is added only when the real-data comparison shows a g
   a trajectory or with a hover drift of 2 cm the pose moves beyond the default thresholds (5 mm, 0.25°) almost every
   ping. It pays for stop-and-go motion; recomputing only the paths near the scene parts that moved is a possible
   speed-up.
+- **A buried pipe is acoustically invisible.** The sonar sees only the sand surface above a buried pipe; the echo of
+  the pipe through the sediment (refraction beyond the critical angle, sand attenuation ~0.5 dB/m/kHz) is not
+  modelled. Buried-pipe scenarios show the gas at the sand and the pockmarks, not the pipe.
 - **Plume intermittency.** The plume echo is steadier than real seep footage suggests (energy ±0.4 dB from ping to
   ping): constant flow, slow meander and small-scale OU turbulence only, no large eddies or bubble clusters. To check
   against a real recording (M2 goal) before tuning; candidate fix with the LBM flow field (M6).

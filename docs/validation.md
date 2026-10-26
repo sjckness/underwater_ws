@@ -689,3 +689,80 @@ The static speckle correlation from one ping to the next is 0.18–0.22 while mo
 scene changes with the pose, as it should.
 
 Not modelled: motion during a ping, Doppler (Known gaps).
+
+## M5: dataset sweeps and the first generation (2026-10-26)
+
+### Remaining physics from the Known gaps
+
+**Bubble multipath, bistatic.** The bubbles' image paths now cover every multipath boundary (surface and the four
+walls, before: the surface only), and the paths in and out by different routes use the gas sphere's bistatic
+cross-section: the modal series |f(θ)|², as a ratio to the backscatter on a (log ka, θ) table, each averaged over
+±10 % in ka so that the ideal sphere's narrow interior resonances do not dominate. Checks (tests/test_scattering.py):
+f(π) is the modal backscatter, ∫|f|² dΩ the modal extinction (lossless sphere, optical theorem, 0.2 %), forward
+scattering dominates at ka 12 (> 30x backscatter), nearly isotropic at ka 0.05. Cost: +3.2 ms per ping (bubbles
+1.9 → 5.1 ms). Effect, tank exposed: the plume-caused echo energy changes by less than 0.1 dB (the direct echo
+dominates); the all-paths label grows 46 % at roll 0° (4929 → 7216 pixels: the wall ghosts of the plume), 1 % at
+roll 90°; the direct-path label is unchanged.
+
+**Surface boil.** uw/surface.py: the bubble simulation counts bursts per 1 cm surface cell around where the plume
+surfaces (integer atomics: deterministic). Per ping each cell gets a smoothed burst rate (0.3 s), a disturbed share
+f = 1 − exp(−rate / 20 000 m⁻²s⁻¹), and a point scatterer jittered in the cell (new phase every ping) with the
+Kirchhoff backscatter of a rough pressure-release surface (rms slope 0.3 per axis; the static scene's convention).
+It goes to the sonar as generic point scatterers (direct path, counted in the all-paths label only); sonar.py stays
+independent of the bubble code. Checks (tests/gpu/test_surface.py): a saturated cell straight above the sonar has
+σ = A / (8π s²); the boil's energy shows up in the all-paths label and not in the direct one; bursts land where the
+plume surfaces (tests/gpu/test_bubbles.py). In the default geometry the boil is outside the vertical beam (+47°) and
+adds 0.1 dB of plume-caused energy with the fan vertical. Its parameters are assumed.
+
+### Leaks for sweeps
+
+Leak presets (config/presets/leak): pinhole 0.1–5 L/min (d50 2 mm), crack 5–50 (3 mm), rupture 50–500 (5 mm, pool
+400 k). Source `flow_jet`: the set flow (at the hole's pressure) with the jet of the hole that gives it at the pipe
+pressure (mass flow ∝ hole area: 0.06 mm for 0.1 L/min, 4.4 mm for 500 L/min at 3 bar g). Time profiles: constant,
+ramp (0 → full over ramp_s, from the first ping), intermittent (on for duty of each period). Checks: emitted gas
+1/8 of the constant leak after 1 s of a 4 s ramp, 30 % with a 30 % duty (±8 %); flow_jet gives the set flow exactly.
+
+### Sweep tooling
+
+`tools/sweep.py` samples scenarios from `config/sweeps/v0.1.yaml` (deterministic for its seed), assigns splits by
+scenario (largest remainder per stratum: kind / pipe preset / flow decade), and generates them with worker
+containers that claim scenarios with an O_EXCL file, write them through the flat FileSink and mark them DONE or
+FAILED. The orchestrator pauses (stops its workers) for f1tenth runs, a PAUSE file, or less than 27 GB free on /;
+a scenario without DONE is redone from scratch. Scatterers are not cached for sweep scenarios (60–300 MB each:
+every scenario has its own geometry). tests/test_dataset.py: sampled scenarios are valid configs with flows inside
+their preset's range and unique seeds; the splits are ~70/15/15 overall and every stratum of ≥ 10 has all three;
+the loader returns the polar image, masks with row 0 at range 0, targets.
+
+Pilots (12 + 9 scenarios × 5 pings, every kind, profile, mobile preset, both sizes and modes): one failure, a
+distractor whose `--set materials.steel_coated.rms_height_m=1e-05` YAML 1.1 read as a string; --set now takes
+exponents without a dot as numbers.
+
+### First generation: v0.1 (linus, 2026-10-26)
+
+`python3 tools/sweep.py run` (config/sweeps/v0.1.yaml, physics git 2ac4675), 2 workers, data on the HDD
+(`/HDD2T/underwater_data/v0.1`; / kept at 31 GB free):
+
+| | |
+|---|---|
+| scenarios | 300: 236 leak, 50 negative, 14 distractor; 0 failed, no pauses |
+| pings | 18 000 (60 per scenario at 10 Hz); 12 900 LF, 5 100 HF; 2 580 from a moving sonar; 2 460 with the fan vertical |
+| splits (scenarios) | train 209, val 49, test 42 |
+| size | 25.7 GiB (1.53 MB per ping on average: LF tank 0.93 MB, HF and basin more) |
+| time | 71 min wall clock, 4.2 pings/s; 2.32 h of worker time, 15–90 s per scenario (scene and scatterer sampling dominate: 12–20 s tank, about 60 s basin) |
+| ping | 31 ms fixed, 183 ms moving (static scene recomputed every ping) |
+
+Sanity check (`tools/dataset_stats.py`; `stats/report.md`, `overview.png`, `examples.png` in the dataset):
+- Image checks on 1000 random pings: no NaN outside the blind zone, no empty or saturated images (0.08 % of pixels at
+  255 on average), no label pixels in negative or distractor scenarios.
+- **The leak is often out of the main beam.** 45 of the 236 leak scenarios (19 %) never have a bubble in a cell's
+  main lobe (mask_geom empty in every ping); 10 751 of 14 160 leak pings (76 %) have it in view. The random fixed
+  pitch (10–45°) and yaw (±30°) miss the leak's elevation in about a fifth of the poses.
+- **mask_direct is much larger than mask_geom** (median 6 000 vs 716 pixels in the leak pings), and 3 169 leak pings
+  (22 %) have mask_direct without mask_geom: the plume seen through the vertical sidelobes, and the arcs of its
+  sidelobe leakage (rings across the fan at the plume's range when it is strong and close). As designed; a
+  consumer should pick the label for the task.
+- 1 536 leak pings have the leak off (ramp start, intermittent off phase) while bubbles are still in the water:
+  labels without flow, by design.
+- **The leak's range barely varies**: 1.5–2.3 m for most pings in view, in the basin too, because the pipe stays at
+  x = 1.65 m in both sizes and the fixed sonar is always on the -x wall.
+- Distractors are few (14; the test split has one).
