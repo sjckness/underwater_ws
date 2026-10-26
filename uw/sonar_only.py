@@ -37,7 +37,8 @@ def main(argv: list[str]) -> int:
     setup_s = time.perf_counter() - t0
     dt = 1.0 / float(config.get(cfg, "sonar.ping_rate_hz"))
     info = {"name": args.out, "command": "python -m uw sonar-only " + " ".join(argv),
-            "config_hash": recorder.config_hash(cfg), "seed": cfg["seed"], "config": cfg}
+            "config_hash": recorder.config_hash(cfg), "seed": cfg["seed"],
+            "labels": {"threshold": son.mask_threshold, **recorder.LABELS}, "config": cfg}
     step_ms, ping_ms, write_ms = [], [], []
     with sinks.make_sink(args.sink, out_dir=args.out, info=info) as sink:
         for i in range(args.pings):

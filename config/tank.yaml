@@ -114,7 +114,8 @@ sonar:
   array_taper_sll_db: -28.0     # Taylor taper sidelobe level of the receive array (UNVERIFIED — datasheet)
   taylor_nbar: 4
   fan_edge_db: -3.0             # two-way horizontal gain at the fan edges (UNVERIFIED — datasheet)
-  vertical_edge_db: -3.0        # two-way vertical gain at +-fov_v/2 (sinc apertures; UNVERIFIED — datasheet)
+  vertical_edge_db: -3.0        # two-way vertical gain at +-fov_v/2 (UNVERIFIED — datasheet)
+  vertical_taper: hann          # vertical TX/RX aperture: hann | cosine | uniform (sinc) (UNVERIFIED — datasheet)
   source_level_db: 206.0        # dB re 1 uPa @ 1 m (assumed; only sets the SNR together with noise_level_db)
   noise_level_db: 52.0          # receiver noise spectrum level per element, dB re 1 uPa^2/Hz, over the band c/(2 dr)
                                 # and reduced by the array gain in the beams (assumed)
@@ -132,10 +133,15 @@ sonar:
   speckle_sigma_rad: 0.1        # speckle dynamics: std of each cell's slow phase walk (assumed); 0 = frozen speckle
   speckle_time_s: 2.0           # its correlation time (assumed)
   extinction_voxel: 0.02        # bubble extinction grid [m]
+  plume_path_floor_db: null     # scene paths through the plume region weaker than the beam noise floor + this [dB]
+                                # skip the per-ping extinction (they join the static image unattenuated); null: none
   u_grid: 2048                  # direction-cosine cells of the FFT beamformer (aperture sampled at half a wavelength)
   plume_mask_threshold: 0.5     # dataset label: a pixel is plume when the bubbles carry more than this share of its energy
   scatterer_spacing: 0.002      # surface sampling [m] for the acoustic scatterers (fixed in the world: frozen speckle);
                                 # the base: scatterer_spacing_mode adaptive (profile) coarsens it far from the sonar
+
+recorder:                       # python -m uw sonar-only datasets
+  fan_png: false                # also write the Cartesian fan image per ping (derivable from the polar one)
 
 camera:
   enabled: true

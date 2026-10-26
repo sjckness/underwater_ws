@@ -21,6 +21,7 @@ lights:
 sonar:
   position: [0.10, 2.50, 1.05]
   range: 8.0                          # up to the far wall
+  plume_path_floor_db: -20.0          # paths 20 dB below the noise floor skip the per-ping extinction (speed)
 
 camera:
   position: [0.10, 2.50, 0.95]

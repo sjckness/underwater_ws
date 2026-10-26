@@ -181,6 +181,23 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
 - `~/.cache/isaac-sim/cache` is root-owned, so the Warp kernel cache goes to `~/.cache/uw_warp`.
 - Run no ROS process on the side while the f1tenth harness batches run (see the f1tenth CLAUDE.md). The tank sim uses its own ROS_DOMAIN_ID.
 
+## Known gaps (planned fixes; milestones proposed)
+- **Coherent specular reflection from smooth surfaces (pipe, walls).** Now every surface is random-phase facets with a
+  Kirchhoff (geometric-optics) term: the energy is right, but a smooth pipe or wall glints with the statistics of
+  speckle instead of a stable mirror echo. Fix: for materials whose rms slope is below a threshold, give the facets
+  their geometric phase (no random phase) so that the Kirchhoff integral is evaluated coherently over each patch,
+  keeping the random-phase diffuse part; check against the analytic echoes of a finite cylinder at normal incidence
+  and of a plane wall (mirror image). M2.2, before the datasets of M5.
+- **Surface backscatter in the plume boil.** Now the water surface is only a mirror (calm 0.2 mm rms; the boil's
+  5 mm rms only weakens the coherent reflection) and scatters nothing back. Fix: scatterers on the surface inside the
+  boil disc, with a roughness-dependent backscatter (Kirchhoff / small-slope, the boil's rms height and slope) updated
+  every ping from the bubbles reaching the surface, plus the bubble layer just below it. With M3 (the boil is also
+  in the camera image) or M5.
+- **Bubble bistatic multipath.** Now the bubbles' image paths (surface only) use the backscattering cross-section
+  for bistatic angles too, and their wall paths are skipped. Fix: tabulate the gas sphere's scattering amplitude
+  against ka and scattering angle (modal series, 2-D table), use it on the TX-via-mirror and RX-via-mirror paths, and
+  add the wall paths (about 4x the bubble paths). M5, or M6 if it breaks the ping budget on linus.
+
 ## Open questions
 - Does the M750d apply near-field (dynamic) focusing? Exact LF/HF angular resolution, beam spacing, minimum range, ring-down. Ask Blueprint support or check the SDK/datasheet.
 - Source for a real Oculus tank recording (M2): Blueprint sample data, public FLS datasets, other Oculus users.

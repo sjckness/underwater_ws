@@ -233,7 +233,7 @@ The drafts had no TS or σ_ext formulas to remove; the plan's note referred to a
 | Near-field focusing | `focus: true` |
 | Receive taper | Taylor, −28 dB |
 | Horizontal gain at the fan edges | two-way −3 dB |
-| Vertical aperture | uniform (sinc), two-way −3 dB at ±fov_v/2 |
+| Vertical aperture | Hann taper (M2.1; cosine and uniform available), two-way −3 dB at ±fov_v/2 |
 | Ring-down | 60 dB above the beam noise floor at range 0, e-folding 0.08 m |
 
 Assumed (not datasheet values):
@@ -267,11 +267,9 @@ Assumed (not datasheet values):
 - **Datasets:** writing a ping (compressed npz + 3 PNGs) takes about 100 ms on the CPU. The 200-ping smoke dataset
   took 30 s.
 
-### Physically questionable in the images (open)
+### Physically questionable in the images (open; planned fixes in `docs/PLAN.md`, Known gaps)
 
-- **Uniform vertical aperture.** Strong banding at 0.8–1.5 m (vertical sidelobes on the sand) and a bright nadir
-  line at the sonar's altitude (0.75 m). Both follow from the sinc pattern the plan specifies; a real transducer is
-  tapered and baffled, so these are probably too strong. To decide with the datasheet or a real recording.
+- **Uniform vertical aperture.** Resolved in M2.1: the default is now a Hann taper (see below).
 - **Sidelobe arcs across the whole fan.** They come from specular returns of the far wall, the tank corners and the
   pipe. The levels are physical for smooth concrete (the wall acts as a mirror, about 187 dB re 1 µPa), but the far
   Taylor sidelobes of a real array may be lower than the ideal taper.
@@ -292,3 +290,61 @@ Assumed (not datasheet values):
 | Ring-down decay | −106 dB/m | −109 dB/m configured (e-folding 0.08 m). |
 | Brightest target | the pipe | An extended target, so its "sidelobe" is meaningless here; `--target` selects a window holding a point target (e.g. a calibration sphere in a real recording). |
 | Level vs range | | Shaped by the vertical beam pattern on the sand. Compare the curves with a real recording, not the fit constants. |
+
+## M2.1: vertical taper, two plume labels, basin speed, dataset size (2026-10-26)
+
+### Vertical aperture taper (`sonar.vertical_taper`, UNVERIFIED — datasheet)
+
+The default is now a Hann taper; `cosine` and `uniform` (sinc) remain options. Closed forms, x = π L sin(angle)/λ:
+uniform sin x / x, cosine π² cos x / (π² − 4x²), Hann (sin x / x) π² / (π² − x²). L is set so that the two-way gain
+is −3 dB at ±fov_v/2 for each taper. `tests/gpu/test_sonar.py::test_vertical_pattern` checks the measured level at
+10° and 16° off axis against the closed form (±0.3 dB) for all three.
+
+Tank, exposed, static ping, beams within ±40°:
+
+| Taper | altitude line (0.70–0.82 m) re sand at 2.3–2.7 m | 0.85–1.5 m mean re sand | range-profile rms around its 0.1 m trend |
+|---|---|---|---|
+| uniform | +14.6 dB | −2.1 dB | 3.1 dB (19.5 dB peak-to-peak) |
+| cosine | −5.9 dB | −5.7 dB | 2.7 dB |
+| Hann | −21.8 dB | −6.3 dB | 2.4 dB (15.3 dB peak-to-peak) |
+
+- **Altitude line:** gone, 36 dB lower with Hann.
+- **Sidelobe banding:** the alternating bright and dark rings at 0.75–1.5 m are gone from the images.
+- **What the rms column still measures:** ripples and rocks, not sidelobes. With the ripples switched off, the
+  uniform and Hann apertures give 2.7 and 2.4 dB.
+
+### Two plume labels per ping
+
+- `mask_all`: the bubbles' share of the energy over all their paths (direct and surface ghosts) > 0.5.
+- `mask_direct`: the share of their direct path only > 0.5.
+
+Both are stored as PNGs. The shares are stored as uint8 (255 = all of the energy) in the npz, and the manifest
+carries the definitions and the threshold. `test_plume_labels`: the direct label stays within the plume's own
+ranges, while the all-paths label adds pixels beyond them (surface ghosts).
+
+With the Hann taper the two labels nearly coincide in the tank (ping 100: 5180 vs 5159 pixels): the ghosts and the
+upper plume seen through the vertical sidelobes are now far weaker.
+
+### Basin: weak plume-region paths (`sonar.plume_path_floor_db`)
+
+Scene paths through the plume region that are more than |floor| dB below the beam noise floor skip the per-ping
+extinction: they join the static image unattenuated, so no energy is dropped. The floor is −20 dB in the `basin`
+preset and off (null) in `tank`. Exact vs −20 dB, same bubbles and same noise seeds, 10 pings:
+
+| | plume-region paths | sonar ping, mean (max) | per-pixel difference |
+|---|---|---|---|
+| basin, exposed | 12.13 M → 4.02 M | 87.4 (95.6) → 40.9 (92.8) ms | mean abs. 0.018 dB, 99th percentile 0.37 dB, max 33 dB |
+| basin, buried | 14.15 M → 4.76 M | 100.8 (108.8) → 38.2 (46.5) ms | mean abs. 0.017 dB, 99th percentile 0.35 dB, max 43 dB |
+
+- **Where the maxima are:** speckle nulls, 38 pixels in about a million, a median 21.7 dB below their local 5×5
+  mean. A tiny change flips a near-cancellation there.
+- **On 5×5-averaged intensity:** mean abs. difference 0.004 dB, 99.9th percentile 0.43 dB, max 1.6 dB.
+- **Budget:** the basin is now within it with the bubble step included (about 55 ms per ping).
+
+### Dataset size (`python -m uw sonar-only`, tank exposed, 200 pings)
+
+| | MB per ping |
+|---|---|
+| M2 (float16 share, fan PNG) | 1.65 |
+| M2.1, `recorder.fan_png: false` (default) | **0.98**: raw dB float16 0.60, two uint8 shares 0.05, polar PNG 0.32, two masks 0.01 |
+| M2.1, `recorder.fan_png: true` | 1.30 |

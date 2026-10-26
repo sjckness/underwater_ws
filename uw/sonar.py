@@ -13,10 +13,12 @@ surface paths, sigma_bs(ka) from scattering.py, extinction through a voxel grid)
 u gives the aperture at half-wavelength spacing; receiver noise and ring-down are added per element; beams are formed
 with a Taylor taper, with the Fresnel term x^2 (1 - u^2) / (2 R) left in when the array does not focus.
 
-Signal: two-way spherical spreading and absorption, vertical TX/RX sinc patterns, horizontal fan roll-off, coherent
+Signal: two-way spherical spreading and absorption, vertical TX/RX aperture patterns (Hann taper by default; cosine
+or uniform sinc), horizontal fan roll-off, coherent
 sum with an energy-preserving pulse envelope over the two nearest range bins. Output: power [uPa^2] per (range bin,
 beam), raw dB re 1 uPa, TVG (k log10 R + 2 alpha R), 8-bit window above the beam noise floor, blind zone below the
-minimum range, and the bubbles' share of the energy (plume label).
+minimum range, and the bubbles' share of the energy as two plume labels: all bubble paths (direct, surface ghosts) and
+the direct path only.
 Implemented (linus): StaticCache precomputed, SensorPose fixed, Beamformer fft_fresnel; the others are M6.
 """
 from __future__ import annotations
@@ -49,7 +51,8 @@ class Params:
     n_r: int
     n_u: int
     du: float
-    vert: float             # one-way vertical pattern sinc(vert * sin(elevation))
+    vert: float             # one-way vertical pattern vertical(vert * sin(elevation), vtaper)
+    vtaper: int             # vertical aperture: 0 uniform, 1 cosine, 2 Hann
     fan: float              # one-way horizontal pattern cos(azimuth)^fan
     eps: float              # shadow-ray tolerance [m]
     use_mesh: int
@@ -79,21 +82,39 @@ class Box:                              # plume region: extinction grid (lo..hi)
     on: int
     slice_lo: wp.array(dtype=wp.vec3)   # height slices that follow the plume's width: a path that crosses one
     slice_hi: wp.array(dtype=wp.vec3)   # is attenuated every ping
+    weak: float                         # ... unless its amplitude is below this [uPa]: then it joins the static image
 
 
 # ------------------------------------------------------------------------------------------- helpers
 
 @wp.func
+def vertical(x: float, kind: int) -> float:
+    """One-way pattern of a line aperture, 1 on axis, x = pi L sin(angle) / lambda: uniform sin(x)/x; cosine taper
+    pi^2 cos(x) / (pi^2 - 4 x^2); Hann taper (sin(x)/x) pi^2 / (pi^2 - x^2). Signed (sidelobes alternate)."""
+    s = float(1.0)
+    if wp.abs(x) > 1.0e-6:
+        s = wp.sin(x) / x
+    v = s
+    if kind == 1:
+        d = PI * PI - 4.0 * x * x
+        v = PI / 4.0                                    # the limit at x = pi/2
+        if wp.abs(d) > 1.0e-4:
+            v = PI * PI * wp.cos(x) / d
+    elif kind == 2:
+        d = PI * PI - x * x
+        v = 0.5                                         # the limit at x = pi
+        if wp.abs(d) > 1.0e-4:
+            v = s * PI * PI / d
+    return v
+
+
+@wp.func
 def pattern(p: Params, d: wp.vec3) -> float:
-    """One-way gain toward the world direction d (unit, from the sonar): vertical sinc x fan roll-off, 0 behind."""
+    """One-way gain toward the world direction d (unit, from the sonar): vertical aperture x fan roll-off, 0 behind."""
     b = p.rot_t * d
     g = float(0.0)
     if b[0] > 0.0:
-        x = p.vert * b[2]
-        v = float(1.0)
-        if wp.abs(x) > 1.0e-6:
-            v = wp.sin(x) / x
-        g = v * wp.pow(b[0] / wp.sqrt(b[0] * b[0] + b[1] * b[1]), p.fan)
+        g = vertical(p.vert * b[2], p.vtaper) * wp.pow(b[0] / wp.sqrt(b[0] * b[0] + b[1] * b[1]), p.fan)
     return g
 
 
@@ -250,7 +271,10 @@ def emit(p: Params, bx: Box, x: wp.vec3, n: wp.vec3, mu: float, s2: float, r0: f
         phase = p.k * (lt + lr) + ph
         if refl < 0.0:
             phase += PI
-        if crosses(p.pos, qt, bx) + crosses(qt, x, bx) + crosses(x, qr, bx) + crosses(qr, p.pos, bx) > 0:
+        dyn = int(0)
+        if wp.abs(amp) >= bx.weak:
+            dyn = crosses(p.pos, qt, bx) + crosses(qt, x, bx) + crosses(x, qr, bx) + crosses(qr, p.pos, bx)
+        if dyn > 0:
             idx = wp.atomic_add(dyn_count, 0, 1)
             if store != 0 and idx < dyn_x.shape[0]:
                 dyn_x[idx] = x
@@ -352,9 +376,10 @@ def extinction_kernel(pos: wp.array(dtype=wp.vec3), sext: wp.array(dtype=float),
 @wp.kernel
 def point_kernel(p: Params, pl: Planes, n_planes: int, bx: Box, ext: wp.array3d(dtype=float),
                  pos: wp.array(dtype=wp.vec3), sig: wp.array(dtype=float), grid: wp.array2d(dtype=wp.vec2),
-                 grid2: wp.array2d(dtype=wp.vec2), to2: int):
+                 grid2: wp.array2d(dtype=wp.vec2), grid3: wp.array2d(dtype=wp.vec2), to2: int):
     """Point scatterers with backscattering cross-section sig (bubbles, test targets): direct path and the image
-    paths of the first n_planes boundaries; extinction along every leg; phase of a soft sphere (pi)."""
+    paths of the first n_planes boundaries; extinction along every leg; phase of a soft sphere (pi). With to2 the
+    echoes also go into grid2 (all paths) and grid3 (direct path only): the plume labels."""
     i = wp.tid()
     sg = sig[i]
     if sg > 0.0:
@@ -371,6 +396,7 @@ def point_kernel(p: Params, pl: Planes, n_planes: int, bx: Box, ext: wp.array3d(
             deposit(grid, p, 2.0 * l1, u_of(p, d1), amp, 2.0 * p.k * l1 + PI)
             if to2 != 0:
                 deposit(grid2, p, 2.0 * l1, u_of(p, d1), amp, 2.0 * p.k * l1 + PI)
+                deposit(grid3, p, 2.0 * l1, u_of(p, d1), amp, 2.0 * p.k * l1 + PI)
             for k_ in range(n_planes):
                 nk = pl.n[k_]
                 dk = pl.d[k_]
@@ -441,10 +467,11 @@ def beamform_kernel(ap: wp.array2d(dtype=wp.vec2), xs: wp.array(dtype=float), w:
 
 
 @wp.kernel
-def display_kernel(power: wp.array2d(dtype=float), power_b: wp.array2d(dtype=float), dr: float, min_bin: int,
-                   min_range: float, tvg_k: float, alpha_db: float, nf_db: float, lo: float, hi: float, thr: float,
-                   db: wp.array2d(dtype=float), img: wp.array2d(dtype=wp.uint8), share: wp.array2d(dtype=float),
-                   mask: wp.array2d(dtype=wp.uint8)):
+def display_kernel(power: wp.array2d(dtype=float), power_b: wp.array2d(dtype=float),
+                   power_d: wp.array2d(dtype=float), dr: float, min_bin: int, min_range: float, tvg_k: float,
+                   alpha_db: float, nf_db: float, lo: float, hi: float, thr: float, db: wp.array2d(dtype=float),
+                   img: wp.array2d(dtype=wp.uint8), share: wp.array2d(dtype=float), mask: wp.array2d(dtype=wp.uint8),
+                   share_d: wp.array2d(dtype=float), mask_d: wp.array2d(dtype=wp.uint8)):
     r, b = wp.tid()
     if r < min_bin:                             # blind zone: no data
         power[r, b] = 0.0
@@ -452,6 +479,8 @@ def display_kernel(power: wp.array2d(dtype=float), power_b: wp.array2d(dtype=flo
         img[r, b] = wp.uint8(0)
         share[r, b] = 0.0
         mask[r, b] = wp.uint8(0)
+        share_d[r, b] = 0.0
+        mask_d[r, b] = wp.uint8(0)
     else:
         pw = power[r, b]
         rr = wp.max(float(r) * dr, min_range)
@@ -464,6 +493,11 @@ def display_kernel(power: wp.array2d(dtype=float), power_b: wp.array2d(dtype=flo
         mask[r, b] = wp.uint8(0)
         if sh > thr:
             mask[r, b] = wp.uint8(255)
+        sd = power_d[r, b] / wp.max(pw, 1.0e-30)
+        share_d[r, b] = sd
+        mask_d[r, b] = wp.uint8(0)
+        if sd > thr:
+            mask_d[r, b] = wp.uint8(255)
 
 
 @wp.kernel
@@ -499,8 +533,10 @@ class Ping:
     power: np.ndarray           # (range bins, beams) [uPa^2], 0 in the blind zone
     db: np.ndarray              # raw level dB re 1 uPa, NaN in the blind zone
     image: np.ndarray           # uint8: TVG + display window above the beam noise floor
-    plume_share: np.ndarray     # bubbles' share of the echo energy
-    plume_mask: np.ndarray      # uint8 0/255: share > sonar.plume_mask_threshold
+    plume_share_all: np.ndarray     # bubbles' share of the echo energy, all their paths (direct, surface ghosts)
+    plume_mask_all: np.ndarray      # uint8 0/255: share > sonar.plume_mask_threshold
+    plume_share_direct: np.ndarray  # ... their direct path only
+    plume_mask_direct: np.ndarray
     range_m: np.ndarray
     bearing_deg: np.ndarray
     timing_ms: dict = field(default_factory=dict)
@@ -526,12 +562,27 @@ def plume_region(sim, n_slices: int = 12) -> dict:
     return {"lo": lo, "hi": hi, "slices": slices, "boil_centre": pl["pos"][-1].copy(), "boil_radius": float(pl["b"][-1])}
 
 
-def _sinc_root(level: float) -> float:
-    """x with sin(x)/x = level (0 < level < 1), by bisection."""
-    a, b = 1e-9, math.pi
+TAPERS = {"uniform": 0, "cosine": 1, "hann": 2}
+FIRST_NULL = {"uniform": math.pi, "cosine": 1.5 * math.pi, "hann": 2 * math.pi}
+
+
+def vertical_pattern(x, taper: str):
+    """Host version of ``vertical`` (numpy)."""
+    x = np.asarray(x, float) + 1e-7                    # the singular points are removable: step past them
+    s = np.sin(x) / x
+    if taper == "cosine":
+        return np.pi ** 2 * np.cos(x) / (np.pi ** 2 - 4 * x * x)
+    if taper == "hann":
+        return s * np.pi ** 2 / (np.pi ** 2 - x * x)
+    return s
+
+
+def _vertical_root(level: float, taper: str) -> float:
+    """x in the main lobe where the one-way vertical pattern equals level (0 < level < 1), by bisection."""
+    a, b = 1e-9, FIRST_NULL[taper]
     for _ in range(80):
         c = 0.5 * (a + b)
-        a, b = (c, b) if math.sin(c) / c > level else (a, c)
+        a, b = (c, b) if vertical_pattern(c, taper) > level else (a, c)
     return 0.5 * (a + b)
 
 
@@ -580,7 +631,11 @@ class Sonar:
         self.xs, self.w = self._aperture(lam, math.radians(float(md["beamwidth_h_deg"])), float(son["array_taper_sll_db"]),
                                          int(son["taylor_nbar"]))
         # patterns: two-way vertical gain at +-fov_v/2 and horizontal gain at the fan edges
-        vert = _sinc_root(10 ** (float(son["vertical_edge_db"]) / 40)) / math.sin(math.radians(float(md["fov_v_deg"]) / 2))
+        self.vtaper = son["vertical_taper"]
+        if self.vtaper not in TAPERS:
+            raise ConfigError(f"sonar.vertical_taper must be one of {', '.join(TAPERS)}, got {self.vtaper!r}")
+        vert = (_vertical_root(10 ** (float(son["vertical_edge_db"]) / 40), self.vtaper)
+                / math.sin(math.radians(float(md["fov_v_deg"]) / 2)))
         fan = float(son["fan_edge_db"]) / (40 * math.log10(math.cos(self.theta_max)))
         # receiver noise per element over the band c / (2 dr); the beams' noise floor after the array gain
         band = self.c / (2 * self.dr)
@@ -598,6 +653,7 @@ class Sonar:
         p.n_u = self.n_u
         p.du = 2.0 / self.n_u
         p.vert = vert
+        p.vtaper = TAPERS[self.vtaper]
         p.fan = fan
         p.eps = 0.02
         p.use_mesh = 0
@@ -624,6 +680,8 @@ class Sonar:
         self.box.on = 0
         self.box.lo = wp.vec3(0.0, 0.0, 0.0)
         self.box.hi = wp.vec3(0.0, 0.0, 0.0)
+        floor = son["plume_path_floor_db"]                 # weak plume-box paths: static, without extinction
+        self.box.weak = 0.0 if floor is None else 10 ** ((self.nf_db + float(floor)) / 20)
         slices = plume["slices"] if plume is not None else []
         self.box.slice_lo = wp.array([s[0] for s in slices] or np.zeros((0, 3)), dtype=wp.vec3, device=device)
         self.box.slice_hi = wp.array([s[1] for s in slices] or np.zeros((0, 3)), dtype=wp.vec3, device=device)
@@ -639,6 +697,7 @@ class Sonar:
         self.static_grid = wp.zeros(shape, dtype=wp.vec2, device=device)
         self.grid = wp.zeros(shape, dtype=wp.vec2, device=device)
         self.grid_b = wp.zeros(shape, dtype=wp.vec2, device=device)
+        self.grid_d = wp.zeros(shape, dtype=wp.vec2, device=device)
         self.phi = wp.zeros(shape, dtype=float, device=device)
         a = math.exp(-1.0 / (float(son["ping_rate_hz"]) * float(son["speckle_time_s"])))
         self.speckle = (a, float(son["speckle_sigma_rad"]) * math.sqrt(1 - a * a))
@@ -659,6 +718,9 @@ class Sonar:
         self.ub = wp.array(ub.astype(np.float32), dtype=float, device=device)
         self.power = wp.zeros((self.n_r, n_b), dtype=float, device=device)
         self.power_b = wp.zeros((self.n_r, n_b), dtype=float, device=device)
+        self.power_d = wp.zeros((self.n_r, n_b), dtype=float, device=device)
+        self.share_d = wp.zeros((self.n_r, n_b), dtype=float, device=device)
+        self.mask_d = wp.zeros((self.n_r, n_b), dtype=wp.uint8, device=device)
         self.db = wp.zeros((self.n_r, n_b), dtype=float, device=device)
         self.img = wp.zeros((self.n_r, n_b), dtype=wp.uint8, device=device)
         self.share = wp.zeros((self.n_r, n_b), dtype=float, device=device)
@@ -760,8 +822,7 @@ class Sonar:
         cphi = np.sqrt(np.clip(1 - sphi ** 2, 1e-9, 1))
         body = np.stack([np.cos(ce) * cphi, -np.cos(ce) * sphi, np.sin(ce)], -1)
         world = body @ self.rot.T
-        x = self.vert * np.sin(ce)
-        v = np.where(np.abs(x) > 1e-6, np.sin(x) / np.where(x == 0, 1, x), 1.0)
+        v = vertical_pattern(self.vert * np.sin(ce), self.vtaper)
         gain2 = (v ** 4) * cphi ** (4 * self.fan_n) * ok
         domega = (2.0 / nu_c) * de / cphi                             # solid angle of a (u, elevation) cell
         sv = 10 ** (float(son["volume_sv_db"]) / 10)
@@ -807,6 +868,7 @@ class Sonar:
         seed = self.seed + 104729 * self.seq
         wp.copy(self.grid, self.static_grid)
         self.grid_b.zero_()
+        self.grid_d.zero_()
         self.ext.zero_()
         n_bub = 0
         if bubbles is not None:
@@ -830,27 +892,30 @@ class Sonar:
         if n_bub:
             wp.launch(point_kernel, dim=n_bub, device=dev,
                       inputs=[p, self.planes, self.n_point_planes, self.box, self.ext, bubbles.pos, sig, self.grid,
-                              self.grid_b, 1])
+                              self.grid_b, self.grid_d, 1])
         if targets:
             tpos = wp.array(np.array([t[0] for t in targets], np.float32), dtype=wp.vec3, device=dev)
             tsig = wp.array(np.array([t[1] for t in targets], np.float32), dtype=float, device=dev)
             wp.launch(point_kernel, dim=len(targets), device=dev,
                       inputs=[p, self.planes, self.n_point_planes, self.box, self.ext, tpos, tsig, self.grid,
-                              self.grid_b, 0])
+                              self.grid_b, self.grid_d, 0])
         lap("bubbles_targets")
         wp.launch(reverb_kernel, dim=self.grid.shape, device=dev, inputs=[self.grid, self.rev, seed + 1])
         lap("reverberation")
         self._beamform(self.grid, self.power, focus, noise=True, seed=seed)
         self._beamform(self.grid_b, self.power_b, focus, noise=False, seed=seed)
+        self._beamform(self.grid_d, self.power_d, focus, noise=False, seed=seed)
         lap("fft_beamforming")
         lo, hi = self.display
         wp.launch(display_kernel, dim=self.power.shape, device=dev,
-                  inputs=[self.power, self.power_b, self.dr, int(math.ceil(self.min_range / self.dr)), self.min_range,
-                          self.tvg_k, self.alpha_db, self.nf_db, lo, hi, self.mask_threshold, self.db, self.img,
-                          self.share, self.mask])
+                  inputs=[self.power, self.power_b, self.power_d, self.dr, int(math.ceil(self.min_range / self.dr)),
+                          self.min_range, self.tvg_k, self.alpha_db, self.nf_db, lo, hi, self.mask_threshold, self.db,
+                          self.img, self.share, self.mask, self.share_d, self.mask_d])
         lap("display")
-        out = Ping(power=self.power.numpy(), db=self.db.numpy(), image=self.img.numpy(), plume_share=self.share.numpy(),
-                   plume_mask=self.mask.numpy(), range_m=self.range_m, bearing_deg=self.bearing, timing_ms=tm)
+        out = Ping(power=self.power.numpy(), db=self.db.numpy(), image=self.img.numpy(),
+                   plume_share_all=self.share.numpy(), plume_mask_all=self.mask.numpy(),
+                   plume_share_direct=self.share_d.numpy(), plume_mask_direct=self.mask_d.numpy(),
+                   range_m=self.range_m, bearing_deg=self.bearing, timing_ms=tm)
         lap("download")
         tm["total"] = sum(tm.values())
         return out

@@ -131,7 +131,7 @@ def test_surface_ghost_at_the_image_range():
     h, r = 0.3, 2.0
     cfg = config.load(overrides=["sonar.receiver_noise=false", "sonar.reverberation=false", "sonar.ringdown=false",
                                  "sonar.speckle_sigma_rad=0", "sonar.multipath=[surface]",
-                                 "sonar.surface_roughness_m=0", "sonar.rpy_deg=[0, 0, 0]",
+                                 "sonar.surface_roughness_m=0", "sonar.rpy_deg=[0, 0, 0]", "sonar.vertical_taper=uniform",
                                  f"sonar.position=[0.5, 1.5, {2.9 - h}]"])
     son = sonar.Sonar(cfg)
     beam = 256
@@ -151,6 +151,50 @@ def test_surface_ghost_at_the_image_range():
     assert peak(j1) == j1 and peak(j2) == j2
     assert col[j1] - col[j0] == pytest.approx(first, abs=1.0)
     assert col[j2] - col[j0] == pytest.approx(both, abs=1.0)
+
+
+VERTICAL = {   # one-way patterns of a line aperture, x = pi L sin(angle) / lambda (written out again here)
+    "uniform": lambda x: math.sin(x) / x,
+    "cosine": lambda x: math.pi ** 2 * math.cos(x) / (math.pi ** 2 - 4 * x * x),
+    "hann": lambda x: math.sin(x) / x * math.pi ** 2 / (math.pi ** 2 - x * x),
+}
+
+
+@pytest.mark.parametrize("taper", ["uniform", "cosine", "hann"])
+def test_vertical_pattern(taper):
+    """Two-way -3 dB at +-fov_v/2 for every taper; off axis the level follows the taper's closed form."""
+    cfg = config.load(overrides=QUIET + [f"sonar.vertical_taper={taper}"])
+    son = sonar.Sonar(cfg)
+    from scipy.optimize import brentq
+    f = VERTICAL[taper]
+    x_e = brentq(lambda x: f(x) ** 4 - 0.5, 1e-6, 2.0)
+    half = math.radians(config.sonar_mode(cfg)["fov_v_deg"] / 2)
+    j = round(2.0 / son.dr)
+    level = {}
+    for el in (0.0, 10.0, 16.0):
+        db = son.ping(targets=[(target(son, 2.0, son.bearing[256], el), 1e-3)]).db
+        level[el] = np.nanmax(db[j - 1:j + 2, 250:263])
+    for el in (10.0, 16.0):
+        x = x_e * math.sin(math.radians(el)) / math.sin(half)
+        assert level[el] - level[0] == pytest.approx(40 * math.log10(abs(f(x))), abs=0.3), el
+
+
+def test_plume_labels():
+    """Direct-path label inside the plume's own ranges; the all-paths label adds the surface ghosts beyond them."""
+    from uw import bubbles
+    cfg = config.load(overrides=["sonar.speckle_sigma_rad=0"])
+    scene = geometry.build_scene(cfg)
+    sim = bubbles.BubbleSim(cfg, scene)
+    sim.warmup(8.0)
+    son = sonar.Sonar(cfg, scene, None, plume=sonar.plume_region(sim))
+    p = son.ping(bubbles=sim)
+    alive = sim.snapshot()["pos"]
+    r_max = np.linalg.norm(alive - son.position, axis=1).max()
+    rr = son.range_m[:, None] * np.ones((1, len(son.bearing)))
+    direct, every = p.plume_mask_direct > 0, p.plume_mask_all > 0
+    assert direct.sum() > 100 and every.sum() > direct.sum()
+    assert np.all(rr[direct] <= r_max + 0.02)
+    assert np.any(rr[every] > r_max + 0.05)
 
 
 def test_nothing_inside_the_blind_zone():

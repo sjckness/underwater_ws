@@ -62,8 +62,8 @@ message, `manifest.json`); `ros` (M3) and `zenoh` (M7) will publish live.
 ## Where things go
 
 - `output/`: everything the tools write; not in git. `output/plume_preview/<preset>/`, `output/sonar_preview/<preset>/`:
-  previews; `output/datasets/<name>/`: `sonar-only` datasets (per ping: raw dB polar npz, polar/fan/mask PNG, JSON;
-  `manifest.json`); `output/cache/`: acoustic scatterers, one npz per geometry + spacing (rebuilt automatically).
+  previews; `output/datasets/<name>/`: `sonar-only` datasets (per ping: npz with raw dB and the plume shares,
+  polar PNG, two plume-label PNGs, fan PNG if `recorder.fan_png`, JSON; `manifest.json`; about 1 MB per ping); `output/cache/`: acoustic scatterers, one npz per geometry + spacing (rebuilt automatically).
 - `~/.cache/uw_warp`: Warp kernel cache (not `~/.cache/isaac-sim/cache`, which is root-owned).
 - `~/.cache/uw_pydeps`: pytest for the container.
 
