@@ -118,31 +118,35 @@ materials:
                  color: [0.12, 0.12, 0.13], roughness: 0.9, metallic: 0.0}       # absorbing tank lining (rubber tiles)
 
 sonar:
-  model: Oculus M750d           # Blueprint Subsea. Values marked UNVERIFIED are from memory: check the datasheet
+  model: Oculus M750d           # Blueprint Subsea. VERIFIED: on the datasheet (Blueprint Subsea, "Oculus M Series
+                                # Datasheet EN"); UNVERIFIED: assumed, not on the datasheet
   mode: lf                      # lf | hf (modes below)
   position: [0.10, 1.50, 1.05]  # acoustic centre, on a pole at the -x wall
   roll_deg: 0.0                 # about the look axis: 90 turns the fan vertical (the array then measures elevation)
   pitch_deg: 15.0               # positive = nose down
   yaw_deg: 0.0                  # 0 looks along +x
-  range: 3.5                    # range setting [m]
-  ping_rate_hz: 10.0
-  modes:                        # UNVERIFIED — datasheet: frequency, fan, beam count and width, range resolution, min range
-    lf: {frequency_hz: 750000.0, fov_h_deg: 130.0, fov_v_deg: 20.0, beams: 512, beamwidth_h_deg: 1.0, range_resolution: 0.004, min_range: 0.1}
-    hf: {frequency_hz: 1200000.0, fov_h_deg: 70.0, fov_v_deg: 12.0, beams: 512, beamwidth_h_deg: 0.6, range_resolution: 0.0025, min_range: 0.1}
-  beam_spacing: uniform_angle   # uniform_angle | uniform_sine (UNVERIFIED — datasheet)
-  focus: true                   # dynamic near-field focusing of the receive array (UNVERIFIED — datasheet / Blueprint)
-  array_taper_sll_db: -28.0     # Taylor taper sidelobe level of the receive array (UNVERIFIED — datasheet)
+  range: 3.5                    # range setting [m], at most the mode's max_range
+  ping_rate_hz: 10.0            # at most the mode's max_ping_rate_hz
+  modes:                        # VERIFIED (datasheet): frequency, fan (h x v), beams, angular resolution (-3 dB beam
+                                # width), range resolution, min range, max range, max update rate
+    lf: {frequency_hz: 750000.0, fov_h_deg: 130.0, fov_v_deg: 20.0, beams: 512, beamwidth_h_deg: 1.0,
+         range_resolution: 0.004, min_range: 0.1, max_range: 120.0, max_ping_rate_hz: 40.0}
+    hf: {frequency_hz: 1200000.0, fov_h_deg: 70.0, fov_v_deg: 12.0, beams: 512, beamwidth_h_deg: 0.6,
+         range_resolution: 0.0025, min_range: 0.1, max_range: 40.0, max_ping_rate_hz: 40.0}
+  beam_spacing: uniform_angle   # uniform_angle | uniform_sine (UNVERIFIED: not on the datasheet)
+  focus: true                   # dynamic near-field focusing of the receive array (UNVERIFIED: not on the datasheet; ask Blueprint)
+  array_taper_sll_db: -28.0     # Taylor taper sidelobe level of the receive array (UNVERIFIED: not on the datasheet)
   taylor_nbar: 4
-  fan_edge_db: -3.0             # two-way horizontal gain at the fan edges (UNVERIFIED — datasheet)
-  vertical_edge_db: -3.0        # two-way vertical gain at +-fov_v/2 (UNVERIFIED — datasheet)
-  vertical_taper: hann          # vertical TX/RX aperture: hann | cosine | uniform (sinc) (UNVERIFIED — datasheet)
+  fan_edge_db: -3.0             # two-way horizontal gain at the fan edges (UNVERIFIED: not on the datasheet)
+  vertical_edge_db: -3.0        # two-way vertical gain at +-fov_v/2 (UNVERIFIED: not on the datasheet)
+  vertical_taper: hann          # vertical TX/RX aperture: hann | cosine | uniform (sinc) (UNVERIFIED: not on the datasheet)
   source_level_db: 206.0        # dB re 1 uPa @ 1 m (assumed; only sets the SNR together with noise_level_db)
   noise_level_db: 52.0          # receiver noise spectrum level per element, dB re 1 uPa^2/Hz, over the band c/(2 dr)
                                 # and reduced by the array gain in the beams (assumed)
   tvg_db_per_decade: 30.0       # TVG: k log10(R) + 2 alpha R (30: area scattering)
   display_db: [0.0, 80.0]       # dB window above the beam noise floor mapped to 0..255 (a display gain, not physics)
-  ringdown_db: 60.0             # transducer ring-down at zero range, dB above the beam noise floor (UNVERIFIED — datasheet)
-  ringdown_m: 0.08              # ring-down e-folding length (UNVERIFIED — datasheet)
+  ringdown_db: 60.0             # transducer ring-down at zero range, dB above the beam noise floor (UNVERIFIED: not on the datasheet)
+  ringdown_m: 0.08              # ring-down e-folding length (UNVERIFIED: not on the datasheet)
   volume_sv_db: -75.0           # volume backscattering strength of the tank water [dB re 1/m] (assumed)
   surface_roughness_m: 0.0002   # rms height of the calm water surface (assumed)
   boil_roughness_m: 0.005       # rms height where the plume breaks the surface (assumed)

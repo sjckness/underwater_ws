@@ -160,4 +160,9 @@ def sonar_mode(cfg: dict) -> dict:
         raise ConfigError(f"sonar.mode '{mode}' not in sonar.modes {sorted(son['modes'])}")
     merged = {k: v for k, v in son.items() if k != "modes"}
     merged.update(son["modes"][mode])
+    if float(merged["range"]) > float(merged.get("max_range", float("inf"))):
+        raise ConfigError(f"sonar.range {merged['range']} m exceeds the {mode.upper()} mode's {merged['max_range']} m")
+    if float(merged["ping_rate_hz"]) > float(merged.get("max_ping_rate_hz", float("inf"))):
+        raise ConfigError(f"sonar.ping_rate_hz {merged['ping_rate_hz']} exceeds the {mode.upper()} mode's "
+                          f"{merged['max_ping_rate_hz']} Hz")
     return merged

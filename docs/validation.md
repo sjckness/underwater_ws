@@ -219,16 +219,25 @@ The drafts had no TS or σ_ext formulas to remove; the plan's note referred to a
 - **Speckle test region:** |bearing| < 25°. Beyond about 32° the side walls are in the window and the contrast
   rises to 1.2 (bright lines, not under-sampled speckle).
 
-### Parameters UNVERIFIED — datasheet (`config/tank.yaml`, sonar section)
+### Parameters VERIFIED and UNVERIFIED (`config/tank.yaml`, sonar section)
+
+VERIFIED against the datasheet (Blueprint Subsea, "Oculus M Series Datasheet EN", M750d; confirmed 2026-10-26):
 
 | Parameter | Value used |
 |---|---|
 | Frequencies | LF 750 kHz, HF 1.2 MHz |
 | Fan | 130° × 20° (LF), 70° × 12° (HF) |
 | Beams | 512 |
-| −3 dB beam width | 1.0° (LF), 0.6° (HF) |
+| Angular resolution (−3 dB beam width) | 1.0° (LF), 0.6° (HF) |
 | Range resolution | 4 mm (LF), 2.5 mm (HF) |
 | Minimum range (blind zone) | 0.1 m |
+| Maximum range | 120 m (LF), 40 m (HF): `sonar.range` is checked against it |
+| Maximum update rate | 40 Hz: `sonar.ping_rate_hz` is checked against it |
+
+UNVERIFIED (not on the datasheet; assumed):
+
+| Parameter | Value used |
+|---|---|
 | Beam spacing | uniform in angle |
 | Near-field focusing | `focus: true` |
 | Receive taper | Taylor, −28 dB |
@@ -294,7 +303,7 @@ Assumed (not datasheet values):
 
 ## M2.1: vertical taper, two plume labels, basin speed, dataset size (2026-10-26)
 
-### Vertical aperture taper (`sonar.vertical_taper`, UNVERIFIED — datasheet)
+### Vertical aperture taper (`sonar.vertical_taper`, UNVERIFIED: not on the datasheet)
 
 The default is now a Hann taper; `cosine` and `uniform` (sinc) remain options. Closed forms, x = π L sin(angle)/λ:
 uniform sin x / x, cosine π² cos x / (π² − 4x²), Hann (sin x / x) π² / (π² − x²). L is set so that the two-way gain

@@ -103,7 +103,7 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
    - Resonance term kept in the formula but negligible here; no special handling.
    - Non-sphericity: equivalent-volume radius; optional aspect-dependent correction later.
 5. **FLS model** (`sonar.py`): the core of the realism.
-   - **Sonar parameters**: M750d LF mode by default (750 kHz, 130°×20°, 512 beams, ~1°, ~4 mm range resolution); HF mode (1.2 MHz, 70°×12°) switchable. **To verify against the Blueprint datasheet**: angular resolution, beam spacing, minimum range, ping rate, and whether near-field focusing is applied.
+   - **Sonar parameters**: M750d LF mode by default (750 kHz, 130°×20°, 512 beams, 1°, 4 mm range resolution); HF mode (1.2 MHz, 70°×12°, 0.6°, 2.5 mm) switchable; min range 0.1 m, max range 120 / 40 m, up to 40 Hz: VERIFIED (Blueprint "Oculus M Series Datasheet EN"). Still UNVERIFIED: beam spacing, sidelobe level, near-field focusing, vertical aperture shape, ring-down.
    - **Surface scattering**: bistatic Lambert term (μ per material) + Kirchhoff/geometric-optics specular term (RMS slope). Bright glints on pipe and walls, diffuse sand.
    - **Propagation**: two-way spherical spreading and absorption. Vertical TX/RX patterns as sinc apertures (two-way −3 dB at ±10°), with sidelobe leakage. The 130° fan rolls off at the edges.
    - **Multipath**: image-source method for the planar boundaries: water surface (R≈−1 with Rayleigh roughness loss; rough "boil" where the plume reaches it) and the 4 walls (R from material impedance). Combinations of {direct, image} on TX and RX legs, with reflection-point validity checks and shadow rays (Warp `mesh_query_ray`). Produces surface-mirror ghosts and wall/corner returns.
@@ -219,7 +219,7 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
   against a real recording (M2 goal) before tuning; candidate fix with the LBM flow field (M6).
 
 ## Open questions
-- Does the M750d apply near-field (dynamic) focusing? Exact LF/HF angular resolution, beam spacing, minimum range, ring-down. Ask Blueprint support or check the SDK/datasheet.
+- Does the M750d apply near-field (dynamic) focusing? Beam spacing, sidelobe level (receive taper), vertical aperture shape, ring-down: not on the datasheet; ask Blueprint support or measure. (Frequencies, fans, beam count, angular and range resolution, minimum and maximum range, update rate are VERIFIED against the datasheet.)
 - Source for a real Oculus tank recording (M2): Blueprint sample data, public FLS datasets, other Oculus users.
 - Is there a physical lab tank we want to match? If yes, set the `tank` preset to its exact dimensions and wall material.
 

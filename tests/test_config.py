@@ -126,3 +126,13 @@ def test_command_line_options():
 def test_session_config_follows_the_command_line(cfg, pytestconfig):
     """`pytest --profile workstation` (or `scripts/uw.sh test --profile workstation`) reaches the cfg fixture."""
     assert cfg["profile"]["name"] == pytestconfig.option.profile
+
+
+def test_sonar_mode_limits_from_the_datasheet():
+    """Range and ping rate within the mode's datasheet limits (M750d: 120 m LF, 40 m HF, 40 Hz)."""
+    assert config.sonar_mode(config.load(overrides=["sonar.mode=hf", "sonar.range=40"]))["max_range"] == 40.0
+    with pytest.raises(config.ConfigError, match="max|exceeds"):
+        config.sonar_mode(config.load(overrides=["sonar.mode=hf", "sonar.range=41"]))
+    with pytest.raises(config.ConfigError, match="exceeds"):
+        config.sonar_mode(config.load(overrides=["sonar.ping_rate_hz=50"]))
+
