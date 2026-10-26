@@ -27,12 +27,15 @@ services:
       # ROS_DOMAIN_ID, which a shell may have exported for f1tenth. The ROS bridge environment comes with `sim` (M3).
       - ROS_DOMAIN_ID=${UW_ROS_DOMAIN_ID:-73}
       - WARP_CACHE_PATH=/uw_cache/warp
+      - CUDA_CACHE_PATH=/uw_cache/cuda      # the driver's JIT cache, kept between runs
+      - CUDA_CACHE_MAXSIZE=4294967296
       - PYTHONDONTWRITEBYTECODE=1
     volumes:
       # same path as on the host: paths in arguments, logs and tracebacks are valid on both sides
       - ${UW_WS:?start through python -m uw}:${UW_WS}:rw
-      # Warp kernel cache (~/.cache/isaac-sim/cache is root-owned)
+      # Warp kernel cache (~/.cache/isaac-sim/cache is root-owned) and the CUDA driver's JIT cache
       - ${HOME}/.cache/uw_warp:/uw_cache/warp:rw
+      - ${HOME}/.cache/uw_cuda:/uw_cache/cuda:rw
       # pytest for `python -m uw test` (the image has none), installed there on first use
       - ${HOME}/.cache/uw_pydeps:/uw_cache/pydeps:rw
     working_dir: ${UW_WS}

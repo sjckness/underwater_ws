@@ -182,21 +182,22 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
 - Run no ROS process on the side while the f1tenth harness batches run (see the f1tenth CLAUDE.md). The tank sim uses its own ROS_DOMAIN_ID.
 
 ## Known gaps (planned fixes; milestones proposed)
-- **Coherent specular reflection from smooth surfaces (pipe, walls).** Now every surface is random-phase facets with a
-  Kirchhoff (geometric-optics) term: the energy is right, but a smooth pipe or wall glints with the statistics of
-  speckle instead of a stable mirror echo. Fix: for materials whose rms slope is below a threshold, give the facets
-  their geometric phase (no random phase) so that the Kirchhoff integral is evaluated coherently over each patch,
-  keeping the random-phase diffuse part; check against the analytic echoes of a finite cylinder at normal incidence
-  and of a plane wall (mirror image). M2.2, before the datasets of M5.
+- ~~**Coherent specular reflection from smooth surfaces (pipe, walls).**~~ Done in M2.2: Kirchhoff integral with
+  deterministic phase over small triangles of the smooth materials, scaled by the Rayleigh factor of their rms
+  roughness; checked against the analytic echo of a flat plate (docs/validation.md).
+- ~~**Wall roughness and absorption.**~~ Done in M2.2: per-wall rms roughness (Rayleigh loss of the mirror
+  reflection) and an absorbing lining (reflection coefficient in config).
 - **Surface backscatter in the plume boil.** Now the water surface is only a mirror (calm 0.2 mm rms; the boil's
   5 mm rms only weakens the coherent reflection) and scatters nothing back. Fix: scatterers on the surface inside the
   boil disc, with a roughness-dependent backscatter (Kirchhoff / small-slope, the boil's rms height and slope) updated
-  every ping from the bubbles reaching the surface, plus the bubble layer just below it. With M3 (the boil is also
-  in the camera image) or M5.
+  every ping from the bubbles reaching the surface, plus the bubble layer just below it. M5.
 - **Bubble bistatic multipath.** Now the bubbles' image paths (surface only) use the backscattering cross-section
   for bistatic angles too, and their wall paths are skipped. Fix: tabulate the gas sphere's scattering amplitude
   against ka and scattering angle (modal series, 2-D table), use it on the TX-via-mirror and RX-via-mirror paths, and
   add the wall paths (about 4x the bubble paths). M5, or M6 if it breaks the ping budget on linus.
+- **Plume intermittency.** The plume echo is steadier than real seep footage suggests (energy ±0.4 dB from ping to
+  ping): constant flow, slow meander and small-scale OU turbulence only, no large eddies or bubble clusters. To check
+  against a real recording (M2 goal) before tuning; candidate fix with the LBM flow field (M6).
 
 ## Open questions
 - Does the M750d apply near-field (dynamic) focusing? Exact LF/HF angular resolution, beam spacing, minimum range, ring-down. Ask Blueprint support or check the SDK/datasheet.

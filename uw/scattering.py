@@ -93,3 +93,20 @@ class Tables:
     def lookup(self, table: np.ndarray, ka):
         x = (np.log10(np.asarray(ka, float)) - self.log_ka0) / self.dlog_ka
         return np.interp(x, np.arange(len(table)), table)
+
+
+# ------------------------------------------------------------------------------- coherent facets (Kirchhoff)
+
+def triangle_phase_integral(t, area: float) -> complex:
+    """Integral of exp(i g.(x - c)) over a planar triangle of the given area, from the phases t_j = g.(v_j - c) at its
+    vertices: 2 area x the integral over the unit simplex, which by Hermite-Genocchi is minus the second divided
+    difference of exp(i t). Exact for any phase gradient (no sampling); host reference of sonar.tri_integral."""
+    a, b, c = sorted(float(v) for v in t)
+    if c - a < 1e-3:
+        return area * complex(math.cos((a + b + c) / 3), math.sin((a + b + c) / 3))
+
+    def dd(x, y):                       # (e^{iy} - e^{ix}) / (y - x), stable
+        h = 0.5 * (y - x)
+        s = math.sin(h) / h if abs(h) > 1e-9 else 1.0
+        return 1j * complex(math.cos(0.5 * (x + y)), math.sin(0.5 * (x + y))) * s
+    return 2 * area * (-(dd(b, c) - dd(a, b)) / (c - a))

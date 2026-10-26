@@ -33,11 +33,11 @@ def _visible_energy(sc, cfg):
     son = config.sonar_mode(cfg)
     rel = sc.pos.astype(float) - np.asarray(son["position"], float)
     r = np.linalg.norm(rel, axis=1)
-    body = rel @ geometry.rot_rpy_deg(son["rpy_deg"])           # world -> sonar frame (x forward, z up)
+    body = rel @ geometry.sonar_rotation(cfg)                  # world -> sonar frame (x forward, z up)
     az = np.degrees(np.arctan2(body[:, 1], body[:, 0]))
     el = np.degrees(np.arctan2(body[:, 2], np.hypot(body[:, 0], body[:, 1])))
     cos_i = -np.einsum("ij,ij->i", sc.normal.astype(float), rel) / r
-    mats = config.get(cfg, "materials")
+    mats = geometry.surface_materials(cfg)
     mu = np.array([10 ** (mats[n]["lambert_db"] / 10) for n in sc.material_names])[sc.mat]
     seen = (np.abs(az) <= son["fov_h_deg"] / 2) & (np.abs(el) <= son["fov_v_deg"] / 2) & (r <= son["range"]) & (cos_i > 0)
     return float(np.sum((sc.area * mu * cos_i ** 2 / r ** 4)[seen]))

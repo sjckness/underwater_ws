@@ -4,8 +4,11 @@ Static scene, once per sonar pose (StaticCache precomputed): every scatterer of 
 over the direct path and the image-source paths of the planar boundaries (water surface, 4 walls): for each boundary
 TX via the mirror + RX direct, TX direct + RX via the mirror, and both via the mirror. Every leg is checked with a
 shadow ray against the occluders (sand, rocks, pipe; Warp BVH), the reflection point must lie on the boundary.
-Scattering: bistatic Lambert mu cos_i cos_s + Kirchhoff (geometric optics, Gaussian slopes) specular term. The
-complex echo goes into a (range bin x u) grid, u = direction cosine along the receive array (cone effect included);
+Scattering: bistatic Lambert mu cos_i cos_s + Kirchhoff (geometric optics, Gaussian slopes) specular term, random
+phase per scatterer. Smooth (coherent) materials add their mirror-like share exp(-k^2 h^2 (cos_i + cos_s)^2 / 2) as a
+Kirchhoff integral with deterministic phase over small triangles (exact for planar facets), so glints are coherent
+mirror echoes; their incoherent part keeps the rest of the specular energy. The complex echo goes into a
+(range bin x u) grid, u = direction cosine along the receive array (cone effect included);
 paths that cross the plume box are kept in a list and attenuated by the bubbles every ping.
 
 Per ping: static grid (+ plume-box paths x extinction) x slow phase walk ("speckle dynamics") + bubbles (direct and
@@ -34,7 +37,7 @@ import warp as wp
 from . import scattering
 from . import water as wat
 from .config import ConfigError, get, sonar_mode
-from .geometry import rot_rpy_deg
+from .geometry import sonar_rotation, surface_materials
 
 PI = wp.constant(math.pi)
 FAR = 1.0e6
@@ -251,13 +254,34 @@ def optical_depth(ext: wp.array3d(dtype=float), bx: Box, a: wp.vec3, b: wp.vec3)
 # ------------------------------------------------------------------------------------- static scene
 
 @wp.func
-def emit(p: Params, bx: Box, x: wp.vec3, n: wp.vec3, mu: float, s2: float, r0: float, area: float, ph: float,
-         dt: wp.vec3, drx: wp.vec3, lt: float, lr: float, gt: float, gr: float, refl: float, u: float,
-         qt: wp.vec3, qr: wp.vec3, store: int, grid: wp.array2d(dtype=wp.vec2),
+def route(p: Params, bx: Box, x: wp.vec3, qt: wp.vec3, qr: wp.vec3, amp: float, phase: float, path: float, u: float,
+          store: int, grid: wp.array2d(dtype=wp.vec2), dyn_x: wp.array(dtype=wp.vec3), dyn_qt: wp.array(dtype=wp.vec3),
+          dyn_qr: wp.array(dtype=wp.vec3), dyn_v: wp.array(dtype=wp.vec4), dyn_count: wp.array(dtype=wp.int32)):
+    """A static path's echo: into the static grid, or (when it crosses the plume region and is not too weak) into
+    the list attenuated every ping. Pass 1 (store 0) only counts the list."""
+    dyn = int(0)
+    if wp.abs(amp) >= bx.weak:
+        dyn = crosses(p.pos, qt, bx) + crosses(qt, x, bx) + crosses(x, qr, bx) + crosses(qr, p.pos, bx)
+    if dyn > 0:
+        idx = wp.atomic_add(dyn_count, 0, 1)
+        if store != 0 and idx < dyn_x.shape[0]:
+            dyn_x[idx] = x
+            dyn_qt[idx] = qt
+            dyn_qr[idx] = qr
+            dyn_v[idx] = wp.vec4(amp, phase, path, u)
+    elif store != 0:
+        deposit(grid, p, path, u, amp, phase)
+
+
+@wp.func
+def emit(p: Params, bx: Box, x: wp.vec3, n: wp.vec3, mu: float, s2: float, r0: float, coh: int, sh2: float,
+         area: float, ph: float, dt: wp.vec3, drx: wp.vec3, lt: float, lr: float, gt: float, gr: float, refl: float,
+         u: float, qt: wp.vec3, qr: wp.vec3, store: int, grid: wp.array2d(dtype=wp.vec2),
          dyn_x: wp.array(dtype=wp.vec3), dyn_qt: wp.array(dtype=wp.vec3), dyn_qr: wp.array(dtype=wp.vec3),
          dyn_v: wp.array(dtype=wp.vec4), dyn_count: wp.array(dtype=wp.int32)):
-    """One path of one surface scatterer. dt, drx: unit vectors from the scatterer toward where the sound comes from
-    and goes to; lt, lr: lengths of the TX and RX legs; qt, qr: reflection points (x if direct)."""
+    """One path of one surface scatterer (random phase). dt, drx: unit vectors from the scatterer toward where the
+    sound comes from and goes to; lt, lr: lengths of the TX and RX legs; qt, qr: reflection points (x if direct).
+    On a coherent material the specular term keeps only its incoherent share 1 - exp(-k^2 h^2 (ct + cr)^2)."""
     ct = wp.dot(n, dt)
     cr = wp.dot(n, drx)
     if ct > 0.0 and cr > 0.0 and gt * gr != 0.0:               # (sinc sidelobes flip the sign)
@@ -266,29 +290,71 @@ def emit(p: Params, bx: Box, x: wp.vec3, n: wp.vec3, mu: float, s2: float, r0: f
         cb = wp.dot(n, h)
         if cb > 0.0:                                               # Kirchhoff, Gaussian slopes (rms s per axis)
             t2 = (1.0 - cb * cb) / (cb * cb)
-            sig += r0 * r0 * wp.exp(-t2 / (2.0 * s2)) / (8.0 * PI * s2 * cb * cb * cb * cb)
+            spec = r0 * r0 * wp.exp(-t2 / (2.0 * s2)) / (8.0 * PI * s2 * cb * cb * cb * cb)
+            if coh != 0:
+                spec = spec * (1.0 - wp.exp(-sh2 * (ct + cr) * (ct + cr)))
+            sig += spec
         amp = p.sl * wp.sqrt(sig * area) / (lt * lr) * wp.exp(-p.att * (lt + lr)) * gt * gr * wp.abs(refl)   # signed
         phase = p.k * (lt + lr) + ph
         if refl < 0.0:
             phase += PI
-        dyn = int(0)
-        if wp.abs(amp) >= bx.weak:
-            dyn = crosses(p.pos, qt, bx) + crosses(qt, x, bx) + crosses(x, qr, bx) + crosses(qr, p.pos, bx)
-        if dyn > 0:
-            idx = wp.atomic_add(dyn_count, 0, 1)
-            if store != 0 and idx < dyn_x.shape[0]:
-                dyn_x[idx] = x
-                dyn_qt[idx] = qt
-                dyn_qr[idx] = qr
-                dyn_v[idx] = wp.vec4(amp, phase, lt + lr, u)
-        elif store != 0:
-            deposit(grid, p, lt + lr, u, amp, phase)
+        route(p, bx, x, qt, qr, amp, phase, lt + lr, u, store, grid, dyn_x, dyn_qt, dyn_qr, dyn_v, dyn_count)
+
+
+@wp.func
+def dd1(x: float, y: float) -> wp.vec2:
+    """(e^{iy} - e^{ix}) / (y - x) as (re, im), stable for y -> x."""
+    h = 0.5 * (y - x)
+    s = float(1.0)
+    if wp.abs(h) > 1.0e-6:
+        s = wp.sin(h) / h
+    m = 0.5 * (x + y)
+    return wp.vec2(-wp.sin(m) * s, wp.cos(m) * s)
+
+
+@wp.func
+def tri_integral(t0: float, t1: float, t2: float, area: float) -> wp.vec2:
+    """Integral of exp(i g.(x - c)) over a planar triangle from the vertex phases t_j = g.(v_j - c): 2 area x minus
+    the second divided difference of exp(i t) (Hermite-Genocchi; scattering.triangle_phase_integral)."""
+    a = wp.min(t0, wp.min(t1, t2))
+    c = wp.max(t0, wp.max(t1, t2))
+    b = t0 + t1 + t2 - a - c
+    out = wp.vec2(0.0, 0.0)
+    if c - a < 1.0e-3:
+        m = (a + b + c) / 3.0
+        out = wp.vec2(wp.cos(m), wp.sin(m)) * area
+    else:
+        out = (dd1(a, b) - dd1(b, c)) * (2.0 * area / (c - a))
+    return out
+
+
+@wp.func
+def emit_facet(p: Params, bx: Box, c: wp.vec3, n: wp.vec3, v0: wp.vec3, v1: wp.vec3, v2: wp.vec3, area: float,
+               r0: float, sh2: float, dt: wp.vec3, drx: wp.vec3, lt: float, lr: float, gt: float, gr: float,
+               refl: float, u: float, qt: wp.vec3, qr: wp.vec3, store: int, grid: wp.array2d(dtype=wp.vec2),
+               dyn_x: wp.array(dtype=wp.vec3), dyn_qt: wp.array(dtype=wp.vec3), dyn_qr: wp.array(dtype=wp.vec3),
+               dyn_v: wp.array(dtype=wp.vec4), dyn_count: wp.array(dtype=wp.int32)):
+    """One path of one coherent facet: Kirchhoff (physical optics) field -(i k R0 / 4 pi) int n.(s_i + s_s)
+    exp(i k (L_t + L_r)) dA, the phase linear across the facet, times the Rayleigh factor of its roughness."""
+    ct = wp.dot(n, dt)
+    cr = wp.dot(n, drx)
+    if ct > 0.0 and cr > 0.0 and gt * gr != 0.0:
+        g = (dt + drx) * (-p.k)                                    # gradient of k (L_t + L_r) on the facet
+        ii = tri_integral(wp.dot(g, v0 - c), wp.dot(g, v1 - c), wp.dot(g, v2 - c), area)
+        chi = wp.exp(-0.5 * sh2 * (ct + cr) * (ct + cr))
+        amp = (p.sl / (lt * lr) * wp.exp(-p.att * (lt + lr)) * gt * gr * wp.abs(refl) * r0 * p.k / (4.0 * PI)
+               * (ct + cr) * chi * wp.length(ii))
+        phase = p.k * (lt + lr) + wp.atan2(ii[1], ii[0]) - 0.5 * PI
+        if refl < 0.0:
+            phase += PI
+        route(p, bx, c, qt, qr, amp, phase, lt + lr, u, store, grid, dyn_x, dyn_qt, dyn_qr, dyn_v, dyn_count)
 
 
 @wp.kernel
 def static_kernel(p: Params, pl: Planes, bx: Box, pts: wp.array(dtype=wp.vec3), nrm: wp.array(dtype=wp.vec3),
                   area: wp.array(dtype=float), mat: wp.array(dtype=wp.int32), ph0: wp.array(dtype=float),
-                  mu: wp.array(dtype=float), s2: wp.array(dtype=float), r0: wp.array(dtype=float), store: int,
+                  mu: wp.array(dtype=float), s2: wp.array(dtype=float), r0: wp.array(dtype=float),
+                  coh: wp.array(dtype=wp.int32), sh2: wp.array(dtype=float), store: int,
                   grid: wp.array2d(dtype=wp.vec2), dyn_x: wp.array(dtype=wp.vec3), dyn_qt: wp.array(dtype=wp.vec3),
                   dyn_qr: wp.array(dtype=wp.vec3), dyn_v: wp.array(dtype=wp.vec4), dyn_count: wp.array(dtype=wp.int32)):
     i = wp.tid()
@@ -303,7 +369,7 @@ def static_kernel(p: Params, pl: Planes, bx: Box, pts: wp.array(dtype=wp.vec3), 
     vis1 = clear(p, s, x)
     u1 = u_of(p, d1)
     if vis1 != 0:
-        emit(p, bx, x, n, mu[m], s2[m], r0[m], area[i], ph0[i], -d1, -d1, l1, l1, g1, g1, 1.0, u1, x, x,
+        emit(p, bx, x, n, mu[m], s2[m], r0[m], coh[m], sh2[m], area[i], ph0[i], -d1, -d1, l1, l1, g1, g1, 1.0, u1, x, x,
              store, grid, dyn_x, dyn_qt, dyn_qr, dyn_v, dyn_count)
     for k_ in range(pl.count):
         nk = pl.n[k_]
@@ -318,12 +384,60 @@ def static_kernel(p: Params, pl: Planes, bx: Box, pts: wp.array(dtype=wp.vec3), 
                 refl = reflection(pl, k_, q, wp.abs(wp.dot(dq, nk)), p.k)
                 uq = u_of(p, dq)
                 if vis1 != 0:
-                    emit(p, bx, x, n, mu[m], s2[m], r0[m], area[i], ph0[i], xq, -d1, lm, l1, gq, g1, refl, u1, q, x,
+                    emit(p, bx, x, n, mu[m], s2[m], r0[m], coh[m], sh2[m], area[i], ph0[i], xq, -d1, lm, l1, gq, g1, refl, u1, q, x,
                          store, grid, dyn_x, dyn_qt, dyn_qr, dyn_v, dyn_count)
-                    emit(p, bx, x, n, mu[m], s2[m], r0[m], area[i], ph0[i], -d1, xq, l1, lm, g1, gq, refl, uq, x, q,
+                    emit(p, bx, x, n, mu[m], s2[m], r0[m], coh[m], sh2[m], area[i], ph0[i], -d1, xq, l1, lm, g1, gq, refl, uq, x, q,
                          store, grid, dyn_x, dyn_qt, dyn_qr, dyn_v, dyn_count)
-                emit(p, bx, x, n, mu[m], s2[m], r0[m], area[i], ph0[i], xq, xq, lm, lm, gq, gq, refl * refl, uq, q, q,
+                emit(p, bx, x, n, mu[m], s2[m], r0[m], coh[m], sh2[m], area[i], ph0[i], xq, xq, lm, lm, gq, gq, refl * refl, uq, q, q,
                      store, grid, dyn_x, dyn_qt, dyn_qr, dyn_v, dyn_count)
+
+
+@wp.kernel
+def facet_kernel(p: Params, pl: Planes, bx: Box, fv0: wp.array(dtype=wp.vec3), fv1: wp.array(dtype=wp.vec3),
+                 fv2: wp.array(dtype=wp.vec3), fmat: wp.array(dtype=wp.int32), r0: wp.array(dtype=float),
+                 sh2: wp.array(dtype=float), store: int, grid: wp.array2d(dtype=wp.vec2),
+                 dyn_x: wp.array(dtype=wp.vec3), dyn_qt: wp.array(dtype=wp.vec3), dyn_qr: wp.array(dtype=wp.vec3),
+                 dyn_v: wp.array(dtype=wp.vec4), dyn_count: wp.array(dtype=wp.int32)):
+    """Coherent facets over the same paths as the scatterers (direct, image paths of every boundary)."""
+    i = wp.tid()
+    v0 = fv0[i]
+    v1 = fv1[i]
+    v2 = fv2[i]
+    x = (v0 + v1 + v2) / 3.0
+    cr_ = wp.cross(v1 - v0, v2 - v0)
+    area = 0.5 * wp.length(cr_)
+    if area > 0.0:
+        n = cr_ / (2.0 * area)
+        m = fmat[i]
+        s = p.pos
+        v = x - s
+        l1 = wp.length(v)
+        d1 = v / l1
+        g1 = pattern(p, d1)
+        vis1 = clear(p, s, x)
+        u1 = u_of(p, d1)
+        if vis1 != 0:
+            emit_facet(p, bx, x, n, v0, v1, v2, area, r0[m], sh2[m], -d1, -d1, l1, l1, g1, g1, 1.0, u1, x, x,
+                       store, grid, dyn_x, dyn_qt, dyn_qr, dyn_v, dyn_count)
+        for k_ in range(pl.count):
+            nk = pl.n[k_]
+            dk = pl.d[k_]
+            q = plane_hit(nk, dk, mirror(nk, dk, s), x)
+            if inside(q, pl.lo[k_], pl.hi[k_]) != 0:
+                if clear(p, s, q) * clear(p, q, x) != 0:
+                    dq = wp.normalize(q - s)
+                    gq = pattern(p, dq)
+                    lm = wp.length(q - s) + wp.length(x - q)
+                    xq = wp.normalize(q - x)
+                    refl = reflection(pl, k_, q, wp.abs(wp.dot(dq, nk)), p.k)
+                    uq = u_of(p, dq)
+                    if vis1 != 0:
+                        emit_facet(p, bx, x, n, v0, v1, v2, area, r0[m], sh2[m], xq, -d1, lm, l1, gq, g1, refl, u1,
+                                   q, x, store, grid, dyn_x, dyn_qt, dyn_qr, dyn_v, dyn_count)
+                        emit_facet(p, bx, x, n, v0, v1, v2, area, r0[m], sh2[m], -d1, xq, l1, lm, g1, gq, refl, uq,
+                                   x, q, store, grid, dyn_x, dyn_qt, dyn_qr, dyn_v, dyn_count)
+                    emit_facet(p, bx, x, n, v0, v1, v2, area, r0[m], sh2[m], xq, xq, lm, lm, gq, gq, refl * refl, uq,
+                               q, q, store, grid, dyn_x, dyn_qt, dyn_qr, dyn_v, dyn_count)
 
 
 @wp.kernel
@@ -613,7 +727,7 @@ class Sonar:
         self.display = [float(v) for v in son["display_db"]]
         self.mask_threshold = float(son["plume_mask_threshold"])
         self.position = np.asarray(son["position"], float)
-        self.rot = rot_rpy_deg(son["rpy_deg"])
+        self.rot = sonar_rotation(cfg)
         # beams
         self.theta_max = math.radians(float(md["fov_h_deg"]) / 2)
         n_b = int(md["beams"])
@@ -702,6 +816,7 @@ class Sonar:
         a = math.exp(-1.0 / (float(son["ping_rate_hz"]) * float(son["speckle_time_s"])))
         self.speckle = (a, float(son["speckle_sigma_rad"]) * math.sqrt(1 - a * a))
         self.n_dyn = 0
+        self.n_scatterers = self.n_facets = 0
         self.dyn = None
         self.timing_ms["setup"] = (time.perf_counter() - t0) * 1e3
         if scatterers is not None:
@@ -750,20 +865,19 @@ class Sonar:
         L, W, _ = (float(v) for v in get(cfg, "tank.size"))
         wl = float(get(cfg, "tank.water_level"))
         z_sand = float(scene.sand.base) if scene is not None else 0.0
-        mats = get(cfg, "materials")
-        z_w = rho * self.c / 1e6
-        z_wall = float(mats[get(cfg, "tank.wall_material")]["Z"])
-        r_wall = (z_wall - z_w) / (z_wall + z_w)
+        mats = surface_materials(cfg)
         son = get(cfg, "sonar")
         rows, surface = [], -1
         if "surface" in son["multipath"]:
             surface = 0
             rows.append(((0, 0, 1), wl, (0, 0, -FAR), (L, W, FAR), -1.0, float(son["surface_roughness_m"])))
         if "walls" in son["multipath"]:
-            for n, d in (((1, 0, 0), 0.0), ((1, 0, 0), L), ((0, 1, 0), 0.0), ((0, 1, 0), W)):
+            for wid, n, d in (("x0", (1, 0, 0), 0.0), ("x1", (1, 0, 0), L), ("y0", (0, 1, 0), 0.0),
+                              ("y1", (0, 1, 0), W)):
                 lo = [-FAR if n[0] else 0.0, -FAR if n[1] else 0.0, z_sand]
                 hi = [FAR if n[0] else L, FAR if n[1] else W, wl]
-                rows.append((n, d, lo, hi, r_wall, 0.0))
+                m = mats[f"wall:{wid}"]
+                rows.append((n, d, lo, hi, self._reflection(m), float(m.get("rms_height_m", 0.0))))
         pl = Planes()
         dev = self.device
         pl.n = wp.array([r[0] for r in rows] or np.zeros((0, 3)), dtype=wp.vec3, device=dev)
@@ -779,31 +893,51 @@ class Sonar:
         pl.boil_rough = float(son["boil_roughness_m"])
         return pl, (1 if surface == 0 else 0)          # points (bubbles, targets) use the surface paths only
 
-    def _precompute(self, cfg, sc):
-        mats = get(cfg, "materials")
+    def _reflection(self, m: dict) -> float:
+        """Reflection coefficient at normal incidence: the material's `reflection`, else from its impedance."""
+        if m.get("reflection") is not None:
+            return float(m["reflection"])
         z_w = self.rho * self.c / 1e6
-        mu = np.array([10 ** (mats[n]["lambert_db"] / 10) for n in sc.material_names], np.float32)
-        s2 = np.array([mats[n]["rms_slope"] ** 2 for n in sc.material_names], np.float32)
-        r0 = np.array([(mats[n]["Z"] - z_w) / (mats[n]["Z"] + z_w) for n in sc.material_names], np.float32)
+        return (float(m["Z"]) - z_w) / (float(m["Z"]) + z_w)
+
+    def _precompute(self, cfg, sc):
+        mats = surface_materials(cfg)
+        ms = [mats[n] for n in sc.material_names]
         dev = self.device
-        arrays = [wp.array(sc.pos, dtype=wp.vec3, device=dev), wp.array(sc.normal, dtype=wp.vec3, device=dev),
+        mu = wp.array(np.array([10 ** (m["lambert_db"] / 10) for m in ms], np.float32), dtype=float, device=dev)
+        s2 = wp.array(np.array([m["rms_slope"] ** 2 for m in ms], np.float32), dtype=float, device=dev)
+        r0 = wp.array(np.array([self._reflection(m) for m in ms], np.float32), dtype=float, device=dev)
+        coh = wp.array(np.array([1 if m.get("coherent") else 0 for m in ms], np.int32), dtype=wp.int32, device=dev)
+        sh2 = wp.array(np.array([(self.k * m.get("rms_height_m", 0.0)) ** 2 for m in ms], np.float32), dtype=float,
+                       device=dev)
+        points = [wp.array(sc.pos, dtype=wp.vec3, device=dev), wp.array(sc.normal, dtype=wp.vec3, device=dev),
                   wp.array(sc.area, dtype=float, device=dev), wp.array(sc.mat, dtype=wp.int32, device=dev),
-                  wp.array(sc.phase, dtype=float, device=dev), wp.array(mu, dtype=float, device=dev),
-                  wp.array(s2, dtype=float, device=dev), wp.array(r0, dtype=float, device=dev)]
+                  wp.array(sc.phase, dtype=float, device=dev), mu, s2, r0, coh, sh2]
+        facets = sc.facets if sc.facets is not None else np.zeros((0, 3, 3), np.float32)
+        tri = [wp.array(np.ascontiguousarray(facets[:, j]), dtype=wp.vec3, device=dev) for j in range(3)]
+        fmat = wp.array(sc.facet_mat if sc.facet_mat is not None else np.zeros(0, np.int32), dtype=wp.int32, device=dev)
         count = wp.zeros(1, dtype=wp.int32, device=dev)
         empty = [wp.zeros(1, dtype=wp.vec3, device=dev)] * 3 + [wp.zeros(1, dtype=wp.vec4, device=dev)]
-        # pass 1 counts the paths that cross the plume box, pass 2 stores them and deposits the rest
-        wp.launch(static_kernel, dim=len(sc.pos), device=dev,
-                  inputs=[self.p, self.planes, self.box, *arrays, 0, self.static_grid, *empty, count])
+
+        def run(store, dyn):
+            if len(sc.pos):
+                wp.launch(static_kernel, dim=len(sc.pos), device=dev,
+                          inputs=[self.p, self.planes, self.box, *points, store, self.static_grid, *dyn, count])
+            if len(facets):
+                wp.launch(facet_kernel, dim=len(facets), device=dev,
+                          inputs=[self.p, self.planes, self.box, *tri, fmat, r0, sh2, store, self.static_grid, *dyn,
+                                  count])
+        # pass 1 counts the paths that cross the plume region, pass 2 stores them and deposits the rest
+        run(0, empty)
         n_dyn = int(count.numpy()[0])
         self.dyn = [wp.zeros(max(n_dyn, 1), dtype=wp.vec3, device=dev) for _ in range(3)] + \
                    [wp.zeros(max(n_dyn, 1), dtype=wp.vec4, device=dev)]
         count.zero_()
-        wp.launch(static_kernel, dim=len(sc.pos), device=dev,
-                  inputs=[self.p, self.planes, self.box, *arrays, 1, self.static_grid, *self.dyn, count])
+        run(1, self.dyn)
         wp.synchronize_device(dev)
         self.n_dyn = n_dyn
         self.n_scatterers = len(sc.pos)
+        self.n_facets = len(facets)
 
     def _reverb(self, cfg, scene) -> np.ndarray:
         """Per (range bin, u cell): amplitude std of volume reverberation, from the water inside each cell's

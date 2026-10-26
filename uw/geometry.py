@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from dataclasses import dataclass, field
 
@@ -16,7 +17,7 @@ import numpy as np
 from .config import WS, ConfigError, get, sonar_mode
 
 CACHE_DIR = os.path.join(WS, "output", "cache")
-SCATTERER_CACHE_VERSION = 1         # bump when the sampling changes, so stale caches are not reused
+SCATTERER_CACHE_VERSION = 2         # bump when the sampling changes, so stale caches are not reused
 
 
 @dataclass
@@ -269,6 +270,27 @@ def _rot(roll, pitch, yaw):
                      [-sp, cp * sr, cp * cr]])
 
 
+def sonar_rotation(cfg: dict) -> np.ndarray:
+    """Sonar body-to-world rotation from sonar.roll_deg / pitch_deg / yaw_deg (body: x forward, y port, z up)."""
+    return rot_rpy_deg([get(cfg, f"sonar.{k}_deg") for k in ("roll", "pitch", "yaw")])
+
+
+def surface_materials(cfg: dict) -> dict:
+    """Resolved properties of every surface material name a scene uses: the entries of ``materials`` plus one per
+    tank wall, "wall:<id>" (the wall material or the absorbing lining, with the wall's own rms roughness). Coherent
+    materials get rms_slope = sqrt(2) rms_height / correlation for their incoherent part."""
+    mats = {k: dict(v) for k, v in get(cfg, "materials").items()}
+    for wid, w in get(cfg, "tank.walls").items():
+        m = dict(mats["lining" if w["lining"] else get(cfg, "tank.wall_material")])
+        if m.get("coherent"):
+            m["rms_height_m"] = float(w["rms_height_m"])
+        mats[f"wall:{wid}"] = m
+    for m in mats.values():
+        if m.get("coherent"):
+            m["rms_slope"] = max(math.sqrt(2.0) * m["rms_height_m"] / m["correlation_m"], 1e-3)
+    return mats
+
+
 def rot_rpy_deg(rpy_deg) -> np.ndarray:
     """Body-to-world rotation from roll, pitch (positive = nose down, ROS), yaw in degrees."""
     r, p, y = np.radians(rpy_deg)
@@ -322,10 +344,10 @@ def build_scene(cfg: dict) -> Scene:
     wm = get(cfg, "tank.wall_material")
     L, W, H = size
     meshes += [
-        box_mesh("wall_xm", [-t, -t, -t], [0, W + t, H], wm, "wall"),
-        box_mesh("wall_xp", [L, -t, -t], [L + t, W + t, H], wm, "wall"),
-        box_mesh("wall_ym", [0, -t, -t], [L, 0, H], wm, "wall"),
-        box_mesh("wall_yp", [0, W, -t], [L, W + t, H], wm, "wall"),
+        box_mesh("wall_xm", [-t, -t, -t], [0, W + t, H], "wall:x0", "wall"),
+        box_mesh("wall_xp", [L, -t, -t], [L + t, W + t, H], "wall:x1", "wall"),
+        box_mesh("wall_ym", [0, -t, -t], [L, 0, H], "wall:y0", "wall"),
+        box_mesh("wall_yp", [0, W, -t], [L, W + t, H], "wall:y1", "wall"),
         box_mesh("floor", [-t, -t, -t], [L + t, W + t, 0], wm, "wall"),
     ]
     meshes.append(sand_mesh(sand, size, float(get(cfg, "sand.grid")), mats["sand"]["color"], rng))
@@ -378,6 +400,8 @@ class Scatterers:
     mat: np.ndarray       # (N,)   int32 index into material_names
     phase: np.ndarray     # (N,)   float32 random phase [rad], fixed in the world (frozen speckle)
     material_names: list[str]
+    facets: np.ndarray | None = None      # (M, 3, 3) float32 triangles of the coherent (smooth) surfaces
+    facet_mat: np.ndarray | None = None   # (M,) int32 index into material_names
 
 
 WALL_SPACING_FACTOR = 2.0          # walls are sampled at least this much coarser (they are mostly specular)
@@ -421,15 +445,18 @@ def spacing_from_config(cfg: dict) -> Spacing:
                    dr=float(son["range_resolution"]))
 
 
-def sample_scatterers(scene: Scene, spacing: Spacing, rng: np.random.Generator) -> Scatterers:
+def sample_scatterers(scene: Scene, spacing: Spacing, rng: np.random.Generator, coherent=(),
+                      facet_edge: float = 0.015) -> Scatterers:
     """Points on every surface the sound can reach, with exact normals and the area each one stands for.
 
     Sand: jittered grid on the analytic height field, one spacing per ~10 cm patch. Meshes: triangles subdivided
     to <= 10 cm, random points with density 1/spacing^2 and area weight spacing^2 (total areas kept, unbiased).
-    Walls: only their inner faces between the sand and the water surface.
+    Walls: only their inner faces between the sand and the water surface. Meshes of a ``coherent`` material also give
+    their triangles, subdivided to <= ``facet_edge``, for the coherent Kirchhoff term.
     """
     names: list[str] = []
     out_p, out_n, out_a, out_m = [], [], [], []
+    out_f, out_fm = [], []
 
     def mat_index(name):
         if name not in names:
@@ -464,6 +491,16 @@ def sample_scatterers(scene: Scene, spacing: Spacing, rng: np.random.Generator) 
             tri = tri[inside & facing & (np.abs(nrm[:, 2]) < 0.5 * np.linalg.norm(nrm, axis=1))]
             if len(tri) == 0:       # the floor slab: all under the sand
                 continue
+        if m.material in coherent:
+            f = _subdivide(tri, facet_edge)
+            c = f.mean(1)
+            nf = np.cross(f[:, 1] - f[:, 0], f[:, 2] - f[:, 0])         # outward (convex meshes): away from the centroid
+            flip = np.einsum("ij,ij->i", nf, c - m.points.mean(0)) < 0
+            f[flip] = f[flip][:, [0, 2, 1]]
+            sand_h = scene.sand.height(np.clip(c[:, 0], 0, L), np.clip(c[:, 1], 0, W))
+            keep = (c[:, 2] < scene.water_level) & (c[:, 2] > sand_h - 0.01) if wall else c[:, 2] > sand_h - 0.005
+            out_f.append(f[keep])
+            out_fm.append(np.full(int(keep.sum()), mat_index(m.material)))
         p, n, a = _sample_triangles(_subdivide(tri, PATCH), spacing, wall, rng)
         if wall:
             keep = (p[:, 2] < scene.water_level) & (p[:, 2] > scene.sand.height(
@@ -486,7 +523,9 @@ def sample_scatterers(scene: Scene, spacing: Spacing, rng: np.random.Generator) 
     return Scatterers(pos=pos, normal=np.concatenate(out_n).astype(np.float32),
                       area=np.concatenate(out_a).astype(np.float32),
                       mat=np.concatenate(out_m).astype(np.int32),
-                      phase=rng.uniform(0, 2 * np.pi, len(pos)).astype(np.float32), material_names=names)
+                      phase=rng.uniform(0, 2 * np.pi, len(pos)).astype(np.float32), material_names=names,
+                      facets=(np.concatenate(out_f) if out_f else np.zeros((0, 3, 3))).astype(np.float32),
+                      facet_mat=(np.concatenate(out_fm) if out_fm else np.zeros(0)).astype(np.int32))
 
 
 def _sand_grid(scene: Scene, spacing: Spacing, rng: np.random.Generator):
@@ -548,8 +587,13 @@ def _cache_key(cfg: dict, spacing: Spacing) -> str:
               **{k: get(cfg, k) for k in ("tank", "sand", "rocks", "pipe")},
               "leak": {k: leak[k] for k in ("enabled", "position_along", "clock_deg", "vents", "vent_spread",
                                             "pockmark_radius", "pockmark_depth")},
-              "spacing": spacing.__dict__}
+              "spacing": spacing.__dict__, "coherent": sorted(_coherent(cfg)),
+              "facet_edge": get(cfg, "sonar.coherent_patch_m")}
     return hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def _coherent(cfg: dict) -> set:
+    return {k for k, v in surface_materials(cfg).items() if v.get("coherent")}
 
 
 def scatterers(cfg: dict, scene: Scene | None = None, cache_dir: str = CACHE_DIR) -> Scatterers:
@@ -560,12 +604,14 @@ def scatterers(cfg: dict, scene: Scene | None = None, cache_dir: str = CACHE_DIR
     if os.path.isfile(path):
         with np.load(path) as z:
             return Scatterers(pos=z["pos"], normal=z["normal"], area=z["area"], mat=z["mat"], phase=z["phase"],
-                              material_names=[str(s) for s in z["material_names"]])
+                              material_names=[str(s) for s in z["material_names"]], facets=z["facets"],
+                              facet_mat=z["facet_mat"])
     scene = scene if scene is not None else build_scene(cfg)
-    sc = sample_scatterers(scene, spacing, np.random.default_rng([int(cfg["seed"]), 2]))
+    sc = sample_scatterers(scene, spacing, np.random.default_rng([int(cfg["seed"]), 2]), coherent=_coherent(cfg),
+                           facet_edge=float(get(cfg, "sonar.coherent_patch_m")))
     os.makedirs(cache_dir, exist_ok=True)
     tmp = f"{path[:-4]}.{os.getpid()}.tmp.npz"
     np.savez(tmp, pos=sc.pos, normal=sc.normal, area=sc.area, mat=sc.mat, phase=sc.phase,
-             material_names=np.array(sc.material_names))
+             material_names=np.array(sc.material_names), facets=sc.facets, facet_mat=sc.facet_mat)
     os.replace(tmp, path)
     return sc

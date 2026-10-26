@@ -71,7 +71,7 @@ def run_docker(rt: dict, cmd: str, args: list[str]) -> int:
         args = [str(script), *args[1:]]
     cwd = Path.cwd().resolve()
     workdir = cwd if cwd.is_relative_to(WS) else WS
-    for d in ("uw_warp", "uw_pydeps"):                  # docker would create them root-owned
+    for d in ("uw_warp", "uw_cuda", "uw_pydeps"):       # docker would create them root-owned
         (Path.home() / ".cache" / d).mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "UW_WS": str(WS), "UW_UID": str(os.getuid()), "UW_GID": str(os.getgid())}
     name = f"uw-{cmd}-{os.getpid()}"

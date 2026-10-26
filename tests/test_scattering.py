@@ -46,3 +46,21 @@ def test_lookup_tables():
     ka = np.array([0.05, 1.6, 7.3, 16.0])
     assert t.lookup(t.backscatter, ka) == pytest.approx(sc.stanton_backscatter(ka, G, H), rel=2e-3)
     assert t.lookup(t.extinction, ka) == pytest.approx(sc.extinction_fit(ka), rel=2e-3)
+
+
+def test_triangle_phase_integral():
+    """Closed form (Hermite-Genocchi) against Gauss-Legendre quadrature over the triangle (Duffy map)."""
+    rng = np.random.default_rng(3)
+    x, w = np.polynomial.legendre.leggauss(80)
+    x, w = 0.5 * (x + 1), 0.5 * w
+    for scale in (1.0, 50.0, 500.0, 3000.0):                     # phase gradient [rad/m]: flat to many cycles
+        v = rng.normal(size=(3, 2)) * 0.01
+        c = v.mean(0)
+        g = rng.normal(size=2) * scale
+        area = 0.5 * abs(np.cross(v[1] - v[0], v[2] - v[0]))
+        uu, ss = np.meshgrid(x, x, indexing="ij")                 # (u, s) -> (u, (1 - u) s): Jacobian (1 - u)
+        lam1, lam2 = uu, (1 - uu) * ss
+        pts = v[0] + lam1[..., None] * (v[1] - v[0]) + lam2[..., None] * (v[2] - v[0])
+        ref = 2 * area * np.sum(np.outer(w, w) * (1 - uu) * np.exp(1j * (pts - c) @ g))
+        got = sc.triangle_phase_integral((v - c) @ g, area)
+        assert abs(got - ref) < 1e-6 * area

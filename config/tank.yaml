@@ -7,7 +7,13 @@ seed: 7                         # one seed for everything procedural (sand, rock
 tank:
   size: [3.0, 3.0, 3.0]         # inner dimensions [m]
   wall_thickness: 0.05
-  wall_material: concrete       # acoustic + visual material of the 4 walls (materials: below)
+  wall_material: concrete       # acoustic + visual material of the 4 walls and the floor (materials: below)
+  walls:                        # per wall (x0: behind the sonar, x1: the far wall, y0, y1): rms roughness [m] (Rayleigh
+                                # loss of the mirror reflection, coherent share of the glints) and an absorbing lining
+    x0: {rms_height_m: 0.0005, lining: false}
+    x1: {rms_height_m: 0.0005, lining: false}
+    y0: {rms_height_m: 0.0005, lining: false}
+    y1: {rms_height_m: 0.0005, lining: false}
   water_level: 2.9              # free surface height [m]; 0.1 m freeboard
 
 water:
@@ -90,20 +96,31 @@ lights:                         # artificial light only (deep water)
     - {position: [0.12, 1.70, 1.15], target: [1.7, 1.6, 0.35], intensity: 60000.0, cone_deg: 45.0, color: [1.0, 0.97, 0.9]}
 
 materials:
-  # acoustic: Z = acoustic impedance [MRayl]; lambert_db = Lambert parameter mu [dB];
-  #           rms_slope = Kirchhoff facet slope std (smooth -> sharp specular glints)
+  # acoustic: Z = acoustic impedance [MRayl] (reflection at normal incidence from it, or `reflection` if given);
+  #           lambert_db = Lambert parameter mu [dB];
+  #           rough on the wavelength scale (sand, rock): rms_slope = facet slope std of the incoherent Kirchhoff term;
+  #           coherent (smooth: pipe, walls): rms_height_m and correlation_m of a Gaussian surface; the mirror-like
+  #           part (Rayleigh factor exp(-k^2 h^2 (cos_i + cos_s)^2 / 2)) is a Kirchhoff integral over triangles with
+  #           deterministic phase, the rest is incoherent with rms_slope = sqrt(2) h / correlation (all assumed)
   # visual:   base colour, roughness, metallic
   sand:         {Z: 3.2,  lambert_db: -27.0, rms_slope: 0.25, color: [0.62, 0.55, 0.42], roughness: 0.95, metallic: 0.0}
   rock:         {Z: 5.5,  lambert_db: -17.0, rms_slope: 0.35, color: [0.36, 0.34, 0.31], roughness: 0.9,  metallic: 0.0}
-  concrete:     {Z: 8.0,  lambert_db: -32.0, rms_slope: 0.06, color: [0.55, 0.55, 0.53], roughness: 0.85, metallic: 0.0}
-  steel_coated: {Z: 30.0, lambert_db: -35.0, rms_slope: 0.04, color: [0.18, 0.2, 0.22],  roughness: 0.5,  metallic: 0.3}
-  glass:        {Z: 13.0, lambert_db: -40.0, rms_slope: 0.01, color: [0.7, 0.8, 0.8],    roughness: 0.05, metallic: 0.0}
+  concrete:     {Z: 8.0,  lambert_db: -32.0, coherent: true, rms_height_m: 0.0005, correlation_m: 0.01,
+                 color: [0.55, 0.55, 0.53], roughness: 0.85, metallic: 0.0}       # bare, moderately rough
+  steel_coated: {Z: 30.0, lambert_db: -35.0, coherent: true, rms_height_m: 0.00005, correlation_m: 0.005,
+                 color: [0.18, 0.2, 0.22], roughness: 0.5, metallic: 0.3}
+  glass:        {Z: 13.0, lambert_db: -40.0, coherent: true, rms_height_m: 0.00001, correlation_m: 0.005,
+                 color: [0.7, 0.8, 0.8], roughness: 0.05, metallic: 0.0}
+  lining:       {Z: 1.9, reflection: 0.1, lambert_db: -40.0, coherent: true, rms_height_m: 0.0005, correlation_m: 0.01,
+                 color: [0.12, 0.12, 0.13], roughness: 0.9, metallic: 0.0}       # absorbing tank lining (rubber tiles)
 
 sonar:
   model: Oculus M750d           # Blueprint Subsea. Values marked UNVERIFIED are from memory: check the datasheet
   mode: lf                      # lf | hf (modes below)
   position: [0.10, 1.50, 1.05]  # acoustic centre, on a pole at the -x wall
-  rpy_deg: [0.0, 15.0, 0.0]     # roll, pitch (positive = nose down), yaw; looks along +x
+  roll_deg: 0.0                 # about the look axis: 90 turns the fan vertical (the array then measures elevation)
+  pitch_deg: 15.0               # positive = nose down
+  yaw_deg: 0.0                  # 0 looks along +x
   range: 3.5                    # range setting [m]
   ping_rate_hz: 10.0
   modes:                        # UNVERIFIED — datasheet: frequency, fan, beam count and width, range resolution, min range
@@ -133,7 +150,8 @@ sonar:
   speckle_sigma_rad: 0.1        # speckle dynamics: std of each cell's slow phase walk (assumed); 0 = frozen speckle
   speckle_time_s: 2.0           # its correlation time (assumed)
   extinction_voxel: 0.02        # bubble extinction grid [m]
-  plume_path_floor_db: null     # scene paths through the plume region weaker than the beam noise floor + this [dB]
+  coherent_patch_m: 0.015       # max triangle edge of the coherent (Kirchhoff) facets: keeps the phase linear across one
+  plume_path_floor_db: -60.0    # scene paths through the plume region weaker than the beam noise floor + this [dB]
                                 # skip the per-ping extinction (they join the static image unattenuated); null: none
   u_grid: 2048                  # direction-cosine cells of the FFT beamformer (aperture sampled at half a wavelength)
   plume_mask_threshold: 0.5     # dataset label: a pixel is plume when the bubbles carry more than this share of its energy

@@ -23,7 +23,7 @@ Windows venv with `warp-lang`, or a native Isaac install), and the install paths
 
 On the host, `pytest` runs the same tests without Warp (pure Python/numpy); the Warp tests are skipped there.
 
-Tools (run with `python -m uw py`): `tools/plume_preview.py` (bubble plume, both pipe presets), `tools/sonar_preview.py` (sonar images, static and with the plume, focused and unfocused, timing), `tools/compare_real.py` (speckle, sidelobes, blind zone, TVG profile of a recording). What the models were checked against, and where they disagree: [docs/validation.md](docs/validation.md).
+Tools (run with `python -m uw py`): `tools/plume_preview.py` (bubble plume, both pipe presets), `tools/sonar_preview.py` (sonar images, static and with the plume, focused and unfocused, timing; `--video N`: an H.264 MP4 of N pings), `tools/compare_real.py` (speckle, sidelobes, blind zone, TVG profile of a recording). What the models were checked against, and where they disagree: [docs/validation.md](docs/validation.md).
 
 The first `python -m uw test` installs pytest 7.4.4 (the host's version) into `~/.cache/uw_pydeps`, which needs network
 once; the image has no pytest.

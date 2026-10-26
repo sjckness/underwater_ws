@@ -7,9 +7,7 @@ from __future__ import annotations
 
 import os
 import runpy
-import shutil
 import signal
-import subprocess
 import sys
 from pathlib import Path
 
@@ -36,32 +34,11 @@ def run_py(args: list[str]) -> int:
     return 0
 
 
-def _pytest():
-    """pytest from this Python, or installed once (pinned) into UW_PYDEPS."""
-    try:
-        import pytest
-        return pytest
-    except ImportError:
-        pass
-    version = os.environ.get("UW_PYTEST_VERSION", "7.4.4")
-    deps = Path(os.environ.get("UW_PYDEPS", Path.home() / ".cache" / "uw_pydeps")) / f"pytest-{version}"
-    if not deps.is_dir():
-        print(f"uw: installing pytest {version} into {deps} (first run only, needs network)", file=sys.stderr)
-        tmp = deps.with_name(f"pytest-{version}.tmp")
-        shutil.rmtree(tmp, ignore_errors=True)
-        # --no-warn-conflicts: pip would complain about Isaac's own bundled packages, which are not ours to fix
-        subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "--no-cache-dir", "--disable-pip-version-check",
-                        "--no-warn-conflicts", "--target", str(tmp), f"pytest=={version}"], check=True)
-        tmp.rename(deps)
-    sys.path.insert(0, str(deps))
-    import pytest
-    return pytest
-
-
 def run_test(args: list[str]) -> int:
+    from .deps import require
     # no plugin autoload: Isaac's bundled site-packages (or a sourced ROS) must not inject pytest plugins
     os.environ["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
-    return int(_pytest().main(args))
+    return int(require("pytest", "pytest", os.environ.get("UW_PYTEST_VERSION", "7.4.4")).main(args))
 
 
 def main(argv: list[str]) -> int:
@@ -70,6 +47,11 @@ def main(argv: list[str]) -> int:
     warp = os.environ.get("UW_WARP_PATH")
     if warp and Path(warp).is_dir() and warp not in sys.path:
         sys.path.insert(1, warp)
+    try:        # cache native code (cubin), not PTX: else the driver re-JITs every module in every new process
+        import warp as wp
+        wp.config.cuda_output = "cubin"
+    except ImportError:
+        pass
     cmd, args = argv[0], argv[1:]
     try:
         if cmd == "py":

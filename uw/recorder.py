@@ -42,7 +42,8 @@ def leak_position(scene) -> np.ndarray | None:
 
 def sonar_message(seq: int, stamp: float, ping, son, cfg: dict, scene, sim=None) -> Message:
     son_cfg = get(cfg, "sonar")
-    meta = {"sonar": {"position": [float(v) for v in son.position], "rpy_deg": son_cfg["rpy_deg"],
+    meta = {"sonar": {"position": [float(v) for v in son.position],
+                      **{f"{k}_deg": son_cfg[f"{k}_deg"] for k in ("roll", "pitch", "yaw")},
                       "mode": son_cfg["mode"], "range": son.range, "focus": bool(son.focus),
                       "noise_floor_db": son.nf_db, "display_db": son.display},
             "config_hash": config_hash(cfg), "seed": cfg["seed"],

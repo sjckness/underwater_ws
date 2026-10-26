@@ -131,7 +131,7 @@ def test_surface_ghost_at_the_image_range():
     h, r = 0.3, 2.0
     cfg = config.load(overrides=["sonar.receiver_noise=false", "sonar.reverberation=false", "sonar.ringdown=false",
                                  "sonar.speckle_sigma_rad=0", "sonar.multipath=[surface]",
-                                 "sonar.surface_roughness_m=0", "sonar.rpy_deg=[0, 0, 0]", "sonar.vertical_taper=uniform",
+                                 "sonar.surface_roughness_m=0", "sonar.pitch_deg=0", "sonar.vertical_taper=uniform",
                                  f"sonar.position=[0.5, 1.5, {2.9 - h}]"])
     son = sonar.Sonar(cfg)
     beam = 256
@@ -195,6 +195,78 @@ def test_plume_labels():
     assert direct.sum() > 100 and every.sum() > direct.sum()
     assert np.all(rr[direct] <= r_max + 0.02)
     assert np.any(rr[every] > r_max + 0.05)
+
+
+def _plate(son, r, bearing_deg, tilt_deg, width, height, edge=0.0025):
+    """Smooth rectangular plate (width along the array, height across it), centred at range r on the sonar's
+    horizontal plane, facing the sonar, turned by `tilt_deg` about the sonar's vertical axis: coherent facets only."""
+    th, t = math.radians(bearing_deg), math.radians(tilt_deg)
+    los = np.array([math.cos(th), -math.sin(th), 0.0])            # line of sight, sonar frame
+    across = np.array([math.sin(th + t), math.cos(th + t), 0.0])  # the plate's horizontal side, turned by the tilt
+    up = np.array([0.0, 0.0, 1.0])
+    corners = [r * los + a * width / 2 * across + b * height / 2 * up for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+    world = [son.position + son.rot @ c for c in corners]
+    tri = geometry._subdivide(np.array([[world[0], world[1], world[2]], [world[0], world[2], world[3]]]), edge)
+    n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+    flip = np.einsum("ij,j->i", n, son.position - tri.mean(1).mean(0)) < 0      # face the sonar
+    tri[flip] = tri[flip][:, [0, 2, 1]]
+    empty = np.zeros((0, 3), np.float32)
+    return geometry.Scatterers(pos=empty, normal=empty, area=np.zeros(0, np.float32), mat=np.zeros(0, np.int32),
+                               phase=np.zeros(0, np.float32), material_names=["steel_coated"],
+                               facets=tri.astype(np.float32), facet_mat=np.zeros(len(tri), np.int32))
+
+
+def test_smooth_plate_kirchhoff_echo():
+    """A smooth 1 x 2 cm steel plate at 2 m (far field from 0.4 m; 0.3 deg wide, small against the 1 deg beam): echo
+    level SL - 40 log R - 2 alpha R + TS with the Kirchhoff TS = 20 log10(R0 A cos(t) / lambda) at tilt t, times
+    sinc^2(k W sin t) (two-way phase across the width W): within 1 dB on the main lobe and the first sidelobe, and a
+    deep null between them."""
+    cfg = config.load(overrides=QUIET + ["materials.steel_coated.rms_height_m=0"])
+    probe = sonar.Sonar(cfg)
+    beam, r, width, height = 256, 2.0, 0.01, 0.02
+    z_w = probe.rho * probe.c / 1e6
+    r0 = (30.0 - z_w) / (30.0 + z_w)
+    lam = 2 * math.pi / probe.k
+    j = round(r / probe.dr)
+    level = {}
+    null = math.degrees(math.asin(math.pi / (probe.k * width)))
+    side = math.degrees(math.asin(4.4934 / (probe.k * width)))      # first sidelobe peak: tan x = x
+    for tilt in (0.0, 2.0, 4.0, null, side):
+        son = sonar.Sonar(cfg, None, _plate(probe, r, probe.bearing[beam], tilt, width, height))
+        level[tilt] = np.nanmax(son.ping().db[j - 1:j + 2, beam - 3:beam + 4])
+    sl = config.get(cfg, "sonar.source_level_db")
+    for tilt in (0.0, 2.0, 4.0, side):
+        t = math.radians(tilt)
+        x = probe.k * width * math.sin(t)
+        sinc = math.sin(x) / x if x else 1.0
+        expected = (sl - 40 * math.log10(r) - 2 * probe.alpha_db * r
+                    + 20 * math.log10(r0 * width * height * math.cos(t) / lam * abs(sinc)))
+        assert level[tilt] == pytest.approx(expected, abs=1.0), tilt
+    assert level[null] < level[0.0] - 25
+
+
+@pytest.mark.parametrize("roll", [0.0, 45.0, 90.0])
+def test_roll_maps_a_vertical_line_of_targets(roll):
+    """Point targets on a vertical line 2 m ahead appear at the range and bearing an independent rotation
+    (scipy, intrinsic Z-Y-X: yaw, pitch nose-down, roll) predicts, for every roll."""
+    from scipy.spatial.transform import Rotation
+    cfg = config.load(overrides=QUIET + [f"sonar.roll_deg={roll}"])
+    son = sonar.Sonar(cfg)
+    s = config.get(cfg, "sonar")
+    rot = Rotation.from_euler("ZYX", [s["yaw_deg"], s["pitch_deg"], s["roll_deg"]], degrees=True).as_matrix()
+    found = 0
+    for dz in np.linspace(-1.0, 0.4, 8):
+        pos = son.position + np.array([2.0, 0.0, dz])
+        b = rot.T @ (pos - son.position)
+        r = np.linalg.norm(b)
+        bearing, elevation = math.degrees(math.atan2(-b[1], b[0])), math.degrees(math.asin(b[2] / r))
+        if abs(elevation) > 9 or abs(bearing) > 60:                # outside the fan
+            continue
+        p = son.ping(targets=[(pos, 1e-3)])
+        j, i = np.unravel_index(np.nanargmax(p.db), p.db.shape)
+        assert abs(j - r / son.dr) <= 1.0 and abs(son.bearing[i] - bearing) <= 0.3, (dz, bearing, son.bearing[i])
+        found += 1
+    assert found >= 3
 
 
 def test_nothing_inside_the_blind_zone():

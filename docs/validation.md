@@ -234,6 +234,7 @@ The drafts had no TS or σ_ext formulas to remove; the plan's note referred to a
 | Receive taper | Taylor, −28 dB |
 | Horizontal gain at the fan edges | two-way −3 dB |
 | Vertical aperture | Hann taper (M2.1; cosine and uniform available), two-way −3 dB at ±fov_v/2 |
+| Wall roughness, lining | 0.5 mm rms bare concrete (M2.2); lining reflection 0.1 (assumed) |
 | Ring-down | 60 dB above the beam noise floor at range 0, e-folding 0.08 m |
 
 Assumed (not datasheet values):
@@ -348,3 +349,105 @@ preset and off (null) in `tank`. Exact vs −20 dB, same bubbles and same noise 
 | M2 (float16 share, fan PNG) | 1.65 |
 | M2.1, `recorder.fan_png: false` (default) | **0.98**: raw dB float16 0.60, two uint8 shares 0.05, polar PNG 0.32, two masks 0.01 |
 | M2.1, `recorder.fan_png: true` | 1.30 |
+
+## M2.2: coherent glints, wall roughness and lining, sonar roll, ping video (2026-10-26)
+
+### Coherent glints (physical optics on smooth surfaces)
+
+Smooth materials (`coherent: true`: coated steel, concrete, glass, lining) now have two parts:
+- **Mirror-like share:** their triangles (edges ≤ `sonar.coherent_patch_m` = 1.5 cm, so the phase stays linear
+  across one) carry the Kirchhoff field −(ik R₀/4π) ∫ n·(ŝ_i + ŝ_s) e^{ik(L_t+L_r)} dA with deterministic phase,
+  times the Rayleigh factor exp(−½ k² h² (cos θ_i + cos θ_s)²).
+- **Incoherent rest:** the random-phase scatterers keep the remaining specular energy (factor 1 − χ²), with rms
+  slope √2 h / correlation length.
+- **The triangle integral** is exact for planar facets: 2A times minus the second divided difference of e^{it} at
+  the vertex phases (Hermite–Genocchi). It matches Gauss–Legendre quadrature to 10⁻⁶ of the area, so there are no
+  sampling grating lobes.
+- **Sand and rock** stay incoherent.
+
+Smooth steel plate, 1 × 2 cm, at 2 m (far field from 0.4 m), tilted about the vertical axis
+(`test_smooth_plate_kirchhoff_echo`):
+
+| Tilt | Measured | Kirchhoff (R₀ A cos t / λ) · sinc(k W sin t) | Difference |
+|---|---|---|---|
+| 0° | 172.02 dB | 172.11 dB | −0.10 dB |
+| 2° | 170.22 | 170.31 | −0.09 |
+| 4° | 163.58 | 163.58 | 0.00 |
+| 5.76° (first null) | 146.5 (−25.6 dB re peak) | 0 | finite pulse and near field fill the null |
+| 8.26° (first sidelobe) | 158.16 | 158.76 | −0.60 |
+| 12° | 141.33 | 142.42 | −1.09 |
+
+A 2 cm wide plate (0.57°, comparable to the 1° beam) gives a 1.3 dB lower first sidelobe. That is the receive beam
+tapering the plate, which is physical; the analytic formula assumes a plate much smaller than the beam footprint.
+
+The tank has 1.04 M coherent facets: 224k per wall and 147k on the pipe.
+
+**Kernel cache.** Warp cached PTX, so the CUDA driver re-compiled the large sonar module in every new process
+(40 s; HOME is ephemeral in the container). Warp now emits cubin, cached in `~/.cache/uw_warp`, and the driver's
+JIT cache is kept in `~/.cache/uw_cuda`. The first run after a change to `uw/sonar.py` compiles once (about
+100 s); after that a precompute takes 0.2 s.
+
+**Tank plume-region floor.** The facets added 3.5 M plume-region paths (ping 84 ms). `plume_path_floor_db` for
+the `tank` preset is now −60 dB instead of off. Against exact, 6 pings with the plume:
+
+| Floor | plume-region paths | ping | mean abs. difference | 99th percentile | pixels > 1 dB |
+|---|---|---|---|---|---|
+| off (exact) | 7.45 M | 84.0 ms | | | |
+| **−60 dB (default)** | 3.95 M | 37.3 ms | 0.0001 dB | 0.002 dB | 0 % |
+| −40 dB | 2.50 M | 22.1 ms | 0.0014 dB | 0.020 dB | 0.012 % |
+| −20 dB (basin) | 0.53 M | 11.4 ms | 0.021 dB | 0.45 dB | 0.47 % |
+
+### Walls: per-wall rms roughness and absorbing lining (`tank.walls`)
+
+- **Rough walls:** the Rayleigh loss exp(−2 (k h cos θ)²) applies to the mirror (image) paths, and the walls'
+  coherent glint share falls the same way.
+- **Default:** bare concrete, moderately rough (0.5 mm rms, 1 cm correlation length; assumed).
+- **Lining:** the `lining` material (reflection 0.1, Lambert −40 dB; assumed) replaces the wall material where
+  `lining: true`.
+
+Ghost world (multipath images beyond the walls), mean echo energy relative to smooth concrete, quiet static pings,
+range 5 m:
+
+| Walls | beyond the far wall (3.6–5 m, ±20°) | beyond the side walls (2.5–3 m, 50–62°) | sand inside (control) |
+|---|---|---|---|
+| smooth concrete (0 mm) | 0 dB | 0 dB | 0 dB |
+| default (0.5 mm rms) | −37.6 dB | −8.3 dB | −0.5 dB |
+| absorbing lining (R 0.1) | −43.9 dB | −23.7 dB | −0.5 dB |
+
+The far wall is seen near normal incidence, where 0.5 mm of roughness at λ = 2 mm destroys the mirror. The side
+walls are seen at grazing angles, where much of it survives.
+
+### Sonar roll (`sonar.roll_deg`, `pitch_deg`, `yaw_deg`)
+
+One rotation (intrinsic Z-Y-X: yaw, pitch nose-down, roll about the look axis) drives the TX/RX patterns, the beam
+geometry (u is measured along the rotated array), the image paths and the labels.
+`test_roll_maps_a_vertical_line_of_targets` checks, for roll 0°, 45° and 90°, that point targets on a vertical
+line 2 m ahead appear at the range bin (±1) and bearing (±0.3°) predicted by an independent rotation (scipy).
+
+Previews in `output/sonar_preview/exposed{,+roll45,+roll90}/`:
+- **0°:** the rising plume is a compact blob (a point).
+- **45°:** a short diagonal streak, where the column crosses the tilted 20° slab.
+- **90°:** a long streak across the bearings, from the plume's base (1.7 m, +3°) to its top (2.5 m, −62°). In the
+  fan view this is an arc to the left.
+
+### Ping video (`tools/sonar_preview.py --video 50`)
+
+H.264 (libx264 `-preset veryfast`, via a pinned `imageio-ffmpeg` in `~/.cache/uw_pydeps`), fan view, 10 Hz:
+`output/sonar_preview/{exposed,buried}{,+roll90}/plume.mp4`. Statistics of the plume region (every pixel the
+direct-path label marks in any of the 50 pings):
+
+| | echo energy, std over pings | ping-to-ping rms | pixel correlation, next ping / 5 pings apart | label pixels |
+|---|---|---|---|---|
+| exposed, roll 0° | 0.40 dB | 0.52 dB | 0.70 / 0.70 | 4710 ± 179 |
+| buried, roll 0° | 0.35 dB | 0.44 dB | 0.45 / 0.46 | 4500 ± 200 |
+| exposed, roll 90° | 0.13 dB | 0.17 dB | 0.44 / 0.45 | 89 100 ± 1050 |
+| buried, roll 90° | 0.09 dB | 0.12 dB | 0.41 / 0.41 | 91 700 ± 1520 |
+
+Qualitatively the plume sparkles rather than flickers:
+- **Speckle:** its texture renews completely from one ping to the next. The bubbles move about 6 cm per ping,
+  against a 2 mm wavelength, and the correlation does not fall from 1 to 5 pings apart: the correlated part is the
+  static background inside the region.
+- **Brightness and size:** they hold to a few tenths of a dB and about ±4 % of the label area. The roll-90° streak
+  integrates many more bubbles and is steadier still.
+- **Probably steadier than a real seep**, which flares in puffs and clusters. The flow is constant, and the plume
+  model has only slow meander and small-scale turbulence. Added to the Known gaps in `docs/PLAN.md`.
