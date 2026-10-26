@@ -75,7 +75,8 @@ def sonar_message(seq: int, stamp: float, ping, son, cfg: dict, scene, sim=None,
         r, b, e = sonar_frame(pos, ping.position, ping.rot)[0]
         meta["leak"] = {"position": [float(v) for v in pos], "range_m": float(r), "bearing_deg": float(b),
                         "elevation_deg": float(e), "buried": bool(scene.leak.buried),
-                        "flow_lpm": sim.source.q_gas * 6e4 if sim is not None else 0.0,
+                        "flow_lpm": sim.flow_now_lpm() if sim is not None else 0.0,
+                        "flow_nominal_lpm": sim.source.q_gas * 6e4 if sim is not None else 0.0,
                         "mass_flow_g_s": sim.source.mdot * 1e3 if sim is not None else 0.0}
     images = {"polar": ping.image[::-1], "mask_all": ping.plume_mask_all[::-1],
               "mask_direct": ping.plume_mask_direct[::-1], "mask_geom": ping.plume_mask_geom[::-1]}

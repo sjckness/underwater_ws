@@ -612,12 +612,17 @@ def _coherent(cfg: dict) -> set:
     return {k for k, v in surface_materials(cfg).items() if v.get("coherent")}
 
 
-def scatterers(cfg: dict, scene: Scene | None = None, cache_dir: str = CACHE_DIR) -> Scatterers:
+def scatterers(cfg: dict, scene: Scene | None = None, cache_dir: str | None = CACHE_DIR) -> Scatterers:
     """The scatterers for ``cfg``: read from ``cache_dir`` when the same geometry and spacing were sampled before,
-    else sampled and cached there (npz keyed by a hash of the geometry and spacing inputs)."""
+    else sampled and cached there (npz keyed by a hash of the geometry and spacing inputs). ``cache_dir`` None: no
+    cache (sweeps: every scenario has its own geometry, 60-300 MB each)."""
     if scene is None and get(cfg, "sonar.pose_source") == "trajectory":
         scene = build_scene(cfg)
     spacing = spacing_from_config(cfg, scene)
+    if cache_dir is None:
+        scene = scene if scene is not None else build_scene(cfg)
+        return sample_scatterers(scene, spacing, np.random.default_rng([int(cfg["seed"]), 2]), coherent=_coherent(cfg),
+                                 facet_edge=float(get(cfg, "sonar.coherent_patch_m")))
     path = os.path.join(cache_dir, f"scatterers_{_cache_key(cfg, spacing)}.npz")
     if os.path.isfile(path):
         with np.load(path) as z:

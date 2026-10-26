@@ -27,7 +27,7 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 import warp as wp  # noqa: E402
 
-from uw import bubbles, config, deps, geometry, pose, sinks, sonar  # noqa: E402
+from uw import bubbles, config, deps, geometry, pose, sinks, sonar, surface  # noqa: E402
 
 PIPE_PRESETS = ("exposed", "buried")
 
@@ -76,7 +76,7 @@ def tank_views(ax_side, ax_top, scene, sim, son, path=None):
     ax_top.set_title("top view", fontsize=9)
 
 
-def video(path, cfg, scene, sim, son, n, dt, title, contour=True, motion=None, tau=0.0):
+def video(path, cfg, scene, sim, son, n, dt, title, contour=True, motion=None, tau=0.0, boil=None):
     """n consecutive pings with the plume as an H.264 MP4 (1 / dt frames per second): the fan in metres, the title
     with the pose, the outlines of the plume labels mask_direct and mask_geom (contour=True) and a side view of the
     tank. Plus how the echo changes from ping to ping: speckle correlation (sonar_stats.speckle_correlation) of
@@ -90,7 +90,7 @@ def video(path, cfg, scene, sim, son, n, dt, title, contour=True, motion=None, t
         if motion is not None and motion.moving:
             here = motion.at(tau + (i + 1) * dt)
             son.set_pose(here.position, here.rot)
-        pings.append(son.ping(bubbles=sim))
+        pings.append(son.ping(bubbles=sim, extra=boil.update(son.position) if boil is not None else ()))
     track = motion.positions(0.02) if motion is not None and motion.moving else None
     fig = plt.figure(figsize=(12.8, 7.2), dpi=100)
     ax = fig.add_axes([0.05, 0.08, 0.6, 0.82])
@@ -183,6 +183,7 @@ def run(cfg, name, n_pings, n_video=0, contour=True):
     t["scatterers"] = son.n_scatterers
     t["plume_box_paths"] = son.n_dyn
     motion = pose.sensor_pose(cfg, scene)
+    boil = surface.Boil(cfg, sim)
     tau = 0.0
     if motion.moving:
         start = motion.at(0.0)
@@ -191,7 +192,7 @@ def run(cfg, name, n_pings, n_video=0, contour=True):
     for focus in (True, False):
         tag = "focus" if focus else "nofocus"
         for kind, bub in (("static", None), ("plume", sim)):
-            p = son.ping(bubbles=bub, focus=focus)
+            p = son.ping(bubbles=bub, focus=focus, extra=boil.update(son.position) if bub is not None else ())
             sinks.write_png(os.path.join(out, f"{kind}_{tag}_polar.png"), p.image[::-1])
             fans[kind, tag] = son.fan(p.image)
             sinks.write_png(os.path.join(out, f"{kind}_{tag}_fan.png"), fans[kind, tag])
@@ -206,7 +207,7 @@ def run(cfg, name, n_pings, n_video=0, contour=True):
         if motion.moving:
             here = motion.at(tau)
             son.set_pose(here.position, here.rot)
-        pings.append(son.ping(bubbles=sim).timing_ms)
+        pings.append(son.ping(bubbles=sim, extra=boil.update(son.position)).timing_ms)
     keys = list(dict.fromkeys(k for p in pings for k in p))
     stages = {k: float(np.mean([p.get(k, 0.0) for p in pings])) for k in keys}
     t["ping_ms_mean"] = stages
@@ -227,7 +228,7 @@ def run(cfg, name, n_pings, n_video=0, contour=True):
             title = (f"{name}: {sc_['trajectory']['preset']} at {sc_['trajectory']['speed']:g} m/s, "
                      f"{sc_['mode'].upper()} {'focused' if son.focus else 'unfocused'}")
         t["video"] = video(os.path.join(out, "plume.mp4"), cfg, scene, sim, son, n_video, dt, title, contour,
-                           motion=motion, tau=tau)
+                           motion=motion, tau=tau, boil=boil)
     with open(os.path.join(out, "timing.json"), "w") as f:
         json.dump(t, f, indent=1)
     return t

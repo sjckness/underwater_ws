@@ -93,7 +93,7 @@ def test_profiles_set_the_same_knobs():
         _leaves_of(os.path.join(CONFIG_DIR, "profiles", "workstation.yaml"))
 
 
-@pytest.mark.parametrize("group", ["pipe", "size"])
+@pytest.mark.parametrize("group", ["pipe", "size", "leak"])
 def test_presets_of_a_group_set_the_same_keys(group):
     files = sorted(glob.glob(os.path.join(CONFIG_DIR, "presets", group, "*.yaml")))
     assert len(files) >= 2
@@ -135,4 +135,11 @@ def test_sonar_mode_limits_from_the_datasheet():
         config.sonar_mode(config.load(overrides=["sonar.mode=hf", "sonar.range=41"]))
     with pytest.raises(config.ConfigError, match="exceeds"):
         config.sonar_mode(config.load(overrides=["sonar.ping_rate_hz=50"]))
+
+
+def test_exponent_without_a_dot_is_a_number():
+    cfg = config.load(overrides=["materials.steel_coated.rms_height_m=1e-05", "sonar.position=[1e-1, 1.5, 2E0]"])
+    assert config.get(cfg, "materials.steel_coated.rms_height_m") == 1e-05
+    assert config.get(cfg, "sonar.position") == [0.1, 1.5, 2.0]
+    assert config.get(config.load(overrides=["sonar.trajectory.preset=e1x"]), "sonar.trajectory.preset") == "e1x"
 

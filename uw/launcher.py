@@ -76,6 +76,14 @@ def x11_args() -> list[str]:
     return out
 
 
+def _mkdir(path: Path) -> bool:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        return True
+    except OSError:
+        return False
+
+
 def run_docker(rt: dict, cmd: str, args: list[str]) -> int:
     # The workspace is mounted at the same path in the container: make a script path absolute, and keep the
     # caller's directory (when inside the workspace) so that relative paths in the arguments still resolve.
@@ -90,6 +98,9 @@ def run_docker(rt: dict, cmd: str, args: list[str]) -> int:
     for d in ("uw_warp", "uw_cuda", "uw_pydeps", "uw_home/kit_cache", "uw_home/kit_data"):   # else root-owned
         (Path.home() / ".cache" / d).mkdir(parents=True, exist_ok=True)
     extra = x11_args() if cmd == "sim" and "--gui" in args else []
+    data = Path(os.path.expanduser(str(rt.get("data_root") or "")))
+    if str(data) not in ("", ".") and (data.is_dir() or _mkdir(data)):
+        extra += ["-v", f"{data}:{data}:rw", "-e", f"UW_DATA={data}"]
     env = {**os.environ, "UW_WS": str(WS), "UW_UID": str(os.getuid()), "UW_GID": str(os.getgid())}
     name = f"uw-{cmd}-{os.getpid()}"
     tty = sys.stdin.isatty() and sys.stdout.isatty()
@@ -121,6 +132,7 @@ def run_native(rt: dict, cmd: str, args: list[str]) -> int:
     env = {**os.environ, "UW_WS": str(WS), "UW_PYDEPS": str(Path(n["pydeps"]).expanduser()),
            "UW_WARP_PATH": warp_path(rt, n.get("isaac_root")), "UW_PYTEST_VERSION": str(rt["pytest_version"]),
            "UW_USD_PATH": warp_path(rt, n.get("isaac_root"), "usd_path"), "UW_ISAAC_ROOT": n.get("isaac_root") or "",
+           "UW_DATA": os.path.expanduser(str(rt.get("data_root") or "")),
            "PYTHONPATH": os.pathsep.join([str(WS), *filter(None, [os.environ.get("PYTHONPATH")])])}
     proc = subprocess.Popen([n["python"], "-m", "uw.runner", cmd, *args], env=env)
     if os.name == "posix":                              # SIGTERM to us: interrupt the target like Ctrl-C would

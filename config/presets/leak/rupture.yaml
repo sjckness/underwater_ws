@@ -1,0 +1,13 @@
+# Leak preset "rupture": a ruptured line or a blown gasket, 50-500 L/min; large bubbles, big pool.
+# The flow is set (source flow_jet: the jet of the hole that gives it at the pipe pressure); sweeps sample it
+# log-uniformly in flow_range_lpm. The pool holds the bubbles in the tank at the top of the range. The leak presets
+# set the same keys (tests/test_config.py).
+leak:
+  source: flow_jet
+  flow_lpm: 150.0
+  flow_range_lpm: [50.0, 500.0]
+  d50_mm: 5.0
+  sigma_ln: 0.5
+
+plume:
+  max_bubbles: 400000

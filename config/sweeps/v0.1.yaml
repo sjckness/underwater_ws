@@ -1,0 +1,71 @@
+# Dataset sweep v0.1 (tools/sweep.py): every randomised parameter and its distribution. The dataset card
+# (README.md in the dataset root) is written from this file.
+# Distributions: [lo, hi] uniform; {log: [lo, hi]} log-uniform; {int: [lo, hi]} integer, both ends included;
+# {choice: {value: weight, ...}} weighted choice.
+name: v0.1
+seed: 20261026                  # the sampler's seed: the same file gives the same scenarios
+scenarios: 300
+pings: 60                       # per scenario, at sonar.ping_rate_hz (10 Hz: 6 s of sim time)
+workers: 2                      # parallel sonar-only processes (linus: 1-2)
+splits: {train: 0.70, val: 0.15, test: 0.15}   # by scenario, stratified by kind, pipe preset and flow decade
+
+kind: {choice: {leak: 0.75, negative: 0.17, distractor: 0.08}}
+# negative: no leak; distractor: no leak, but more rocks and pipe glints (extra flanges, a smoother coating)
+
+presets:
+  size: {choice: {tank: 0.75, basin: 0.25}}
+  pipe: {choice: {exposed: 0.6, buried: 0.4}}
+  leak: {choice: {pinhole: 0.35, crack: 0.40, rupture: 0.25}}   # leak scenarios only
+
+leak:
+  flow_lpm: {log: preset}                 # log-uniform in the leak preset's flow_range_lpm (0.1-500 L/min overall)
+  profile: {choice: {constant: 0.6, ramp: 0.2, intermittent: 0.2}}
+  ramp_s: [2.0, 6.0]                      # ramp: from 0 at the first ping (no warm-up) to full flow
+  period_s: [2.0, 8.0]                    # intermittent: on for duty of each period, random phase
+  duty: [0.3, 0.7]
+  pipe_pressure_bar: {log: [1.5, 10.0]}   # sets the jet (the hole is solved for the flow)
+  clock_deg_exposed: [-80.0, 80.0]        # hole direction around the pipe, 0 = top
+  clock_deg_buried: [-60.0, 60.0]
+  position_margin_m: 0.4                  # position along the pipe: uniform, this far from the walls
+  cover_buried_m: [0.02, 0.15]            # sand over the crown (buried)
+  crown_out_exposed_m: [0.04, 0.16]       # how far the crown sticks out of the sand (exposed)
+
+sonar:
+  mobile: {choice: {fixed: 0.85, mobile: 0.15}}
+  mode: {choice: {lf: 0.7, hf: 0.3}}
+  focus: {choice: {true: 0.7, false: 0.3}}
+  noise_level_db: [46.0, 60.0]
+  speckle_sigma_rad: [0.0, 0.3]
+  speckle_time_s: [0.5, 5.0]
+  fixed:                                  # on a pole at the -x wall
+    pitch_deg: [10.0, 45.0]
+    yaw_deg: [-30.0, 30.0]
+    roll_deg: {choice: {0: 0.85, 90: 0.15}}
+    x_m: [0.1, 0.4]
+    y_offset_m: {tank: [-0.4, 0.4], basin: [-1.0, 1.0]}    # from the pipe-leak line's y (the tank's centre)
+    z_m: [0.8, 1.6]
+  trajectory:                             # mobile: static cache none
+    preset: {choice: {approach: 0.4, orbit: 0.3, hover: 0.2, lawnmower: 0.1}}
+    speed: [0.05, 0.25]
+    height: [0.6, 1.6]
+    bearing_deg: [120.0, 240.0]           # approach: from where, seen from the leak (180: from the sonar's wall)
+    start_distance: [1.2, 2.5]
+    end_distance: [0.5, 1.0]
+    radius: [0.6, 1.2]                    # orbit
+    start_deg: [0.0, 360.0]
+    direction: {choice: {1: 0.5, -1: 0.5}}
+    drift_m: [0.005, 0.03]                # hover
+    drift_yaw_deg: [0.5, 4.0]
+    lanes: {int: [3, 5]}                  # lawnmower
+
+scene:
+  wall_rms_height_m: {log: [0.0002, 0.002]}    # each wall
+  wall_lining: 0.1                              # probability per wall
+  sand_ripple_amp: [0.0, 0.012]
+  sand_ripple_wavelength: [0.06, 0.2]
+  sand_ripple_heading_deg: [0.0, 180.0]
+  sand_undulation_amp: [0.0, 0.04]
+  rocks_count: {int: [0, 20]}
+  distractor_rocks_count: {int: [25, 40]}
+  distractor_extra_flanges: {int: [2, 4]}
+  distractor_steel_rms_height_m: 0.00001

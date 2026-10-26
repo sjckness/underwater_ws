@@ -57,8 +57,20 @@ def apply_overrides(cfg: dict, overrides: Iterable[str]) -> dict:
             cur = cur[part]
         if not isinstance(cur, dict) or parts[-1] not in cur:
             raise ConfigError(f"override '{key}': no such key")
-        cur[parts[-1]] = yaml.safe_load(raw)
+        cur[parts[-1]] = _number(yaml.safe_load(raw))
     return out
+
+
+def _number(v):
+    """YAML 1.1 reads 1e-05 (no dot) as a string: take it as the number it is."""
+    if isinstance(v, str):
+        try:
+            return float(v) if any(c in v for c in "eE") and v.strip().lstrip("+-")[:1].isdigit() else v
+        except ValueError:
+            return v
+    if isinstance(v, list):
+        return [_number(x) for x in v]
+    return v
 
 
 def merge(base: dict, overlay: dict) -> dict:

@@ -47,3 +47,14 @@ def test_file_sink_ignores_time_and_frames(tmp_path):
         sink.clock(1.0)
         sink.static_transforms(0.0, [("tank", "oculus", np.eye(3), (0.0, 0.0, 1.0))])
     assert not (tmp_path / "clock").exists()
+
+
+def test_flat_layout_for_sweeps(tmp_path):
+    grey = np.zeros((4, 3), np.uint8)
+    with sinks.make_sink("file", out_dir=tmp_path, layout="flat") as sink:
+        sink.publish(sinks.Message("sonar", 7, 0.7, arrays={"db": np.zeros(2)}, images={"polar": grey,
+                                                                                      "mask_geom": grey}))
+    names = sorted(p.name for p in tmp_path.iterdir())
+    assert names == ["manifest.json", "ping_00007.json", "ping_00007.npz", "ping_00007.png",
+                     "ping_00007_mask_geom.png"]
+

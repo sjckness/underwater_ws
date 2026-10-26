@@ -76,6 +76,31 @@ def extinction_fit(ka):
     return 2.0 + 2.0 / (1.0 + (ka / KA_EXT) ** P_EXT)
 
 
+def modal_bistatic(ka: float, g: float, h: float, theta) -> np.ndarray:
+    """sigma(theta) / a^2 = |f(theta)|^2 / a^2 at scattering angles theta [rad] (0: forward, pi: back),
+    f(theta) = (-i/k) sum (2n+1) A_n P_n(cos theta)."""
+    from scipy.special import eval_legendre
+    a_n = modal_coefficients(ka, g, h)
+    n = np.arange(len(a_n))
+    p_n = eval_legendre(n[:, None], np.cos(np.atleast_1d(np.asarray(theta, float)))[None, :])
+    return np.abs(((2 * n + 1) * a_n) @ p_n) ** 2 / ka ** 2
+
+
+def bistatic_ratio_table(g: float, h: float, ka_min: float = 0.05, ka_max: float = 200.0, n_ka: int = 120,
+                         n_theta: int = 61, smooth: float = 0.1):
+    """sigma(ka, theta) / sigma(ka, pi) of the gas sphere (modal series), each averaged over ka within +-``smooth``
+    (relative) so that the ideal sphere's narrow interior resonances do not dominate. Rows: log-spaced ka; columns:
+    theta from 0 to pi. Returns (log10 ka_min, d log10 ka, table)."""
+    theta = np.linspace(0.0, math.pi, n_theta)
+    ka = np.logspace(math.log10(ka_min), math.log10(ka_max), n_ka)
+    out = np.zeros((n_ka, n_theta))
+    for i, x in enumerate(ka):
+        sub = x * np.linspace(1 - smooth, 1 + smooth, 9)
+        s = np.mean([modal_bistatic(y, g, h, theta) for y in sub], 0)
+        out[i] = s / s[-1]
+    return math.log10(ka_min), (math.log10(ka_max) - math.log10(ka_min)) / (n_ka - 1), out.astype(np.float32)
+
+
 @dataclass
 class Tables:
     """sigma_bs / a^2 and sigma_ext / (pi a^2) on a log-spaced ka grid, for linear lookup in log10(ka)."""

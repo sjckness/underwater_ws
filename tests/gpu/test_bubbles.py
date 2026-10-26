@@ -83,3 +83,40 @@ def test_cuda_graph_and_batching_do_not_change_the_bubbles(preset):
     for other in states[1:]:
         for a, b in zip(states[0], other):
             assert np.array_equal(a, b)
+
+
+def test_bursts_are_counted_where_the_plume_surfaces():
+    cfg = config.load()
+    sim = bubbles.BubbleSim(cfg, geometry.build_scene(cfg))
+    sim.warmup(float(config.get(cfg, "plume.warmup_s")))
+    sim.bursts.zero_()
+    before = sim.counters()["burst"]
+    sim.step(1.0)
+    counts = sim.bursts.numpy()
+    assert counts.sum() == pytest.approx(sim.counters()["burst"] - before, rel=0.02)    # nearly all inside the grid
+    ii, jj = np.indices(counts.shape)
+    centroid = np.array(sim.burst_origin) + (np.array([np.sum(ii * counts), np.sum(jj * counts)]) / counts.sum()
+                                             + 0.5) * sim.burst_cell
+    width = float(sim.flow.plume["b"][-1])
+    assert np.linalg.norm(centroid - sim.flow.plume["pos"][-1, :2]) < 0.5 * width     # meander moves it a little
+
+
+@pytest.mark.parametrize("profile, seconds, share", [
+    ({"kind": "ramp", "ramp_s": 4.0}, 1.0, 0.125),                         # integral of t/4 over 1 s
+    ({"kind": "intermittent", "period_s": 1.0, "duty": 0.3, "phase": 0.0}, 3.0, 0.3)])
+def test_leak_profiles_emit_the_right_gas(profile, seconds, share):
+    gas = {}
+    for name, prof in (("constant", {"kind": "constant"}), ("profiled", profile)):
+        cfg = config.merge(config.load(), {"leak": {"profile": prof}})
+        sim = bubbles.BubbleSim(cfg, geometry.build_scene(cfg))
+        sim.step(seconds)
+        gas[name] = sim.emitted_gas
+    assert gas["profiled"] / gas["constant"] == pytest.approx(share, rel=0.08)
+
+
+def test_flow_jet_source_gives_the_set_flow():
+    from uw import plume
+    for flow in (0.1, 30.0, 500.0):
+        cfg = config.load(overrides=["leak.source=flow_jet", f"leak.flow_lpm={flow}"])
+        src = plume.leak_source(cfg, geometry.build_scene(cfg))
+        assert src.q_gas * 6e4 == pytest.approx(flow, rel=1e-9) and src.momentum > 0

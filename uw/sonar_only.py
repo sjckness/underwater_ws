@@ -16,7 +16,7 @@ import time
 import numpy as np
 import warp as wp
 
-from . import bubbles, config, geometry, pose, recorder, sinks, sonar
+from . import bubbles, config, geometry, pose, recorder, sinks, sonar, surface
 from .ros_bridge import R_SONAR_PROJECTED
 
 
@@ -43,14 +43,14 @@ def main(argv: list[str]) -> int:
 
 
 def run(cfg: dict, pings: int, sink, plume: bool = True, fan: bool | None = None, info: dict | None = None,
-        progress=None) -> dict:
+        progress=None, cache: bool = True) -> dict:
     """``pings`` pings of ``cfg`` into ``sink``: scene, scatterers, bubble warm-up, then per ping 1 / ping_rate of
     bubble steps, the sonar's pose at that time (sonar.pose_source; trajectory time 0 = end of the warm-up), a ping.
     ``info`` gets the config hash, seed, labels and config (the sink writes it to its manifest). ``progress(i)`` is
-    called after every ping. Returns timing statistics."""
+    called after every ping. ``cache`` False: the scatterers are not cached (sweeps). Returns timing statistics."""
     t0 = time.perf_counter()
     scene = geometry.build_scene(cfg)
-    sc = geometry.scatterers(cfg, scene)
+    sc = geometry.scatterers(cfg, scene, **({} if cache else {"cache_dir": None}))
     sim = None
     if config.get(cfg, "leak.enabled") and plume:
         sim = bubbles.BubbleSim(cfg, scene)
@@ -60,6 +60,7 @@ def run(cfg: dict, pings: int, sink, plume: bool = True, fan: bool | None = None
         from .ros_bridge import RosPose
         motion = RosPose(motion, config.get(cfg, "sonar.ros_pose_topic"))
     son = sonar.Sonar(cfg, scene, sc, plume=sonar.plume_region(sim) if sim else None)
+    boil = surface.Boil(cfg, sim) if sim is not None else None
     setup_s = time.perf_counter() - t0
     dt = 1.0 / float(config.get(cfg, "sonar.ping_rate_hz"))
     if info is not None:
@@ -79,7 +80,7 @@ def run(cfg: dict, pings: int, sink, plume: bool = True, fan: bool | None = None
             here = motion.at((i + 1) * dt)
             son.set_pose(here.position, here.rot)
         t1 = time.perf_counter()
-        ping = son.ping(bubbles=sim)
+        ping = son.ping(bubbles=sim, extra=boil.update(son.position) if boil is not None else ())
         t2 = time.perf_counter()
         sink.clock(stamp)
         if motion.moving:

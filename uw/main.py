@@ -128,7 +128,7 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
     import torch
     import warp as wp
 
-    from . import bubbles, geometry, pose, recorder, sinks, sonar, usd_scene
+    from . import bubbles, geometry, pose, recorder, sinks, sonar, surface, usd_scene
     from .app import render_settings_report
     from .ros_bridge import FRAMES
 
@@ -141,6 +141,7 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
         sim = bubbles.BubbleSim(cfg, scene)
         sim.warmup(float(get(cfg, "plume.warmup_s")))
     son = sonar.Sonar(cfg, scene, sc, plume=sonar.plume_region(sim) if sim else None)
+    boil = surface.Boil(cfg, sim) if sim is not None else None
     motion = pose.sensor_pose(cfg, scene)
     if get(cfg, "sonar.pose_source") == "ros":
         from .ros_bridge import RosPose
@@ -242,7 +243,7 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                 if motion.moving:
                     here = motion.at(t_loop)
                     son.set_pose(here.position, here.rot)
-                ping = son.ping(bubbles=sim)
+                ping = son.ping(bubbles=sim, extra=boil.update(son.position) if boil is not None else ())
                 t_c = time.perf_counter()
                 if motion.moving:
                     sink.transforms(t, [(FRAMES["world"], FRAMES["sonar"], ping.rot, ping.position)])
@@ -303,7 +304,7 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
             if live and scene.leak is not None and timers["leak"].due(t_loop):
                 sink.publish(sinks.Message("leak", k, t, meta={
                     "position": scene.leak.hole.tolist(), "direction": scene.leak.direction.tolist(),
-                    "flow_lpm": sim.source.q_gas * 6e4 if sim is not None else 0.0}))
+                    "flow_lpm": sim.flow_now_lpm() if sim is not None else 0.0}))
             if shots and t_loop + 1e-9 >= shots[0]:
                 os.makedirs(shot_dir, exist_ok=True)
                 stem = os.path.join(shot_dir, f"{'+'.join(args.preset) or 'default'}_t{shots.pop(0):g}")

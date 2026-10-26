@@ -515,13 +515,29 @@ def resolve_ext_kernel(acc: wp.array3d(dtype=wp.uint64), ext: wp.array3d(dtype=f
     ext[x, y, z] = float(wp.int64(acc[x, y, z])) / EXT_SCALE
 
 
+@wp.func
+def bistatic_ratio(tab: wp.array2d(dtype=float), log0: float, dlog: float, ka: float, theta: float) -> float:
+    """sigma(theta) / sigma(pi), bilinear in (log10 ka, theta)."""
+    x = wp.clamp((wp.log10(ka) - log0) / dlog, 0.0, float(tab.shape[0] - 1) - 1.0e-3)
+    y = wp.clamp(theta / PI * float(tab.shape[1] - 1), 0.0, float(tab.shape[1] - 1) - 1.0e-3)
+    i = int(x)
+    j = int(y)
+    fx = x - float(i)
+    fy = y - float(j)
+    return ((1.0 - fx) * ((1.0 - fy) * tab[i, j] + fy * tab[i, j + 1])
+            + fx * ((1.0 - fy) * tab[i + 1, j] + fy * tab[i + 1, j + 1]))
+
+
 @wp.kernel
 def point_kernel(p: Params, pl: Planes, n_planes: int, bx: Box, ext: wp.array3d(dtype=float),
-                 pos: wp.array(dtype=wp.vec3), sig: wp.array(dtype=float), grid: wp.array3d(dtype=wp.uint64),
-                 grid2: wp.array3d(dtype=wp.uint64), grid3: wp.array3d(dtype=wp.uint64), to2: int):
-    """Point scatterers with backscattering cross-section sig (bubbles, test targets): direct path and the image
-    paths of the first n_planes boundaries; extinction along every leg; phase of a soft sphere (pi). With to2 the
-    echoes also go into grid2 (all paths) and grid3 (direct path only): the plume labels."""
+                 pos: wp.array(dtype=wp.vec3), sig: wp.array(dtype=float), rad: wp.array(dtype=float), bistatic: int,
+                 tab: wp.array2d(dtype=float), log0: float, dlog: float, grid: wp.array3d(dtype=wp.uint64),
+                 grid2: wp.array3d(dtype=wp.uint64), grid3: wp.array3d(dtype=wp.uint64), labels: int):
+    """Point scatterers with backscattering cross-section sig (bubbles, boil patches, test targets): direct path and
+    the image paths of the first n_planes boundaries; extinction along every leg; phase of a soft sphere (pi). With
+    ``bistatic`` the paths in and out by different routes use the gas sphere's bistatic cross-section at their
+    scattering angle (ratio to backscatter from ``tab``, radius ``rad``). ``labels``: bit 1, all the echoes also go
+    into grid2 (the all-paths plume label); bit 2, the direct echo into grid3 (the direct-path label)."""
     i = wp.tid()
     sg = sig[i]
     if sg > 0.0:
@@ -536,8 +552,9 @@ def point_kernel(p: Params, pl: Planes, n_planes: int, bx: Box, ext: wp.array3d(
         if clear(p, s, x) != 0 and g1 != 0.0:
             amp = base / (l1 * l1) * wp.exp(-2.0 * p.att * l1 - t1) * g1 * g1
             deposit(grid, p, 2.0 * l1, u_of(p, d1), amp, 2.0 * p.k * l1 + PI)
-            if to2 != 0:
+            if labels % 2 == 1:
                 deposit(grid2, p, 2.0 * l1, u_of(p, d1), amp, 2.0 * p.k * l1 + PI)
+            if labels >= 2:
                 deposit(grid3, p, 2.0 * l1, u_of(p, d1), amp, 2.0 * p.k * l1 + PI)
             for k_ in range(n_planes):
                 nk = pl.n[k_]
@@ -553,11 +570,14 @@ def point_kernel(p: Params, pl: Planes, n_planes: int, bx: Box, ext: wp.array3d(
                     if refl < 0.0:
                         ph = PI
                     a1 = base / (lm * l1) * wp.exp(-p.att * (lm + l1) - 0.5 * (tm + t1)) * gq * g1 * wp.abs(refl)
+                    if bistatic != 0:               # in from the mirror point, out straight to the sonar
+                        c = wp.dot(wp.normalize(x - q), -d1)
+                        a1 = a1 * wp.sqrt(bistatic_ratio(tab, log0, dlog, p.k * rad[i], wp.acos(wp.clamp(c, -1.0, 1.0))))
                     a2 = base / (lm * lm) * wp.exp(-2.0 * p.att * lm - tm) * gq * gq * refl * refl
                     deposit(grid, p, lm + l1, u_of(p, d1), a1, p.k * (lm + l1) + PI + ph)
                     deposit(grid, p, lm + l1, u_of(p, dq), a1, p.k * (lm + l1) + PI + ph)
                     deposit(grid, p, 2.0 * lm, u_of(p, dq), a2, 2.0 * p.k * lm + PI)
-                    if to2 != 0:
+                    if labels % 2 == 1:
                         deposit(grid2, p, lm + l1, u_of(p, d1), a1, p.k * (lm + l1) + PI + ph)
                         deposit(grid2, p, lm + l1, u_of(p, dq), a1, p.k * (lm + l1) + PI + ph)
                         deposit(grid2, p, 2.0 * lm, u_of(p, dq), a2, 2.0 * p.k * lm + PI)
@@ -900,6 +920,14 @@ class Sonar:
         self.tables = scattering.Tables.build(g, h)
         self.tab_bs = wp.array(self.tables.backscatter, dtype=float, device=device)
         self.tab_ext = wp.array(self.tables.extinction, dtype=float, device=device)
+        self.bistatic = son["bubble_paths"] == "bistatic"
+        if son["bubble_paths"] not in ("bistatic", "surface_backscatter"):
+            raise ConfigError(f"sonar.bubble_paths must be bistatic | surface_backscatter, got {son['bubble_paths']!r}")
+        self.bi_log0, self.bi_dlog, tab = (scattering.bistatic_ratio_table(g, h) if self.bistatic
+                                           else (0.0, 1.0, np.ones((2, 2), np.float32)))
+        self.tab_bi = wp.array(tab, dtype=float, device=device)
+        if self.bistatic:                       # bubbles: the image paths of every boundary (surface and walls)
+            self.n_point_planes = self.planes.count
         # plume box: extinction grid and the static paths crossing it
         self.box = Box()
         self.box.vox = float(son["extinction_voxel"])
@@ -1151,9 +1179,12 @@ class Sonar:
         return out
 
     # ----------------------------------------------------------------------------------------- ping
-    def ping(self, bubbles=None, targets=None, focus: bool | None = None) -> Ping:
-        """One ping. ``bubbles``: a BubbleSim (its GPU arrays are read directly); ``targets``: [(position, sigma_bs)]
-        point scatterers (tests). ``focus`` overrides sonar.focus."""
+    def ping(self, bubbles=None, targets=None, focus: bool | None = None, extra=()) -> Ping:
+        """One ping. ``bubbles``: gas bubbles as GPU arrays, any object with ``pos`` (vec3), ``r`` (radius), ``alive``
+        (int32) and ``cap`` (e.g. a BubbleSim); ``targets``: [(position, sigma_bs)] point scatterers (tests);
+        ``extra``: [(pos, sigma_bs, labels)] further point scatterers as GPU arrays, direct path only (labels: bit 1
+        counts them in the all-paths plume label, bit 2 in the direct one), e.g. the surface boil.
+        ``focus`` overrides sonar.focus."""
         dev, p = self.device, self.p
         focus = self.focus if focus is None else focus
         tm, t_last = {}, [time.perf_counter()]
@@ -1198,14 +1229,19 @@ class Sonar:
             a.zero_()
         if n_bub:
             wp.launch(point_kernel, dim=n_bub, device=dev,
-                      inputs=[p, self.planes, self.n_point_planes, self.box, self.ext, bubbles.pos, sig, self.acc,
-                              self.acc_b, self.acc_d, 1])
+                      inputs=[p, self.planes, self.n_point_planes, self.box, self.ext, bubbles.pos, sig, bubbles.r,
+                              int(self.bistatic), self.tab_bi, self.bi_log0, self.bi_dlog, self.acc, self.acc_b,
+                              self.acc_d, 3])
+        for e_pos, e_sig, e_labels in extra:            # e.g. the surface boil: plume-caused, not bubbles
+            wp.launch(point_kernel, dim=e_pos.shape[0], device=dev,
+                      inputs=[p, self.planes, 0, self.box, self.ext, e_pos, e_sig, e_sig, 0, self.tab_bi,
+                              self.bi_log0, self.bi_dlog, self.acc, self.acc_b, self.acc_d, int(e_labels)])
         if targets:
             tpos = wp.array(np.array([t[0] for t in targets], np.float32), dtype=wp.vec3, device=dev)
             tsig = wp.array(np.array([t[1] for t in targets], np.float32), dtype=float, device=dev)
             wp.launch(point_kernel, dim=len(targets), device=dev,
-                      inputs=[p, self.planes, self.n_point_planes, self.box, self.ext, tpos, tsig, self.acc,
-                              self.acc_b, self.acc_d, 0])
+                      inputs=[p, self.planes, self.n_point_planes, self.box, self.ext, tpos, tsig, tsig, 0,
+                              self.tab_bi, self.bi_log0, self.bi_dlog, self.acc, self.acc_b, self.acc_d, 0])
         for a, g, add_to in ((self.acc, self.grid, 1), (self.acc_b, self.grid_b, 0), (self.acc_d, self.grid_d, 0)):
             wp.launch(resolve_kernel, dim=g.shape, device=dev, inputs=[a, g, add_to])
         self.mask_g.zero_()

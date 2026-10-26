@@ -147,8 +147,16 @@ def leak_source(cfg: dict, scene) -> Source:
     elif lc["source"] == "flow":
         info = {}
         mdot, momentum = float(lc["flow_lpm"]) / 60000.0 * p_rel / (r_gas * t_k), 0.0
+    elif lc["source"] == "flow_jet":            # the hole that gives flow_lpm at the pipe pressure (mdot ~ area)
+        p0 = float(lc["pipe_pressure_bar"]) * 1e5 + wat.pressure(float(leak.hole[2]), wl, rho, ambient)
+        mdot = float(lc["flow_lpm"]) / 60000.0 * p_rel / (r_gas * t_k)
+        ref = wat.choked_leak(p0, p_rel, 1e-3, lc["gas"], t_k, float(lc["discharge_coeff"]))
+        hole = 1e-3 * math.sqrt(mdot / ref["mdot"])
+        info = {**wat.choked_leak(p0, p_rel, hole, lc["gas"], t_k, float(lc["discharge_coeff"])),
+                "hole_diameter_mm": hole * 1e3}
+        mdot, momentum = info["mdot"], info["momentum_flux"]
     else:
-        raise ConfigError(f"leak.source must be pressure or flow, got {lc['source']!r}")
+        raise ConfigError(f"leak.source must be pressure, flow or flow_jet, got {lc['source']!r}")
     d50 = float(lc["d50_mm"]) * 1e-3
     if leak.buried:
         momentum = 0.0          # the sand takes the jet's momentum

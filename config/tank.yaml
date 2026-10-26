@@ -60,11 +60,19 @@ leak:
   clock_deg: 45.0               # hole direction around the pipe: 0 = top, +90 = towards +x
   gas: methane                  # methane | air | nitrogen | co2
   source: pressure              # pressure: flow + jet from the pipe pressure and the hole (choked if >~0.85 bar g)
-                                # flow: fixed flow_lpm, no jet momentum
+                                # flow: fixed flow_lpm, no jet momentum | flow_jet: flow_lpm, with the jet of the
+                                # hole that gives it at pipe_pressure_bar (diameter solved; the leak presets' mode)
   pipe_pressure_bar: 3.0        # gauge pressure inside the pipe
   hole_diameter_mm: 1.0         # 3 bar g through 1 mm -> ~25 L/min methane at the hole ("medium")
   discharge_coeff: 0.62         # sharp-edged hole
-  flow_lpm: 25.0                # source: flow only; at the hole's ambient pressure
+  flow_lpm: 25.0                # source flow and flow_jet; at the hole's ambient pressure
+  flow_range_lpm: [5.0, 50.0]   # validity range of the leak preset (config/presets/leak): sweeps sample flow_lpm in it
+  profile:                      # gas flow over sim time (time 0 = the leak starts; the plume warm-up counts):
+    kind: constant              # constant | ramp (0 -> full over ramp_s) | intermittent (on for duty of each period_s)
+    ramp_s: 5.0
+    period_s: 4.0
+    duty: 0.5
+    phase: 0.0                  # intermittent: where in its period the leak starts, [0, 1)
   # bubble size after jet breakup: log-normal number distribution
   d50_mm: 3.0                   # number-median volume-equivalent diameter
   sigma_ln: 0.5
@@ -88,6 +96,7 @@ plume:                          # integral buoyant-jet model (top-hat) for the l
   max_bubbles: 150000
   dt: 0.004166667               # bubble integration step [s] (1/240)
   cuda_graph: true              # run each batch of substeps as one captured CUDA graph (same results, less overhead)
+  burst_grid_m: 0.01            # cells of the grid that counts where bubbles burst (for the surface boil)
   warmup_s: 12.0                # simulated before the first frame so the plume has reached the surface
 
 lights:                         # artificial light only (deep water)
@@ -173,7 +182,15 @@ sonar:
   volume_sv_db: -75.0           # volume backscattering strength of the tank water [dB re 1/m] (assumed)
   surface_roughness_m: 0.0002   # rms height of the calm water surface (assumed)
   boil_roughness_m: 0.005       # rms height where the plume breaks the surface (assumed)
+  boil_backscatter:             # the boil's own echo (uw/surface.py): Kirchhoff (geometric optics) of a rough
+    enabled: true               # pressure-release surface, rms slope per axis, over the area the bursts disturb:
+    rms_slope: 0.3              #   share 1 - exp(-rate / saturation_rate) of each cell, rate = bursts per s and m^2
+    saturation_rate: 20000.0    #   (smoothed over time_s); random phase every ping (assumed values)
+    time_s: 0.3
   multipath: [surface, walls]   # specular image paths: surface (pressure release), walls (Z of the wall material)
+  bubble_paths: bistatic        # bistatic: bubbles' image paths over every multipath boundary, with the gas sphere's
+                                # bistatic cross-section (modal series) on the paths in and out by different routes |
+                                # surface_backscatter: surface paths only, backscatter cross-section on all (M2)
   receiver_noise: true          # switches for tests
   reverberation: true
   ringdown: true

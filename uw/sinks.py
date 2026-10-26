@@ -56,26 +56,37 @@ class NullSink(SensorSink):
 
 
 class FileSink(SensorSink):
-    """A dataset on disk: <out>/<sensor>/<seq>.npz, <seq>_<image>.png, <seq>.json; manifest.json on close."""
+    """A dataset on disk; manifest.json on close.
+    layout "sensor": <out>/<sensor>/<seq>.npz, <seq>_<image>.png, <seq>.json (6 digits);
+    layout "flat" (sweeps, one scenario per directory): <out>/<prefix>_<seq>.npz, <prefix>_<seq>.png (the image named
+    ``main_image``), <prefix>_<seq>_<image>.png, <prefix>_<seq>.json (5 digits; prefix "ping" for the sonar)."""
 
-    def __init__(self, out_dir, info: dict | None = None):
+    PREFIX = {"sonar": "ping"}
+
+    def __init__(self, out_dir, info: dict | None = None, layout: str = "sensor", main_image: str = "polar"):
+        if layout not in ("sensor", "flat"):
+            raise ValueError(f"FileSink layout must be sensor or flat, got {layout!r}")
         self.out = Path(out_dir)
         self.out.mkdir(parents=True, exist_ok=True)
-        self.info = info or {}
+        self.info = info if info is not None else {}
+        self.layout, self.main_image = layout, main_image
         self.index: dict[str, list] = {}
         self.t0 = time.time()
 
     def publish(self, msg: Message) -> None:
-        d = self.out / msg.sensor
-        d.mkdir(exist_ok=True)
-        stem = f"{msg.seq:06d}"
+        if self.layout == "flat":
+            d, stem = self.out, f"{self.PREFIX.get(msg.sensor, msg.sensor)}_{msg.seq:05d}"
+        else:
+            d, stem = self.out / msg.sensor, f"{msg.seq:06d}"
+            d.mkdir(exist_ok=True)
         files = []
         if msg.arrays:
             np.savez_compressed(d / f"{stem}.npz", **msg.arrays)
             files.append(f"{stem}.npz")
         for name, img in msg.images.items():
-            write_png(d / f"{stem}_{name}.png", img)
-            files.append(f"{stem}_{name}.png")
+            fname = f"{stem}.png" if self.layout == "flat" and name == self.main_image else f"{stem}_{name}.png"
+            write_png(d / fname, img)
+            files.append(fname)
         (d / f"{stem}.json").write_text(json.dumps({"seq": msg.seq, "stamp": msg.stamp, **msg.meta}, indent=1))
         files.append(f"{stem}.json")
         self.index.setdefault(msg.sensor, []).append({"seq": msg.seq, "stamp": msg.stamp, "files": files})
@@ -84,7 +95,7 @@ class FileSink(SensorSink):
         manifest = {**self.info, "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
                     "wall_clock_s": time.time() - self.t0,
                     "sensors": {s: {"count": len(v), "messages": v} for s, v in self.index.items()}}
-        (self.out / "manifest.json").write_text(json.dumps(manifest, indent=1))
+        (self.out / "manifest.json").write_text(json.dumps(manifest, indent=1, default=str))
 
 
 def make_sink(kind: str, **kwargs) -> SensorSink:

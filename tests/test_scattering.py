@@ -64,3 +64,21 @@ def test_triangle_phase_integral():
         ref = 2 * area * np.sum(np.outer(w, w) * (1 - uu) * np.exp(1j * (pts - c) @ g))
         got = sc.triangle_phase_integral((v - c) @ g, area)
         assert abs(got - ref) < 1e-6 * area
+
+
+def test_bistatic_modal_series():
+    """f(pi) is the backscatter; the integral of |f|^2 over all directions is the extinction (lossless sphere,
+    optical theorem); ka >> 1 scatters mostly forward (diffraction), ka << 1 nearly isotropically (monopole)."""
+    theta = np.linspace(0.0, np.pi, 2001)
+    for ka in (0.5, 3.0, 12.0):
+        s = sc.modal_bistatic(ka, G, H, theta)
+        assert s[-1] == pytest.approx(sc.modal_backscatter(ka, G, H), rel=1e-9)
+        total = 2 * np.pi * np.trapz(s * np.sin(theta), theta) / np.pi        # / (pi a^2)
+        assert total == pytest.approx(sc.modal_extinction(ka, G, H), rel=2e-3)
+    big = sc.modal_bistatic(12.0, G, H, np.array([0.0, np.pi]))
+    assert big[0] > 30 * big[1]
+    small = sc.modal_bistatic(0.05, G, H, np.array([0.0, np.pi / 2, np.pi]))
+    assert small.max() / small.min() < 1.3
+    log0, dlog, tab = sc.bistatic_ratio_table(G, H, n_ka=12, n_theta=13)
+    assert tab.shape == (12, 13) and np.allclose(tab[:, -1], 1.0)
+

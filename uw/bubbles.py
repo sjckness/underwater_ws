@@ -144,7 +144,8 @@ def step_kernel(dt: float, step: int, seeds: wp.array(dtype=wp.int32), u_liq: wp
                 pos: wp.array(dtype=wp.vec3), r0: wp.array(dtype=float), z0: wp.array(dtype=float),
                 r: wp.array(dtype=float), alive: wp.array(dtype=wp.int32), turb: wp.array(dtype=wp.vec3),
                 misc: wp.array(dtype=wp.vec3), age: wp.array(dtype=float), vel_out: wp.array(dtype=wp.vec3),
-                stats: wp.array(dtype=wp.float64)):
+                stats: wp.array(dtype=wp.float64), bursts: wp.array2d(dtype=wp.int32), burst_x0: float,
+                burst_y0: float, burst_cell: float):
     i = wp.tid()
     if alive[i] == 0:
         return
@@ -189,6 +190,10 @@ def step_kernel(dt: float, step: int, seeds: wp.array(dtype=wp.int32), u_liq: wp
         wp.atomic_add(stats, S_BURST, wp.float64(1.0))
         wp.atomic_add(stats, S_BURST_GAS, wp.float64(gas_amount(r0[i], z0[i], p_surf, rho, water_level)))
         wp.atomic_add(stats, S_BURST_AGE, wp.float64(age[i]))
+        bx = int(wp.floor((p[0] - burst_x0) / burst_cell))     # where it burst: the surface boil
+        by = int(wp.floor((p[1] - burst_y0) / burst_cell))
+        if bx >= 0 and by >= 0 and bx < bursts.shape[0] and by < bursts.shape[1]:
+            wp.atomic_add(bursts, bx, by, 1)
 
 
 # -------------------------------------------------------------------------------------- flow fields
@@ -306,6 +311,11 @@ class BubbleSim:
         self.head = 0
         self.flow = make_flow_field(cfg, src, self.water_level, self.p_surf, self.dt, self.rng, device)
         self.emitter = plume.Emitter(src.q_gas, src.sizes, self.rng)
+        prof = lc["profile"]
+        if prof["kind"] not in ("constant", "ramp", "intermittent"):
+            raise ConfigError(f"leak.profile.kind must be constant | ramp | intermittent, got {prof['kind']!r}")
+        self.profile = (prof["kind"], float(prof["ramp_s"]), float(prof["period_s"]), float(prof["duty"]),
+                        float(prof["phase"]))
         self.emitted = 0
         self.emitted_gas = 0.0                       # sum of p0*V0 [Pa m^3]
         # buried leak: intermittent vents, OU-driven soft switching of each vent's share of the gas
@@ -334,6 +344,18 @@ class BubbleSim:
         # numbers, in the order of one substep after the other) goes into pinned staging arrays, one upload, then the
         # GPU part of all substeps, captured once per batch length as a CUDA graph (plume.cuda_graph). The results
         # are bit-identical to launching every substep on its own (tests/gpu/test_bubbles.py).
+        # bursts per surface cell (counted until someone reads and clears them: the surface boil, uw/surface.py),
+        # on a grid around where the plume reaches the surface
+        self.burst_cell = float(pc["burst_grid_m"])
+        pl = getattr(self.flow, "plume", None)
+        if pl is not None:
+            half = (3.0 + 2.0 * float(pc["meander_amp"])) * float(pl["b"][-1]) + 0.1
+            centre = pl["pos"][-1, :2]
+        else:
+            half, centre = 0.5 * float(max(self.size[0], self.size[1])), self.size[:2] / 2
+        n = int(math.ceil(2 * half / self.burst_cell))
+        self.burst_origin = (float(centre[0] - half), float(centre[1] - half))
+        self.bursts = wp.zeros((n, n), dtype=wp.int32, device=dev)
         self.use_graph = bool(pc["cuda_graph"]) and wp.get_device(dev).is_cuda
         self.batch_max = 240
         self.max_new = 128                           # new bubbles per substep the batch holds (grows on demand)
@@ -353,6 +375,19 @@ class BubbleSim:
                 "bubbles_per_s": src.q_gas / src.sizes.mean_volume, "slip_mean_m_s": src.slip_mean,
                 "plume_uc_b_at_0.5m": at(0.5), "plume_uc_b_at_1.5m": at(1.5),
                 "liquid_travel_time_s": float(pl["tau"][-1])}
+
+    def flow_factor(self, t: float) -> float:
+        """The leak's flow at sim time t over its nominal flow (leak.profile)."""
+        kind, ramp, period, duty, phase = self.profile
+        if kind == "ramp":
+            return min(max(t / ramp, 0.0), 1.0) if ramp > 0 else 1.0
+        if kind == "intermittent":
+            return 1.0 if (t / period + phase) % 1.0 < duty else 0.0
+        return 1.0
+
+    def flow_now_lpm(self) -> float:
+        """Gas flow leaving the leak now [L/min at the release pressure]."""
+        return self.source.q_gas * self.flow_factor(self.t) * 6e4
 
     def counters(self) -> dict:
         """Running totals since the start: emitted and burst bubbles, gas amounts [Pa m^3], age sum at burst [s]."""
@@ -431,6 +466,7 @@ class BubbleSim:
         rows = []
         for j in range(k):
             self._update_vents()
+            self.emitter.q = self.source.q_gas * self.flow_factor(self.t)
             state = self.flow.advance(self.dt)
             rows.append((state, self._new_bubbles(self.dt), self.head, (self.seed + self.step_count) % 2 ** 31))
             n = 0 if rows[-1][1] is None else len(rows[-1][1][0])
@@ -475,7 +511,8 @@ class BubbleSim:
                               self.rho, src.mu, src.sigma, src.kb, self.p_surf, self.water_level,
                               float(self.size[0]), float(self.size[1]),
                               self.pos, self.r0, self.z0, self.r, self.alive, self.turb, self.misc, self.age,
-                              self.vel, self.stats])
+                              self.vel, self.stats, self.bursts, self.burst_origin[0], self.burst_origin[1],
+                              self.burst_cell])
 
     def step(self, dt_total: float):
         """round(dt_total / plume.dt) substeps, in batches of up to 240."""

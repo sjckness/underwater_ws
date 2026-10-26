@@ -1,0 +1,13 @@
+# Leak preset "pinhole": a pinhole or a weeping fitting, 0.1-5 L/min; small jet-breakup bubbles.
+# The flow is set (source flow_jet: the jet of the hole that gives it at the pipe pressure); sweeps sample it
+# log-uniformly in flow_range_lpm. The pool holds the bubbles in the tank at the top of the range. The leak presets
+# set the same keys (tests/test_config.py).
+leak:
+  source: flow_jet
+  flow_lpm: 1.0
+  flow_range_lpm: [0.1, 5.0]
+  d50_mm: 2.0
+  sigma_ln: 0.45
+
+plume:
+  max_bubbles: 100000
