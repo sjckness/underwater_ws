@@ -1,5 +1,5 @@
-# Isaac Sim 5.1 container for the underwater tank sim. Start it through scripts/uw.sh, which sets UW_WS,
-# UW_UID and UW_GID, names the container and removes it on exit.
+# Isaac Sim 5.1 container for the underwater tank sim. Start it through `python -m uw` (uw/launcher.py), which sets
+# UW_WS, UW_UID and UW_GID, names the container and removes it on exit.
 # Uses the image built for ~/isaac_ws as is; never builds or pulls (a rebuild would pull the ~20 GB
 # nvcr.io/nvidia/isaac-sim:5.1.0 base).
 name: uw
@@ -10,11 +10,11 @@ services:
     runtime: nvidia
     network_mode: host
     ipc: host
-    init: true                        # tini as PID 1: passes docker stop's SIGTERM on to uw.sh, reaps zombies
+    init: true                        # tini as PID 1: passes docker stop's SIGTERM on to Python, reaps zombies
     # The host user plus the image's isaac-sim group (/isaac-sim is 750 isaac-sim:isaac-sim): everything written
     # to the workspace and the caches stays owned by the host user. Enough for Warp-only runs (py, test,
     # sonar-only); the Kit app (sim, M3) may need more.
-    user: "${UW_UID:?start through scripts/uw.sh}:${UW_GID:?start through scripts/uw.sh}"
+    user: "${UW_UID:?start through python -m uw}:${UW_GID:?start through python -m uw}"
     group_add: [isaac-sim]
     entrypoint: ["/bin/bash"]
     environment:
@@ -30,10 +30,10 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
     volumes:
       # same path as on the host: paths in arguments, logs and tracebacks are valid on both sides
-      - ${UW_WS:?start through scripts/uw.sh}:${UW_WS}:rw
+      - ${UW_WS:?start through python -m uw}:${UW_WS}:rw
       # Warp kernel cache (~/.cache/isaac-sim/cache is root-owned)
       - ${HOME}/.cache/uw_warp:/uw_cache/warp:rw
-      # pytest for `uw.sh test` (the image has none), installed there on first use
+      # pytest for `python -m uw test` (the image has none), installed there on first use
       - ${HOME}/.cache/uw_pydeps:/uw_cache/pydeps:rw
     working_dir: ${UW_WS}
     stdin_open: true

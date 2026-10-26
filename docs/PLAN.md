@@ -1,7 +1,7 @@
 # Underwater gas-leak tank in Isaac Sim: FLS (+ camera) simulation
 
-> **Status (2026-10-26):** plan revised after review (near-field array, bubble scattering regime, VRAM budget, validation targets, tank size presets). Implementation not started. Draft modules exist (see the end).
-> Start at M0 when given the go. Runs on **linus** for now.
+> **Status (2026-10-26):** M0–M1 done (infra and launcher; scene, bubble plume, adaptive scatterers; checks in `docs/validation.md`). Next: M2 sonar standalone.
+> Runs on **linus** for now.
 
 ## Changes in this revision (2026-10-26)
 1. **Bubble scattering**: at 750 kHz (λ ≈ 2 mm) bubbles of 1–3 mm have ka ≈ 3–10, i.e. the transition regime, not ka≫1. Replace `TS = 20 log(a/2)` and `σ_ext = 2πa²` with a high-frequency fluid-sphere model (Anderson, via the Thuraisingham / Ainslie–Leighton approximations), valid across ka. Resonance (Minnaert, a ≈ 4 µm at 750 kHz) is irrelevant for the size range and is dropped.
@@ -37,7 +37,7 @@ Bigger is not automatically more realistic, and it does not remove the need for 
 | `tank` (default) | 3×3×3 m | Matches typical lab test tanks; near-field regime; fastest |
 | `basin` | 8×5×4 m | Ranges beyond the ~5 m Fraunhofer distance (far-field check), longer plume rise, less wall clutter |
 
-- Plume: deeper water lets the jet→plume transition and centreline meander develop; at 3 m depth (z/D ≤ 0.7) the plume never reaches the slip-dominated far field. That is the main physical argument for `basin`.
+- Plume: deeper water gives a longer rise and more room for the centreline meander; the jet→plume transition is complete within a few cm anyway (jet length l_M ≈ 2.6 cm for the default leak). At 3 m depth (z/D ≤ 0.7) the plume never reaches the slip-dominated far field, and in `basin` (z/D ≤ 1) neither. The main arguments for `basin` are ranges beyond the Fraunhofer distance and less wall clutter.
 - Cost: at fixed 2 mm spacing, `basin` would need ~20 M+ scatterers (too much for 8 GB). So spacing becomes **adaptive**: per surface patch, spacing = max(2 mm, sqrt(R·Δθ·Δr/9)), where the resolution cell at range R is ≈ R·Δθ × Δr (Δr ≈ 4 mm), so each cell keeps about 3 × 3 scatterers (needed for fully developed speckle). Near the sonar it stays 2 mm; far away it grows. Areas are rescaled so the backscattered energy is unchanged.
 - Rule: develop and validate on `tank`; add `basin` at M2 once adaptive spacing passes the speckle test.
 
@@ -66,14 +66,16 @@ On linus, M2–M3 implement only the first option of each; the others are stubs 
 ## Architecture
 A single geometry source (numpy) feeds two consumers:
 - **Isaac/USD stage**: rendering (camera and GUI), ROS bridge, time loop.
-- **Warp acoustic model** on the same GPU, Warp 1.8.2 from `/isaac-sim/extscache/omni.warp.core-1.8.2+lx64`. BVH ray queries against the same meshes. Runs inside Isaac, and standalone (no SimulationApp) for tests, fast iteration and **sonar-only dataset mode**.
+- **Warp acoustic model** on the same GPU, Warp 1.8.2 from the Isaac install (path in `config/runtime.yaml`). BVH ray queries against the same meshes. Runs inside Isaac, and standalone (no SimulationApp) for tests, fast iteration and **sonar-only dataset mode**.
 
 ```
 ~/underwater_ws/
   config/tank.yaml          all parameters (+ presets: exposed, buried; tank, basin); --set a.b=c overrides
+  config/runtime.yaml       how commands run: docker (Linux) | native (Windows venv / native Isaac); no hard-coded install paths
   docker/compose.yaml       same image, host net, nvidia runtime, mounts ~/underwater_ws, Warp cache ~/.cache/uw_warp
-  scripts/uw.sh             host wrapper: `uw.sh sim [--gui]`, `uw.sh sonar-only`, `uw.sh py tools/x.py`, `uw.sh test`
-  uw/config.py  water.py  plume.py  geometry.py  bubbles.py  scattering.py  sonar.py  camera_uw.py  usd_scene.py  ros_bridge.py  recorder.py  main.py
+  scripts/uw.sh             thin Linux wrapper: `uw.sh CMD ...` = `python -m uw CMD ...`
+  uw/__main__.py launcher.py runner.py   entry point `python -m uw py|test|sim|sonar-only` (+ --profile/--preset/--set)
+  uw/config.py  water.py  plume.py  geometry.py  bubbles.py  scattering.py  sonar.py  sinks.py  camera_uw.py  usd_scene.py  ros_bridge.py  recorder.py  main.py
   ros/sonar_relay/          host-side Jazzy node: Image+meta -> marine_acoustic_msgs/ProjectedSonarImage
   tools/                    plume_preview.py, sonar_preview.py, compare_real.py, sweep.py
   tests/                    pure-numpy tests on the host (pytest); Warp tests via uw.sh test
@@ -133,14 +135,23 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
     - Camera: frames + plume mask from instancer semantics.
     - Sweeps randomize seed, leak rate, hole clock angle, cover depth, sonar tilt, noise, speckle dynamics, focus mode and tank preset.
 
+## Decisions (2026-10-26)
+- **(a) Entry point:** `python -m uw` (pathlib, no shell logic) replaces `scripts/uw.sh`, which stays as a thin Linux wrapper. Docker on Linux; a venv or native Isaac on Windows. No hard-coded `/isaac-sim` paths: they live in `config/runtime.yaml` (+ an untracked `runtime.local.yaml`).
+- **(b) Sensor outputs** go through a `SensorSink` interface (`uw/sinks.py`): backends `file` (datasets), `ros`, `zenoh`; later `oculus_emulator`.
+- **(c) Real-time mode** besides sim time: wall-clock pacing with a watchdog that reports pings over budget.
+- **(d) Sim and ROS decoupled:** the sim publishes over Zenoh; a relay on linus republishes to ROS 2. ROS is optional on the sim side.
+- **(e) Hardware in the loop:** milestones M7 (open loop) and M8 (closed loop) below.
+
 ## Milestones (each ends runnable and checked; I ask before each commit)
 - **M0 Infra**: compose file, `scripts/uw.sh` (incl. `sonar-only` stub), README, `.gitignore` (output/, third_party/), pytest skeleton.
 - **M1 Scene + plume standalone**: `tools/plume_preview.py` writes side and top scatter plots plus stats (flow, bubbles/s, rise time, centreline speed/width), both pipe presets. Plume checked against MTT similarity **and** published bubble-plume / blowout correlations (e.g. Socolofsky & Adams, Bombardelli et al.: centreline velocity, spreading rate, slip-velocity ratio). Adaptive scatterer spacing implemented and cached.
-- **M2 Sonar standalone**: `scattering.py` + `sonar.py`; `tools/sonar_preview.py` writes polar and fan PNGs of the static tank and tank with plume, both focus modes; timing per ping and VRAM. **Real reference goal**: obtain at least one real Oculus (ideally M750d) tank recording (PIC4SeR / partners, Blueprint sample data, or public FLS datasets) and compare with `tools/compare_real.py`: sand/background intensity histogram (Rayleigh/K-distribution fit), sidelobe level next to a bright target, blind zone and ring-down shape, TVG profile. Then enable the `basin` preset.
+- **M2 Sonar standalone**: `scattering.py` + `sonar.py`; `tools/sonar_preview.py` writes polar and fan PNGs of the static tank and tank with plume, both focus modes; timing per ping and VRAM. **Real reference goal**: obtain at least one real Oculus (ideally M750d) tank recording (Blueprint sample data, public FLS datasets, or other Oculus users) and compare with `tools/compare_real.py`: sand/background intensity histogram (Rayleigh/K-distribution fit), sidelobe level next to a bright target, blind zone and ring-down shape, TVG profile. Then enable the `basin` preset.
 - **M3 Isaac integration**: USD stage from the geometry, lamps, bubble instancer, sonar in the loop, ROS topics plus host relay; GUI check. `sonar-only` mode feature-complete.
 - **M4 Camera underwater model**.
 - **M5 Dataset recorder + sweeps; buried-pipe sediment penetration**.
 - **M6 High-fidelity backends (developed on linus at small scale, run full-size on a workstation)**: mobile sonar (`StaticCache: none` + `SensorPose: trajectory`), element-level beamformer, LBM flow field, bigger bubble pool. Each checked on linus with a reduced scene, and against the default backend on the same scene (same echo level and bearing within tolerance).
+- **M7 HIL open loop**: a Jetson on Ethernet receives sonar and compressed camera (Zenoh), runs leak detection; end-to-end latency measured (sim stamp → detection).
+- **M8 HIL closed loop**: ROV dynamics model, commands from the Jetson, mobile sonar. Needs M6 (mobile sonar) and the workstation for real time.
 
 ## Verification
 - **Host pytest (pure numpy)**:
@@ -165,20 +176,17 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
 - **Performance on linus**: ping ≤100 ms; VRAM in `sonar-only` < 3 GB; full sim with camera < 7 GB, measured with `nvidia-smi` during a GUI run.
 
 ## For the next session
-- Start at M0. Before writing new code, read the draft modules listed below; they follow this plan (except: TS/σ_ext formulas in drafts must move to `scattering.py`; spacing in `geometry.py` must become adaptive).
-- Run Warp in the container: `PYTHONPATH=/isaac-sim/extscache/omni.warp.core-1.8.2+lx64 /isaac-sim/python.sh ...`. The image has numpy 1.26, scipy, torch 2.7 cu128, cv2 and trimesh, but no pytest. The host has pytest and numpy.
+- Continue at M2. `docs/validation.md` records what M1 checked and calibrated.
+- Run everything through `python -m uw` (or `scripts/uw.sh`), e.g. `python -m uw test`, `python -m uw py tools/x.py`. In the container the image has numpy 1.26, scipy, torch 2.7 cu128, cv2, matplotlib and trimesh; pytest is installed into `~/.cache/uw_pydeps` on first use. The host has pytest and numpy.
 - `~/.cache/isaac-sim/cache` is root-owned, so the Warp kernel cache goes to `~/.cache/uw_warp`.
 - Run no ROS process on the side while the f1tenth harness batches run (see the f1tenth CLAUDE.md). The tank sim uses its own ROS_DOMAIN_ID.
 
 ## Open questions
 - Does the M750d apply near-field (dynamic) focusing? Exact LF/HF angular resolution, beam spacing, minimum range, ring-down. Ask Blueprint support or check the SDK/datasheet.
-- Source for a real Oculus tank recording (M2).
+- Source for a real Oculus tank recording (M2): Blueprint sample data, public FLS datasets, other Oculus users.
 - Is there a physical lab tank we want to match? If yes, set the `tank` preset to its exact dimensions and wall material.
 
 ## Current state / assumptions to confirm later
-- Draft files already in `~/underwater_ws` (uncommitted):
-  - `config/tank.yaml`, `uw/config.py`, `uw/water.py`, `uw/bubbles.py`;
-  - `uw/geometry.py`, tested: 4.7 M scatterers in 19 s on the CPU (fixed spacing), to be cached as npz.
-  - OceanSim cloned under `third_party/` for reference only.
+- M0–M1 committed (git log). OceanSim cloned under `third_party/` for reference only.
 - Assumed values, all in config: concrete tank walls; seawater at 15 °C; leak of 3 bar g methane through a 1 mm hole; source level 206 dB and noise level 52 dB; sonar on a wall pole at 1.05 m height, pitched 15° down, looking at the pipe; camera just below it.
 - Not modelled: bubble coalescence and breakup, dissolution, tank recirculation, elastic echoes of the pipe, Doppler within a ping.

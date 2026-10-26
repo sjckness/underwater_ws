@@ -4,6 +4,8 @@ output/
 *.npz
 # reference checkouts (OceanSim), cloned by hand
 third_party/
+# machine-specific runtime settings
+config/runtime.local.yaml
 # caches
 __pycache__/
 *.py[cod]

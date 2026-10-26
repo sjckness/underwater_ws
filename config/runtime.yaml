@@ -1,0 +1,19 @@
+# How `python -m uw` runs commands (uw/launcher.py). Machine-specific overrides go in config/runtime.local.yaml
+# (not in git), merged over this file. Environment: UW_RUNTIME=docker|native overrides `mode`, UW_PYTHON the native
+# Python.
+mode: docker                          # docker: the Isaac Sim container (Linux) | native: a local Python (Windows, native Isaac)
+
+docker:                               # paths inside the image
+  compose_file: docker/compose.yaml   # relative to the workspace
+  service: uw
+  isaac_root: /isaac-sim
+  pydeps: /uw_cache/pydeps            # the container side of ~/.cache/uw_pydeps
+  stop_timeout_s: 15                  # docker stop grace period before SIGKILL
+
+native:
+  python: python3                     # e.g. C:/isaac-sim/kit/python/python.exe, or a venv's python with warp-lang
+  isaac_root: null                    # a native Isaac Sim install, if any (needed for `sim`, M3)
+  pydeps: ~/.cache/uw_pydeps
+
+warp_path: "{isaac_root}/extscache/omni.warp.core-1.8.2+lx64"   # put on sys.path if it exists, else the installed warp
+pytest_version: 7.4.4                 # installed into pydeps when the target Python has no pytest (same as the host's)
