@@ -150,7 +150,7 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
 - **M3.5 Mobile sonar (kinematic ROV)**: SensorPose trajectory (presets) and ros, StaticCache on_motion / none, pose per ping in the data and on /tf, the rig (sonar, camera, lamps) moving in Isaac. Done.
 - **M4 Camera underwater model**.
 - **M5 Dataset recorder + sweeps**: surface boil and bistatic bubble paths, leak presets and time profiles, `tools/sweep.py` (resumable, parallel, pauses for f1tenth runs), dataset layout and card, splits by scenario, `uw/dataset.py` loader, `tools/dataset_stats.py`; first generation v0.1 (docs/validation.md). Done. Buried-pipe sediment penetration (the acoustic echo of a pipe under sand) is not done: see Known gaps.
-- **M6 High-fidelity backends — conditional** (see "Real-data validation"): element-level beamformer and LBM flow field only if the real-data comparison shows a beamforming or plume-dynamics gap the current models cannot close, or if scenarios with currents are needed; bigger bubble pool when a flow range needs it. Each checked on linus with a reduced scene, and against the default backend on the same scene (same echo level and bearing within tolerance). (The mobile sonar, first planned here, is M3.5.)
+- **M6 High-fidelity backends — DEFERRED (2026-10-26)**: element-level beamformer and LBM flow field. No real gas data is in prospect in the short term, so the gap that would justify the LBM cannot be shown; the integral plume model stays. **Reopened only by** (a) real bubble or plume data showing a plume-dynamics gap the integral model cannot close, or (b) a need for scenarios with currents. The element-level beamformer keeps its own trigger: a beamforming gap against a real recording. `FlowField lbm` and `Beamformer element_das` stay as stubs that raise. If reopened: bigger bubble pool when a flow range needs it, each backend checked on linus with a reduced scene and against the default backend on the same scene (same echo level and bearing within tolerance). (The mobile sonar, first planned here, is M3.5.)
 - **M7 HIL open loop**: a Jetson on Ethernet receives sonar and compressed camera (Zenoh), runs leak detection; end-to-end latency measured (sim stamp → detection).
 - **M8 HIL closed loop**: ROV dynamics model, commands from the Jetson, mobile sonar (M3.5). Needs the workstation for real time.
 
@@ -158,26 +158,37 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
 Sources to obtain:
 - **DeeperSense / DFKI dataset**: Blueprint Oculus M1200d + stereo camera, tank and lakes. Metadata on Zenodo (record 10373154); the full ROS bags on request.
 - **UATD** multibeam forward-looking sonar dataset (arXiv 2212.00352): background, speckle and sidelobe statistics.
-- **Gas data**: the authors of "Underwater Gas Leakage Flow Detection and Classification Based on Multibeam FLS" (JMSA 2024), on request.
+- **Gas data**: the authors of "Underwater Gas Leakage Flow Detection and Classification Based on Multibeam FLS" (JMSA 2024), on request. **Not expected in the short term (2026-10-26)**; this is what defers M6.
 
 `tools/compare_real.py` gets a reader for each format as the data arrives. Every mismatch found becomes a config or model change, logged in `docs/validation.md`.
 
-Rule: new physics fidelity is added only when the real-data comparison shows a gap it would close. M6 (LBM flow, element-level beamforming) is done only if the comparison shows a plume-dynamics or beamforming gap the current models cannot close, or if scenarios with currents are needed.
+Rule: new physics fidelity is added only when the real-data comparison shows a gap it would close. M6 (LBM flow, element-level beamforming) is **deferred** on that rule, not merely unscheduled: the gas-data source below did not materialise, so the plume-dynamics gap cannot be demonstrated either way. Its triggers are listed under M6.
 
-## Dataset v0.2 (before generating it)
-From the v0.1 sanity check (docs/validation.md, M5):
-- Aim most fixed poses at the leak (pitch and yaw so that it lies inside the 130° × 20° fan, plus jitter), keep
-  ~20 % random: v0.1 misses the leak in 19 % of the leak scenarios.
-- Vary the leak's range: pipe position across the tank (and sonar on any wall), so that the basin gives 3–7 m.
-- More distractors (25 %), and of more kinds: other strong point clouds (a fish school, suspended sediment from the
-  bottom, a second pipe), so that a detector cannot key on "anything bright above the sand".
-- Faster setup: several sonar poses per scene (the scene and scatterer sampling are 60–90 % of the time), or the
-  sampling on the GPU.
+## Dataset v0.2
+From the v0.1 sanity check (docs/validation.md, M5). `config/sweeps/v0.2.yaml`; v0.1's file still samples its 300
+scenarios exactly.
+
+**Done** (d11a9fe, "Dataset v0.2 prep"):
+- Aim most fixed poses at the leak: `fixed.aim` 0.8, a point up to 0.6 m above the hole at a random place inside the
+  fan (`pose.aim`); the rest random pitch and yaw. Pilot: 14/14 aimed views and 1/1 random view in view.
+- Vary the leak's range: `sonar.placement` puts the pole on any of the four walls and the leak at a distance from it
+  (tank 1–2.5 m, basin 2.5–7 m) via `pipe.x` or the leak's place along the pipe.
+- Distractors at 25 %.
+- Several sonar poses per scene: `fixed.poses` 3 views of one scene, `pings / poses` each, same wall, static cache
+  `on_motion`. The scene and scatterer sampling were 60–90 % of the time and are now shared across the three views.
+- Randomise `sonar.receiver_noise_common_db` over −20 to −10 dB in half the scenarios (a stripe at bearing 0, +3 to
+  +11 dB at broadside: the span an Oculus M1200d shows, docs/validation.md) until the 16-bit bags fix it.
+- Faster writing: `recorder.compress` false and `recorder.png_level` 0 drop zlib from the worker's critical path
+  (M5 measured 63 ms of a ~100 ms write in zlib). Disk is the trade; the sweep passes both from the scenario config.
+
+**Open:**
+- More *kinds* of distractor: only the count was raised. Other strong point clouds (a fish school, suspended
+  sediment, a second pipe) so that a detector cannot key on "anything bright above the sand".
 - Store polar_db as uint16 (0.01 dB steps) instead of float16 to shrink the npz; drop the soft shares if unused.
 - Leak flow driving the plume flow field while it changes (Known gaps).
-- Calibrate against real data first where it exists (Real-data validation).
-- Randomise `sonar.receiver_noise_common_db` over −20 to −10 dB in part of the scenarios (a stripe at bearing 0,
-  +3 to +11 dB at broadside: the span an Oculus M1200d shows, docs/validation.md) until the 16-bit bags fix it.
+- Scatterer sampling on the GPU (the other half of "faster setup").
+- Calibrate against real data first where it exists (Real-data validation); the UNVERIFIED table in
+  docs/validation.md says which parameters the public datasets do and do not constrain.
 
 ## Verification
 - **Host pytest (pure numpy)**:

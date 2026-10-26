@@ -327,7 +327,9 @@ def worker(root: Path, max_scenarios: int) -> int:
             t0 = time.time()
             cfg = config.load(presets=sc["presets"], overrides=sc["overrides"])
             info = {"scenario": sc, "sweep": sweep["name"], "git": sweep["git"]}
-            with sinks.make_sink("file", out_dir=d, info=info, layout="flat") as sink:
+            with sinks.make_sink("file", out_dir=d, info=info, layout="flat",
+                                 compress=bool(config.get(cfg, "recorder.compress")),
+                                 png_level=int(config.get(cfg, "recorder.png_level"))) as sink:
                 st = sonar_only.run(cfg, int(sweep["pings"]), sink, info=info, cache=False)
             size = sum(f.stat().st_size for f in d.iterdir())
             (d / "DONE").write_text(json.dumps({**st, "wall_s": time.time() - t0, "bytes": size}, indent=1))

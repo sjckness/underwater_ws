@@ -63,13 +63,17 @@ class FileSink(SensorSink):
 
     PREFIX = {"sonar": "ping"}
 
-    def __init__(self, out_dir, info: dict | None = None, layout: str = "sensor", main_image: str = "polar"):
+    def __init__(self, out_dir, info: dict | None = None, layout: str = "sensor", main_image: str = "polar",
+                 compress: bool = True, png_level: int = 3):
         if layout not in ("sensor", "flat"):
             raise ValueError(f"FileSink layout must be sensor or flat, got {layout!r}")
         self.out = Path(out_dir)
         self.out.mkdir(parents=True, exist_ok=True)
         self.info = info if info is not None else {}
         self.layout, self.main_image = layout, main_image
+        # Writing a ping is CPU work on the critical path of a sweep worker (M5: 63 ms of a 100 ms write was zlib).
+        # compress False trades disk for wall clock; png_level 0 does the same for the images.
+        self.compress, self.png_level = compress, png_level
         self.index: dict[str, list] = {}
         self.t0 = time.time()
 
@@ -81,11 +85,11 @@ class FileSink(SensorSink):
             d.mkdir(exist_ok=True)
         files = []
         if msg.arrays:
-            np.savez_compressed(d / f"{stem}.npz", **msg.arrays)
+            (np.savez_compressed if self.compress else np.savez)(d / f"{stem}.npz", **msg.arrays)
             files.append(f"{stem}.npz")
         for name, img in msg.images.items():
             fname = f"{stem}.png" if self.layout == "flat" and name == self.main_image else f"{stem}_{name}.png"
-            write_png(d / fname, img)
+            write_png(d / fname, img, self.png_level)
             files.append(fname)
         (d / f"{stem}.json").write_text(json.dumps({"seq": msg.seq, "stamp": msg.stamp, **msg.meta}, indent=1))
         files.append(f"{stem}.json")

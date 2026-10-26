@@ -213,6 +213,9 @@ sonar:
 
 recorder:                       # python -m uw sonar-only datasets
   fan_png: false                # also write the Cartesian fan image per ping (derivable from the polar one)
+  compress: true                # npz: zlib (savez_compressed) | false: savez, bigger but much faster to write.
+                                # Writing is on the sweep worker's critical path: false is the speed lever there.
+  png_level: 3                  # zlib level of the label/display PNGs (0: store, fastest)
 
 sim:                            # python -m uw sim: the Isaac app
   realtime: true                # pace sim time to the wall clock (--no-realtime: as fast as it goes); the watchdog

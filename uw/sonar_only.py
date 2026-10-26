@@ -33,7 +33,8 @@ def main(argv: list[str]) -> int:
     wp.config.quiet = True
     cfg = config.from_args(args)
     info = {"name": args.out, "command": "python -m uw sonar-only " + " ".join(argv)}
-    kw = {"out_dir": args.out, "info": info} if args.sink == "file" else {}
+    kw = ({"out_dir": args.out, "info": info, "compress": bool(config.get(cfg, "recorder.compress")),
+           "png_level": int(config.get(cfg, "recorder.png_level"))} if args.sink == "file" else {})
     with sinks.make_sink(args.sink, **kw) as sink:
         st = run(cfg, args.pings, sink, plume=not args.no_plume, fan=True if args.sink == "ros" else None, info=info)
     print(f"sonar-only: {args.pings} pings -> {args.out or args.sink}; setup {st['setup_s']:.1f} s; per ping: "

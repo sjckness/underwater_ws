@@ -293,6 +293,8 @@ Assumed (not datasheet values):
 
 ### Real-data comparison (skeleton, `tools/compare_real.py`, on our 200-ping smoke dataset)
 
+Superseded by "Real data: public sonar datasets" below, where the same statistics are run against real recordings; this table is what the measures read on our own data before any existed.
+
 | Measure | Result | Note |
 |---|---|---|
 | Background, 2.15–2.8 m, ±25° | contrast 1.99, K shape 0.7 | The real tank with ripples, rocks and the plume shadow is K-distributed; pure speckle is the flat-sand test above. |
@@ -767,12 +769,140 @@ Sanity check (`tools/dataset_stats.py`; `stats/report.md`, `overview.png`, `exam
   x = 1.65 m in both sizes and the fixed sonar is always on the -x wall.
 - Distractors are few (14; the test split has one).
 
-## Real data: a stripe at bearing 0 on an Oculus M1200d (2026-10-26)
+## Real data: public sonar datasets (2026-10-26)
 
-DeeperSense basin-2 (Zenodo 7728089: Oculus M1200d at 2 MHz, 80° fan, published as 512 × 512 inferno-mapped
-Cartesian images) has a bright stripe straight ahead. Measured on 200 frames read back to polar
-(`compare_real.py` fan loader, `--fan-colormap inferno --fan-fov 80`): the mean intensity of the beams within ±0.5°
-of broadside over that of the beams at 3–10° on either side (± = spread between frames).
+Two public datasets were downloaded and compared with the sim. Nothing here is committed: the data lives in
+`~/underwater_data/real/` (see its `SOURCES.md`), outside the repo.
+
+| Dataset | Sonar | Format | Licence |
+|---|---|---|---|
+| UATD (Figshare [10.6084/m9.figshare.21331143](https://doi.org/10.6084/m9.figshare.21331143), arXiv 2212.00352) | Tritech Gemini 1200ik, 1200 kHz (709/800) or 720 kHz (91/800) | **polar** 8-bit BMP, 1024 or 512 beams × 1024–2047 range bins, per-ping XML (range, azimuth 120°, elevation 12°/20°, sound speed, frequency) | CC BY 4.0 |
+| DeeperSense metadata (Zenodo [10373154](https://doi.org/10.5281/zenodo.10373154)) | Blueprint Oculus M1200d | metadata only, 1.97 GB (SQLite + CSV) | CC BY 4.0 |
+| DeeperSense basin-1 (Zenodo [7728089](https://doi.org/10.5281/zenodo.7728089)) | Tritech Gemini 720i | Cartesian fan, grayscale JPEG 2896 × 1448 | CC BY 4.0 |
+| DeeperSense basin-2 (same record) | Oculus M1200d, 2 MHz, 80° × 12° | Cartesian fan, inferno-mapped PNG 512 × 512 | CC BY 4.0 |
+
+`tools/compare_real.py` grew two loaders (`uatd`, `fan`) beside `uw`; `tools/deepersense_index.py` indexes the
+metadatabase. Our sonar is an M750d (LF 750 kHz, HF 1.2 MHz); the M1200d is 1.2 / 2.1 MHz and the Gemini 1200ik is
+1.2 / 0.72 MHz, so only the HF end overlaps, and only statistics that do not depend on the absolute level or on
+the maker's TVG are compared at all.
+
+### Which recordings are in the lab tank
+
+Zenodo 10373154 holds **no sensor data**: DFKI release it on demand, and the metadatabase exists to pick what to
+ask for. `modality.modality_description` says the published image datafiles are a *Cartesian projection* of the
+sonar output, so only the ROS bags carry raw polar beams — a request must name bags.
+
+**89 Oculus M1200d streams at the Maritime Exploration Hall (`location_key` `dfki_basin`), 11.58 h, 151.1 GB of
+bags**, in two sessions: 35 in 2022-02 and 54 in 2023-04. (The third lab session, 2021-08, used a Gemini 720i, not
+the Oculus.) Every stream is a single `/oculus/sonar_image` topic of `acoustic_msgs/SonarImage` plus one
+`dynamic_reconfigure/Config`. The full table is in `docs/deepersense_tank_recordings.md`. Settings across them:
+
+| | |
+|---|---|
+| `freqMode` | high 74, low 21 |
+| `range` | 8 m (49), 6.5 m (15), 10 m (13), 9 m (13), 7 m (5) |
+| `gain` | 10–80 %, mostly 30 % |
+| `gamma` | 127 throughout (127/255 ≈ 0.5, so the 8-bit sample is roughly an amplitude) |
+| `data_16bit` | **False in 92 of 95 configs** |
+| `send_gain` | True in 9 (the per-row TVG gain is then recoverable) |
+| `gain_assistance` | True in 45 (automatic gain: the level is then not comparable between pings) |
+
+**Worth requesting, in this order** (17.3 GB in total, but the first two are 0.85 GB together):
+
+1. `2023-04_dfki_basin/2023-04-27-10-13_test_high_data_res_low_freq/` (0.12 GB, 28 s, 283 pings, 16-bit, freqMode 1, 8 m)
+2. `2023-04_dfki_basin/2023-04-27-10-15_test_high_data_res_high_freq/` (0.73 GB, 116 s, 992 pings, 16-bit, freqMode 2, 8 m)
+   — the only two 16-bit lab-tank bags, and both are small. `gain_assistance` is on, so the level drifts between
+   pings; they still settle the beam pattern, the ring-down and the speckle, which is what we need.
+3. `2022-02_dfki_basin/2022-02-07-15-39_pipe_mounting_5/` and `…-15-52_pipe_mounting_6/` (2.69 GB each, 600 s,
+   8-bit but `send_gain` True and `gain_assistance` False) — a fixed gain *and* the per-row TVG, so the applied
+   gain can be divided out. The scene (a pipe being mounted) is also the closest to ours of anything on offer.
+4. `2022-02-07-16-07_diver_moving_around_1` (2.81 GB, freqMode 1, 7 m, `send_gain` True) for the low-frequency mode.
+
+Nothing in the corpus has a calibration sphere, so none of it fixes an absolute level or an array sidelobe.
+
+### What the comparison measures, and what a published image destroys
+
+Real recordings are 8-bit display images, not calibrated pressure, so `compare_real.py` reads a pixel as an
+amplitude raised to a power p (intensity dB = (20/p) log10 v) and `--fit-pixel-law` can solve for the p that makes
+the background a Rayleigh speckle. Fitted on a background window: **UATD p = 1.10, basin-1 p = 1.02** — both are
+plain linear amplitude, which is now the default (`--pixel-exponent 1`). basin-2 fits p = 0.33, but at that
+exponent its sidelobe reads −26.7 dB and its TVG 179 dB/decade, both nonsense: the fit is compensating for a lost
+speckle, not finding a gamma.
+
+Before trusting any number off a Cartesian fan image, the whole pipeline was run in reverse on data we can check:
+20 UATD pings at 10 m were rendered into DeeperSense-style square fan images (aspect not kept, inferno, 8-bit) and
+read back through the same `fan` loader, so the same scene is measured before and after the display pipeline.
+
+| | native polar | fan 512 | fan 1024 | fan 2048 | 2048→1024 bilinear | 2048→512 bilinear |
+|---|---|---|---|---|---|---|
+| background contrast | 1.046 | 0.934 | 0.957 | 0.983 | 0.814 | 0.677 |
+| KS vs Rayleigh | 0.070 | 0.124 | 0.112 | 0.099 | 0.167 | 0.217 |
+| brightest target width [deg] | 0.96 | 0.63 | 0.75 | 0.90 | 0.87 | 1.25 |
+| ring-down slope [dB/m] | −47 | +53 | +57 | +82 | | |
+| TVG fit [dB/decade] | 41.5 | 141.7 | 145.6 | 153.5 | | |
+
+- **Speckle contrast and angular width survive** a nearest-neighbour fan rendering at a decent size (contrast
+  within 6 %, width within 6 % at 2048). An *interpolating* resize is what destroys them: 2048 → 512 bilinear
+  takes the contrast to 0.68.
+- **The near-range profile and the TVG fit do not survive at all** — the sign of the ring-down slope flips. The
+  apex of a fan image is where its sampling is worst, and that is exactly where those two are measured.
+- So from a published fan image: use the background statistics and (at high resolution) the beam width; never the
+  blind zone, the ring-down or the TVG. basin-2's 512 × 512 is past even the first of those.
+
+### Sim vs real
+
+50 pings each, `output/compare_real/` (`compare.json`, `compare.png`). The fan datasets have no known display
+range, so their range axis is a fraction of the outer radius and their windows were set in those units.
+
+| Measure | sim `smoke_exposed` (M750d LF, tank, 3.5 m) | UATD (Gemini 1200ik) | basin-1 (Gemini 720i, fan) | basin-2 (Oculus 2 MHz, fan) |
+|---|---|---|---|---|
+| background contrast | 2.013 | 0.986 | 1.022 | 0.332 |
+| K shape | 0.7 | 13.2 | 46.1 | ∞ |
+| KS vs Rayleigh | 0.230 | 0.089 | 0.014 | 0.349 |
+| brightest target width [deg] | 2.44 | 1.02 | 1.14 | 0.80 |
+| "sidelobe" [dB] | −2.1 | −6.0 | −5.1 | −8.5 |
+| blind zone | 0.100 m | 0.006 m | 0.003 | 0.003 |
+| ring-down slope [dB/m] | −106 | −29 | −44 | +13 |
+| level vs range [dB/decade] | −158.9 | +23.7 | −32.1 | +56.6 |
+
+**What matches.** Where the model is supposed to give fully developed speckle, it does, and so does reality: our
+flat-sand test is contrast 0.984 (M2, above), UATD's lake bottom is 0.986–1.046 and basin-1's is 1.022, all within
+a few per cent of the Rayleigh 1. UATD's brightest-target width of 1.02° also sits on its sonar's ~1° resolution,
+just as our measured 0.982° sits on our designed 1.0° — the measurement recovers a datasheet beam width from an
+image, which is the method we would apply to an Oculus bag.
+
+**What does not match.** Our *scene* is far more heterogeneous than any real recording here: at 2.15–2.8 m the
+tank gives contrast 2.0 at ±25° and 2.3–3.7 in every other bearing window tried, against ~1.0 for real bottom.
+Both real datasets stay near Rayleigh over wide windows; our tank has no window at that range that does. The
+contributors are known and already listed as open gaps above — specular walls, corners and the pipe built from
+random-phase facets, plus rocks, ripples and the plume shadow — and the round-trip control rules out the display
+pipeline as the explanation (nearest-neighbour rendering kept basin-1's contrast at 1.02, and bilinear resizing
+only ever *lowers* contrast, never raises it). It is not settled whether this is a model defect or simply a
+smaller and more cluttered tank than the DFKI basin: that needs a recording from a tank of our geometry, which is
+what the bag request above is for.
+
+**What is not comparable.** The absolute level (nothing here is calibrated), the TVG profile (the maker's TVG is
+applied in the 8-bit data and is only recoverable from a `send_gain` bag), and the sidelobe level: neither dataset
+has a point target, so the −2 to −9 dB in that row is the skirt of an extended target, not an array sidelobe.
+
+### Which UNVERIFIED parameters the data constrains
+
+| Parameter | Verdict |
+|---|---|
+| `ringdown_db` 60, `ringdown_m` 0.08 | **Weakly constrained.** UATD's beam-averaged level peaks 23.6 dB at range 0 and is back within 1 dB of the local background (≈13 dB) by 0.02 m, −10 dB by 0.14 m; the fitted slope is −72.9 dB/m over the first 0.1 m. Our near-range excess is of a similar size (ring-down sits 7–22 dB over the sand at 0.1 m) but reaches ~0.3 m, several times further. Not changed yet: a Gemini is not an Oculus, and the Gemini's own TVG lifts the far side of that curve. Settled by request 1–2. |
+| Beam spacing `uniform_angle` | Not constrained. UATD packs 1024 beams into 120° for a ~1° beam, which is consistent with uniform-in-angle but would be consistent with much else too. |
+| `array_taper_sll_db` −28 | **Not constrained.** Needs a point target; nothing in either dataset has one. |
+| `focus: true` (near-field focusing) | **Not constrained.** UATD works at 7–25 m, the far field for that array; the question only bites inside ~8 m. |
+| `vertical_taper` hann, `vertical_edge_db`, `fan_edge_db` | **Not constrained.** Needs a flat bottom at a known altitude and known geometry; neither dataset documents the mounting. |
+| Speckle model (Rayleigh, K shape) | **Confirmed** for homogeneous bottom, at contrast 1.0 ± 0.05 in two independent real datasets. |
+| Pixel law of a published 8-bit image | **Newly measured**, not previously assumed: p = 1.0–1.1, i.e. linear amplitude, for both a Gemini 1200ik and a Gemini 720i. |
+| `receiver_noise_common_db` (new, off) | **Existence shown, level not.** basin-2 has a broadside stripe of +3.4 dB (pixel as amplitude) to +10.2 dB (fitted law); see the subsection below. Settled by requests 1–2. |
+
+### A stripe at bearing 0 on an Oculus M1200d
+
+basin-2 has a bright stripe straight ahead. Measured on 200 frames read back to polar with the `fan` loader above
+(`--fan-colormap inferno --fan-fov 80`): the mean intensity of the beams within ±0.5° of broadside over that of the
+beams at 3–10° on either side (± = spread between frames).
 
 | | far half (0.55–0.95 of the range) | near half (0.15–0.5) |
 |---|---|---|
@@ -804,7 +934,6 @@ A focusing array applies its focusing law to a signal that has no wavefront curv
 near range; the weaker stripe in basin-2's near half fits that, though it does not prove it.
 
 **Why off.** New physics goes in when real data shows a gap it closes. This data shows that a stripe exists, not its
-level, and on an M1200d, not on our M750d. The 16-bit lab-tank bags in the DeeperSense metadatabase
-(`2023-04_dfki_basin/2023-04-27-10-13_test_high_data_res_low_freq` and `…-10-15_test_high_data_res_high_freq`, on
-request from DFKI) settle it: raw polar beams, where the stripe at a fixed beam index can be set against the noise in
-water-only rows and the share read off directly. Until then, v0.2 randomises the share (docs/PLAN.md).
+level, and on an M1200d, not on our M750d. Requests 1–2 above (the two 16-bit lab-tank bags) settle it: raw polar
+beams, where the stripe at a fixed beam index can be set against the noise in water-only rows and the share read off
+directly. Until then, v0.2 randomises the share (docs/PLAN.md).
