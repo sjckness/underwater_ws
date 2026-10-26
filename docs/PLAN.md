@@ -151,7 +151,21 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
 - **M4 Camera underwater model**.
 - **M5 Dataset recorder + sweeps**: surface boil and bistatic bubble paths, leak presets and time profiles, `tools/sweep.py` (resumable, parallel, pauses for f1tenth runs), dataset layout and card, splits by scenario, `uw/dataset.py` loader, `tools/dataset_stats.py`; first generation v0.1 (docs/validation.md). Done. Buried-pipe sediment penetration (the acoustic echo of a pipe under sand) is not done: see Known gaps.
 - **M6 High-fidelity backends — DEFERRED (2026-10-26)**: element-level beamformer and LBM flow field. No real gas data is in prospect in the short term, so the gap that would justify the LBM cannot be shown; the integral plume model stays. **Reopened only by** (a) real bubble or plume data showing a plume-dynamics gap the integral model cannot close, or (b) a need for scenarios with currents. The element-level beamformer keeps its own trigger: a beamforming gap against a real recording. `FlowField lbm` and `Beamformer element_das` stay as stubs that raise. If reopened: bigger bubble pool when a flow range needs it, each backend checked on linus with a reduced scene and against the default backend on the same scene (same echo level and bearing within tolerance). (The mobile sonar, first planned here, is M3.5.)
-- **M7 HIL open loop**: a Jetson on Ethernet receives sonar and compressed camera (Zenoh), runs leak detection; end-to-end latency measured (sim stamp → detection).
+- **M7 HIL open loop — ROS 2 over Ethernet (current main track, 2026-10-26)**: a Jetson on Ethernet receives sonar
+  and camera and runs leak detection; end-to-end latency measured (sim stamp → detection). **ROS 2, not Zenoh**:
+  the sim already publishes the topics (`uw/ros_bridge.py`) and the host relay already speaks the Oculus drivers'
+  message, so the bags match future real Oculus bags. Zenoh stays a `SensorSink` option, unscheduled. Steps:
+  1. **Design doc `docs/ros_hil.md` first**: topics, message types and QoS for sonar (raw polar beams *and* the
+     Cartesian fan image, with Oculus-like metadata: range, gain, beam angles, sound speed), camera, ROV pose/TF,
+     and ground-truth leak info in a **separate namespace the detector never subscribes to**; clock handling (sim
+     time vs wall time), target rates, a bandwidth estimate over Ethernet, and how the sim keeps real time or
+     degrades gracefully.
+  2. Sim-side bridge publishing them, with the ROV pose driven by a command topic (teleop and scripted
+     trajectories). `RosPose` (`sonar.pose_source ros`) is the existing half.
+  3. rosbag2 profiles for dataset capture, same layout as a future real Oculus bag.
+  4. Jetson side: a minimal subscriber that measures latency and drops, plus a Docker image for the Jetson.
+  5. Loopback on one machine first, then over Ethernet; report latency, rate and drops.
+  Rule for this track: **the sonar and scattering code stays independent of ROS** — the bridge only wraps it.
 - **M8 HIL closed loop**: ROV dynamics model, commands from the Jetson, mobile sonar (M3.5). Needs the workstation for real time.
 
 ## Real-data validation (priority over new physics)
@@ -212,8 +226,47 @@ scenarios exactly.
 - **Visual**: compare with published Oculus M750d imagery of tanks and bubble plumes (bright far wall and corners, sidelobe arcs, plume speckle and shadow, surface ghosts), and the camera with deep-sea ROV footage (lamp haze cone, snow).
 - **Performance on linus**: ping ≤100 ms; VRAM in `sonar-only` < 3 GB; full sim with camera < 7 GB, measured with `nvidia-smi` during a GUI run.
 
+## Where this session stopped (2026-10-26)
+Done and pushed:
+- `ab7243b` real-data work adopted and merged (UATD + DeeperSense loaders in `tools/compare_real.py`, which now
+  runs without `PYTHONPATH`; `tools/deepersense_index.py` + `docs/deepersense_tank_recordings.md`; one "Real data:
+  public sonar datasets" section in `docs/validation.md` with the stripe finding as a subsection); M6 deferred;
+  Dataset v0.2 split into done/open; `recorder.compress` / `recorder.png_level`.
+- `b8b786f` splits: the by-scenario rule stated and tested, optional held-out domain, `dataset_stats` split report.
+
+**Not started, in this order:**
+1. **Launch the v0.2 sweep.** Decided but not run: output to `/HDD2T/underwater_data/datasets/v0.2` (1.7 TB free;
+   the root disk has 33 GB and v0.1 alone was 25.7 GiB), with `recorder.compress=false` and `recorder.png_level=0`.
+   Measured on 8 pings: write 65.2 → 7.6 ms per ping, size 8 → 28 MB, so expect roughly 60–90 GB. `nohup` with
+   `nice`/`ionice`, and no other GPU job while it runs. Benchmark `/HDD2T` write throughput first (it is a spinning
+   disk; the sweep needs ~15 MB/s sustained) and fall back to `compress=true` if it cannot keep up.
+2. **`docs/ros_hil.md`** (M7 step 1 above) — CPU-only, so it is the work to do while the sweep holds the GPU.
+3. **Fix `KeyError: 'rms_slope'`** at `uw/sonar.py:1065`: with `materials.<m>.coherent=false` the material has no
+   `rms_slope` (the coherent materials carry `rms_height_m` + `correlation_m` instead, and `geometry.py:281`
+   derives `rms_slope = sqrt(2) * rms_height / correlation` only for their incoherent part). Then rerun the
+   diffuse-scattering check and log it in `docs/validation.md`: re-render the tank scene with walls, corners and
+   pipe forced to purely diffuse (`materials.concrete.coherent=false materials.steel_coated.coherent=false`) and
+   recompute the bearing-window speckle contrast, against the 2.0–3.7 the coherent scene gives.
+   `output/probe/coh_baseline` (60 pings) already holds the baseline; `coh_diffuse` and `coh_diffuse_nomp` are
+   empty dirs left by the crash, delete them first. The three paired runs, same seed and ping count:
+   ```
+   python -m uw sonar-only --pings 60 --sink file --out output/probe/coh_baseline
+   python -m uw sonar-only --pings 60 --sink file --out output/probe/coh_diffuse \
+     --set materials.concrete.coherent=false --set materials.steel_coated.coherent=false
+   python -m uw sonar-only --pings 60 --sink file --out output/probe/coh_diffuse_nomp \
+     --set materials.concrete.coherent=false --set materials.steel_coated.coherent=false \
+     --set sonar.multipath='[surface]'
+   ```
+   The third drops the specular wall image paths as well, to separate the two mechanisms. Read the contrast per
+   bearing window with `sonar_stats.background` over 2.15–2.8 m, the windows used in docs/validation.md
+   (±25°, ±(35–55)°, ±(40–60)°).
+4. **`dataset_stats.py` on v0.2** once the sweep finishes.
+
+Environment notes: `~/underwater_data/real` is a symlink to `/HDD2T/underwater_data/real` (the 6.8 GB of DeeperSense
+and UATD data, intact); the GPU is otherwise free; the f1tenth telegram bot holds 2 GB of VRAM permanently.
+
 ## For the next session
-- Continue at M4. `docs/validation.md` records what M1–M3 checked, calibrated and measured.
+- `docs/validation.md` records what M1–M3 and M5 checked, calibrated and measured.
 - Run everything through `python -m uw` (or `scripts/uw.sh`), e.g. `python -m uw test`, `python -m uw py tools/x.py`. In the container the image has numpy 1.26, scipy, torch 2.7 cu128, cv2, matplotlib and trimesh; pytest is installed into `~/.cache/uw_pydeps` on first use. The host has pytest and numpy.
 - `~/.cache/isaac-sim/cache` is root-owned, so the Warp kernel cache goes to `~/.cache/uw_warp`.
 - Run no ROS process on the side while the f1tenth harness batches run (see the f1tenth CLAUDE.md). The tank sim uses its own ROS_DOMAIN_ID.
