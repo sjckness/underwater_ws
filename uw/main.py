@@ -103,14 +103,22 @@ class Stats:
                 for k, v in self.t.items() if v}
 
 
-def static_frames(cfg: dict, son) -> list:
-    from .geometry import rot_rpy_deg
+def static_frames(cfg: dict, son, moving: bool = False) -> list:
+    """The fixed frames. A fixed sonar: tank -> oculus and tank -> camera; a moving one: the camera rides with the
+    sonar (oculus -> camera, its configured offset), and tank -> oculus goes on /tf every ping."""
+    from .geometry import rot_rpy_deg, sonar_rotation
     from .ros_bridge import FRAMES, R_SONAR_PROJECTED
-    out = [(FRAMES["world"], FRAMES["sonar"], son.rot, son.position),
-           (FRAMES["sonar"], FRAMES["sonar_projected"], R_SONAR_PROJECTED, (0.0, 0.0, 0.0))]
+    out = [(FRAMES["sonar"], FRAMES["sonar_projected"], R_SONAR_PROJECTED, (0.0, 0.0, 0.0))]
+    if not moving:
+        out.insert(0, (FRAMES["world"], FRAMES["sonar"], son.rot, son.position))
     if get(cfg, "camera.enabled"):
-        out += [(FRAMES["world"], FRAMES["camera"], rot_rpy_deg(get(cfg, "camera.rpy_deg")), get(cfg, "camera.position")),
-                (FRAMES["camera"], FRAMES["camera_optical"], R_BODY_OPTICAL, (0.0, 0.0, 0.0))]
+        cam_rot, cam_pos = rot_rpy_deg(get(cfg, "camera.rpy_deg")), np.asarray(get(cfg, "camera.position"), float)
+        if moving:
+            s_rot, s_pos = sonar_rotation(cfg), np.asarray(get(cfg, "sonar.position"), float)
+            out.append((FRAMES["sonar"], FRAMES["camera"], s_rot.T @ cam_rot, s_rot.T @ (cam_pos - s_pos)))
+        else:
+            out.append((FRAMES["world"], FRAMES["camera"], cam_rot, cam_pos))
+        out.append((FRAMES["camera"], FRAMES["camera_optical"], R_BODY_OPTICAL, (0.0, 0.0, 0.0)))
     return out
 
 
@@ -120,8 +128,9 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
     import torch
     import warp as wp
 
-    from . import bubbles, geometry, recorder, sinks, sonar, usd_scene
+    from . import bubbles, geometry, pose, recorder, sinks, sonar, usd_scene
     from .app import render_settings_report
+    from .ros_bridge import FRAMES
 
     t_setup = time.perf_counter()
     wp.config.quiet = True
@@ -132,6 +141,10 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
         sim = bubbles.BubbleSim(cfg, scene)
         sim.warmup(float(get(cfg, "plume.warmup_s")))
     son = sonar.Sonar(cfg, scene, sc, plume=sonar.plume_region(sim) if sim else None)
+    motion = pose.sensor_pose(cfg, scene)
+    if get(cfg, "sonar.pose_source") == "ros":
+        from .ros_bridge import RosPose
+        motion = RosPose(motion, get(cfg, "sonar.ros_pose_topic"))
     stage = omni.usd.get_context().get_stage()
     info = usd_scene.build(stage, cfg, scene)
     n_vert = usd_scene.check_geometry(stage, scene, son.mesh.points.numpy(), son.mesh.indices.numpy())
@@ -171,12 +184,13 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
         sink = sinks.make_sink("none")
     dt = sim.dt if sim is not None else float(get(cfg, "plume.dt"))
     t0 = sim.t if sim is not None else 0.0
-    sink.static_transforms(t0, static_frames(cfg, son))
+    sink.static_transforms(t0, static_frames(cfg, son, motion.moving))
     setup_s = time.perf_counter() - t_setup
     log.info("setup %.1f s; render settings %s", setup_s, render_settings_report())
 
     realtime = bool(get(cfg, "sim.realtime")) and not args.no_realtime
-    budget = float(get(cfg, "sonar.ping_budget_ms.static"))
+    budget = get(cfg, f"sonar.ping_budget_ms.{'mobile' if motion.moving else 'static'}")
+    budget = float("inf") if budget is None else float(budget)
     max_lag = float(get(cfg, "sim.max_lag_s"))
     rates = {"ping": float(get(cfg, "sonar.ping_rate_hz")), "camera": float(get(cfg, "camera.rate_hz")),
              "gui": float(get(cfg, "sim.gui_fps")), "clock": float(get(cfg, "ros.clock_hz")),
@@ -225,12 +239,17 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                 wp.synchronize_device(son.device)        # queued GPU work (bubble graph, last render) finishes first
                 t_b = time.perf_counter()
                 stats.add("gpu_wait_before_ping", (t_b - t_w) * 1e3)
+                if motion.moving:
+                    here = motion.at(t_loop)
+                    son.set_pose(here.position, here.rot)
                 ping = son.ping(bubbles=sim)
                 t_c = time.perf_counter()
+                if motion.moving:
+                    sink.transforms(t, [(FRAMES["world"], FRAMES["sonar"], ping.rot, ping.position)])
                 sink.publish(recorder.sonar_message(count["pings"], sim.t if sim is not None else t, ping, son, cfg,
                                                     scene, sim, fan=True if live else None))
                 if overlay is not None:
-                    overlay.update(ping.image)
+                    overlay.update(ping.image, ping.position, ping.rot)
                 t_d = time.perf_counter()
                 count["pings"] += 1
                 for key, v in ping.timing_ms.items():
@@ -243,6 +262,9 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                     log.warning("watchdog: ping %d took %.0f ms (budget %.0f ms)", count["pings"],
                                 ping.timing_ms["total"], budget)
             if cam_due or gui_due or idle_due:
+                if motion.moving and (cam_due or gui_due):
+                    here = motion.at(t_loop)
+                    usd_scene.set_rig_pose(stage, cfg, here.position, here.rot)
                 if bubbles_due and (cam_due or gui_due):
                     for key, v in inst.update().items():
                         if key.endswith("_ms"):

@@ -297,6 +297,13 @@ def rot_rpy_deg(rpy_deg) -> np.ndarray:
     return _rot(r, p, y)
 
 
+def rpy_deg_of(rot) -> np.ndarray:
+    """Roll, pitch, yaw [deg] of a body-to-world rotation (the inverse of ``rot_rpy_deg``)."""
+    m = np.asarray(rot, float)
+    return np.degrees([math.atan2(m[2, 1], m[2, 2]), math.asin(max(-1.0, min(1.0, -m[2, 0]))),
+                       math.atan2(m[1, 0], m[0, 0])])
+
+
 # -------------------------------------------------------------------------------------------- scene
 
 def build_scene(cfg: dict) -> Scene:
@@ -413,11 +420,12 @@ PATCH = 0.1                        # [m] sand patches and mesh triangles share o
 class Spacing:
     """Scatterer spacing rule. Fixed: ``base`` everywhere. Adaptive: at slant range R from the sonar,
     max(base, sqrt(R dtheta dr / per_cell)), i.e. about ``per_cell`` scatterers per resolution cell (R dtheta wide,
-    dr deep) once that is coarser than ``base``. Walls never finer than ``wall_min``."""
+    dr deep) once that is coarser than ``base``; for a moving sonar R is the closest it comes (``sonar`` holds
+    positions along its path). Walls never finer than ``wall_min``."""
     base: float
     wall_min: float
     adaptive: bool = False
-    sonar: tuple | None = None      # acoustic centre [m]
+    sonar: tuple | None = None      # acoustic centre [m], or a tuple of them along a trajectory
     dtheta: float = 0.0             # horizontal beam width [rad]
     dr: float = 0.0                 # range resolution [m]
     per_cell: float = SCATTERERS_PER_CELL
@@ -425,24 +433,32 @@ class Spacing:
     def at(self, p: np.ndarray, wall: bool = False) -> np.ndarray:
         s = np.full(len(p), self.base)
         if self.adaptive:
-            r = np.linalg.norm(np.asarray(p, float) - np.asarray(self.sonar, float), axis=1)
+            p = np.asarray(p, float)
+            r = np.full(len(p), np.inf)
+            for q in np.atleast_2d(np.asarray(self.sonar, float)):
+                r = np.minimum(r, np.linalg.norm(p - q, axis=1))
             s = np.maximum(s, np.sqrt(r * self.dtheta * self.dr / self.per_cell))
         return np.maximum(s, self.wall_min) if wall else s
 
 
-def spacing_from_config(cfg: dict) -> Spacing:
+def spacing_from_config(cfg: dict, scene: Scene | None = None) -> Spacing:
     """``sonar.scatterer_spacing`` (base) and ``sonar.scatterer_spacing_mode`` (fixed | adaptive, from the profile);
-    the adaptive rule uses the sonar position and the active mode's beam width and range resolution."""
+    the adaptive rule uses the sonar position (a trajectory: its positions every 5 cm; a pose from ROS is unknown in
+    advance: fixed spacing) and the active mode's beam width and range resolution."""
     base = float(get(cfg, "sonar.scatterer_spacing"))
     mode = get(cfg, "sonar.scatterer_spacing_mode")
-    if mode == "fixed":
+    if mode == "fixed" or get(cfg, "sonar.pose_source") == "ros":
         return Spacing(base=base, wall_min=WALL_SPACING_FACTOR * base)
     if mode != "adaptive":
         raise ConfigError(f"sonar.scatterer_spacing_mode must be fixed or adaptive, got {mode!r}")
     son = sonar_mode(cfg)
-    return Spacing(base=base, wall_min=WALL_SPACING_FACTOR * base, adaptive=True,
-                   sonar=tuple(float(v) for v in son["position"]), dtheta=float(np.radians(son["beamwidth_h_deg"])),
-                   dr=float(son["range_resolution"]))
+    sonar = tuple(float(v) for v in son["position"])
+    if son["pose_source"] == "trajectory":
+        from .pose import sensor_pose
+        pts = sensor_pose(cfg, scene).positions(0.05)
+        sonar = tuple(tuple(round(float(v), 4) for v in q) for q in pts)
+    return Spacing(base=base, wall_min=WALL_SPACING_FACTOR * base, adaptive=True, sonar=sonar,
+                   dtheta=float(np.radians(son["beamwidth_h_deg"])), dr=float(son["range_resolution"]))
 
 
 def sample_scatterers(scene: Scene, spacing: Spacing, rng: np.random.Generator, coherent=(),
@@ -599,7 +615,9 @@ def _coherent(cfg: dict) -> set:
 def scatterers(cfg: dict, scene: Scene | None = None, cache_dir: str = CACHE_DIR) -> Scatterers:
     """The scatterers for ``cfg``: read from ``cache_dir`` when the same geometry and spacing were sampled before,
     else sampled and cached there (npz keyed by a hash of the geometry and spacing inputs)."""
-    spacing = spacing_from_config(cfg)
+    if scene is None and get(cfg, "sonar.pose_source") == "trajectory":
+        scene = build_scene(cfg)
+    spacing = spacing_from_config(cfg, scene)
     path = os.path.join(cache_dir, f"scatterers_{_cache_key(cfg, spacing)}.npz")
     if os.path.isfile(path):
         with np.load(path) as z:

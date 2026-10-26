@@ -8,8 +8,11 @@ profile:
 
 sonar:
   scatterer_spacing_mode: fixed       # sonar.scatterer_spacing (2 mm) everywhere
-  pose_source: fixed                  # or trajectory: mobile sonar (M6)
-  static_cache: precomputed           # none with a mobile sonar (M6)
+  pose_source: fixed                  # SensorPose: fixed | trajectory (sonar.trajectory) | ros
+                                      #   (sonar.ros_pose_topic); uw/pose.py
+  static_cache: precomputed           # StaticCache: precomputed (fixed pose only) | on_motion (recompute
+                                      #   when the pose moved beyond sonar.static_cache_motion) | none
+                                      #   (recompute every ping)
   beamformer: fft_fresnel             # or element_das (M6)
   ping_budget_ms:
     static: 100

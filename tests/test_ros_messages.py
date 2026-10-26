@@ -80,3 +80,17 @@ def test_relay_projected_sonar_image():
     assert out.ping_info.frequency == 750e3 and len(out.ping_info.rx_beamwidths) == 16
     with pytest.raises(ValueError):
         projected(Image(height=39, width=16), ros_bridge.sonar_meta(msg), db=False)
+
+
+def test_pose_input_roundtrip():
+    """sonar.pose_source ros: a PoseStamped built from a pose gives that pose back."""
+    pytest.importorskip("geometry_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
+    from geometry_msgs.msg import PoseStamped
+    from uw import geometry
+    rot = geometry.rot_rpy_deg([10.0, 25.0, -130.0])
+    m = PoseStamped()
+    m.pose.position.x, m.pose.position.y, m.pose.position.z = 0.4, 1.1, 1.3
+    x, y, z, w = ros_bridge.quat_xyzw(rot)
+    m.pose.orientation.x, m.pose.orientation.y, m.pose.orientation.z, m.pose.orientation.w = x, y, z, w
+    pos, back = ros_bridge.pose_from_msg(m)
+    assert np.allclose(pos, [0.4, 1.1, 1.3]) and np.allclose(back, rot)

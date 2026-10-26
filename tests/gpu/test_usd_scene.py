@@ -61,14 +61,30 @@ def test_sensor_and_lamp_poses(built):
     assert 2 * math.degrees(math.atan(w / 2 / info.camera_K[0, 0])) == pytest.approx(config.get(cfg, "camera.hfov_deg"))
     lamps = config.get(cfg, "lights.lamps")
     for i, lamp in enumerate(lamps):
-        lm = _world(stage, f"{usd_scene.WORLD}/lights/lamp_{i}")
+        lm = _world(stage, f"{usd_scene.LAMPS}/lamp_{i}")
         aim = np.subtract(lamp["target"], lamp["position"])
         assert np.allclose(lm[:3, 3], lamp["position"])
         assert np.allclose(-lm[:3, 2], aim / np.linalg.norm(aim))   # lights shine along their -z
-        shaping = UsdLux.ShapingAPI(stage.GetPrimAtPath(f"{usd_scene.WORLD}/lights/lamp_{i}"))
+        shaping = UsdLux.ShapingAPI(stage.GetPrimAtPath(f"{usd_scene.LAMPS}/lamp_{i}"))
         assert shaping.GetShapingConeAngleAttr().Get() == pytest.approx(lamp["cone_deg"] / 2)
-    assert not stage.GetPrimAtPath(f"{usd_scene.WORLD}/lights/dome")      # deep water: no dome by default
+    assert not stage.GetPrimAtPath(f"{usd_scene.WORLD}/dome")             # deep water: no dome by default
     assert stage.GetPrimAtPath(f"{usd_scene.TANK}/leak_marker_0")
+
+
+def test_rig_moves_sonar_camera_and_lamps_together(built):
+    cfg, scene, son, stage, info = built
+    cam0, lamp0 = _world(stage, usd_scene.CAMERA_OPTICAL), _world(stage, f"{usd_scene.LAMPS}/lamp_0")
+    target = geometry.rot_rpy_deg([0.0, 30.0, 40.0])
+    usd_scene.set_rig_pose(stage, cfg, [0.8, 1.2, 1.4], target)
+    m = _world(stage, usd_scene.SONAR)
+    assert np.allclose(m[:3, :3], target) and np.allclose(m[:3, 3], [0.8, 1.2, 1.4])
+    s0 = np.eye(4)
+    s0[:3, :3], s0[:3, 3] = son.rot, son.position
+    motion = m @ np.linalg.inv(s0)
+    assert np.allclose(_world(stage, usd_scene.CAMERA_OPTICAL), motion @ cam0)
+    assert np.allclose(_world(stage, f"{usd_scene.LAMPS}/lamp_0"), motion @ lamp0)
+    usd_scene.set_rig_pose(stage, cfg, son.position, son.rot)
+    assert np.allclose(_world(stage, usd_scene.CAMERA_OPTICAL), cam0)
 
 
 def test_bubble_instancer_matches_the_pool():

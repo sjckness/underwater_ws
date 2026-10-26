@@ -1,6 +1,6 @@
 # Underwater gas-leak tank in Isaac Sim: FLS (+ camera) simulation
 
-> **Status (2026-10-26):** M0–M3 done (infra and launcher; scene, bubble plume, adaptive scatterers; bubble scattering, sonar standalone, minimal recorder; Isaac integration with the bubble instancer, sonar in the loop, GUI overlay, ROS 2 topics and the host relay; M3.1 geometric plume label and CUDA graph bubble substeps; checks in `docs/validation.md`). Next: M4 camera underwater model.
+> **Status (2026-10-26):** M0–M3 done (infra and launcher; scene, bubble plume, adaptive scatterers; bubble scattering, sonar standalone, minimal recorder; Isaac integration with the bubble instancer, sonar in the loop, GUI overlay, ROS 2 topics and the host relay; M3.1 geometric plume label and CUDA graph bubble substeps; M3.5 mobile sonar; checks in `docs/validation.md`). Next: M4 camera underwater model.
 > Runs on **linus** for now.
 
 ## Changes in this revision (2026-10-26)
@@ -48,7 +48,7 @@ Selected with `--profile linus|workstation` (default `linus`), merged before pre
 |---|---|---|
 | Tank preset | `tank` (basin only with adaptive spacing) | `tank`, `basin`, open seafloor patch |
 | Scatterer spacing | adaptive (2 mm near) | fixed 2 mm everywhere |
-| Sonar pose | fixed, static precompute | fixed **or mobile** (full recompute per ping) |
+| Sonar pose | fixed, static precompute; mobile runs (static recompute 150 ms tank, 350 ms basin per ping) | fixed **or mobile** |
 | Beamformer | FFT on u grid + Fresnel correction | same, or **element-level** (64–128 channels, delay-and-sum) |
 | Plume flow | integral plume model | integral, or **LBM in Warp** (2-way coupled, 1 cm cells) |
 | Bubble pool | 150 k | 1–2 M (+ coalescence/breakup, later) |
@@ -59,9 +59,9 @@ Selected with `--profile linus|workstation` (default `linus`), merged before pre
 Interfaces that keep this parametric:
 - `FlowField` (integral | LBM) used by `bubbles.py`;
 - `Beamformer` (fft_fresnel | element_das) used by `sonar.py`;
-- `StaticCache` (precomputed | none) — `none` means recompute every ping, required for a mobile sonar;
-- `SensorPose` (fixed | trajectory from config/ROS topic).
-On linus, M2–M3 implement only the first option of each; the others are stubs with a clear error until a later milestone (M6).
+- `StaticCache` (precomputed | on_motion | none) — `none` recomputes every ping, `on_motion` when the pose moved beyond thresholds; a mobile sonar needs one of them (M3.5);
+- `SensorPose` (fixed | trajectory | ros): waypoint trajectories and presets (approach, lawnmower, orbit, hover) or a ROS pose topic (M3.5).
+FlowField lbm and Beamformer element_das are stubs with a clear error (M6, conditional: see "Real-data validation").
 
 ## Architecture
 A single geometry source (numpy) feeds two consumers:
@@ -147,11 +147,22 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
 - **M1 Scene + plume standalone**: `tools/plume_preview.py` writes side and top scatter plots plus stats (flow, bubbles/s, rise time, centreline speed/width), both pipe presets. Plume checked against MTT similarity **and** published bubble-plume / blowout correlations (e.g. Socolofsky & Adams, Bombardelli et al.: centreline velocity, spreading rate, slip-velocity ratio). Adaptive scatterer spacing implemented and cached.
 - **M2 Sonar standalone**: `scattering.py` + `sonar.py`; `tools/sonar_preview.py` writes polar and fan PNGs of the static tank and tank with plume, both focus modes; timing per ping and VRAM. **Real reference goal**: obtain at least one real Oculus (ideally M750d) tank recording (Blueprint sample data, public FLS datasets, or other Oculus users) and compare with `tools/compare_real.py`: sand/background intensity histogram (Rayleigh/K-distribution fit), sidelobe level next to a bright target, blind zone and ring-down shape, TVG profile. Then enable the `basin` preset.
 - **M3 Isaac integration**: USD stage from the geometry, lamps, bubble instancer, sonar in the loop, ROS topics plus host relay; GUI check. `sonar-only` mode feature-complete.
+- **M3.5 Mobile sonar (kinematic ROV)**: SensorPose trajectory (presets) and ros, StaticCache on_motion / none, pose per ping in the data and on /tf, the rig (sonar, camera, lamps) moving in Isaac. Done.
 - **M4 Camera underwater model**.
 - **M5 Dataset recorder + sweeps; buried-pipe sediment penetration**.
-- **M6 High-fidelity backends (developed on linus at small scale, run full-size on a workstation)**: mobile sonar (`StaticCache: none` + `SensorPose: trajectory`), element-level beamformer, LBM flow field, bigger bubble pool. Each checked on linus with a reduced scene, and against the default backend on the same scene (same echo level and bearing within tolerance).
+- **M6 High-fidelity backends — conditional** (see "Real-data validation"): element-level beamformer and LBM flow field only if the real-data comparison shows a beamforming or plume-dynamics gap the current models cannot close, or if scenarios with currents are needed; bigger bubble pool when a flow range needs it. Each checked on linus with a reduced scene, and against the default backend on the same scene (same echo level and bearing within tolerance). (The mobile sonar, first planned here, is M3.5.)
 - **M7 HIL open loop**: a Jetson on Ethernet receives sonar and compressed camera (Zenoh), runs leak detection; end-to-end latency measured (sim stamp → detection).
-- **M8 HIL closed loop**: ROV dynamics model, commands from the Jetson, mobile sonar. Needs M6 (mobile sonar) and the workstation for real time.
+- **M8 HIL closed loop**: ROV dynamics model, commands from the Jetson, mobile sonar (M3.5). Needs the workstation for real time.
+
+## Real-data validation (priority over new physics)
+Sources to obtain:
+- **DeeperSense / DFKI dataset**: Blueprint Oculus M1200d + stereo camera, tank and lakes. Metadata on Zenodo (record 10373154); the full ROS bags on request.
+- **UATD** multibeam forward-looking sonar dataset (arXiv 2212.00352): background, speckle and sidelobe statistics.
+- **Gas data**: the authors of "Underwater Gas Leakage Flow Detection and Classification Based on Multibeam FLS" (JMSA 2024), on request.
+
+`tools/compare_real.py` gets a reader for each format as the data arrives. Every mismatch found becomes a config or model change, logged in `docs/validation.md`.
+
+Rule: new physics fidelity is added only when the real-data comparison shows a gap it would close. M6 (LBM flow, element-level beamforming) is done only if the comparison shows a plume-dynamics or beamforming gap the current models cannot close, or if scenarios with currents are needed.
 
 ## Verification
 - **Host pytest (pure numpy)**:
@@ -214,6 +225,13 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
   sand).
 - ~~**Plume labels include the sidelobe leakage.**~~ The energy labels (mask_all, mask_direct) do by definition;
   done in M3.1: a third, geometric label mask_geom (main-lobe cells of visible bubbles, no echo levels).
+- **Motion within a ping and Doppler.** A moving sonar takes one pose per ping (the pose at the ping time): no motion
+  during the ~5 ms of a ping's two-way travel, and no Doppler shift or smear of the echoes (at 0.15 m/s the shift
+  is 150 Hz at 750 kHz, small against the 188 kHz band).
+- **on_motion saves little for a moving sonar.** Static recomputes cost 150 ms (tank) / 350 ms (basin) per ping; on
+  a trajectory or with a hover drift of 2 cm the pose moves beyond the default thresholds (5 mm, 0.25°) almost every
+  ping. It pays for stop-and-go motion; recomputing only the paths near the scene parts that moved is a possible
+  speed-up.
 - **Plume intermittency.** The plume echo is steadier than real seep footage suggests (energy ±0.4 dB from ping to
   ping): constant flow, slow meander and small-scale OU turbulence only, no large eddies or bubble clusters. To check
   against a real recording (M2 goal) before tuning; candidate fix with the LBM flow field (M6).

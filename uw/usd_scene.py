@@ -24,9 +24,11 @@ from .geometry import icosphere, rot_rpy_deg, sonar_rotation, surface_materials
 WORLD = "/World"
 TANK = f"{WORLD}/tank"
 LOOKS = f"{WORLD}/Looks"
-SONAR = f"{WORLD}/sensors/oculus"
-CAMERA = f"{WORLD}/sensors/camera"
+RIG = f"{WORLD}/rig"                     # sonar, camera and lamps; moves rigidly with a mobile sonar (set_rig_pose)
+SONAR = f"{RIG}/oculus"
+CAMERA = f"{RIG}/camera"
 CAMERA_OPTICAL = f"{CAMERA}/optical"
+LAMPS = f"{RIG}/lamps"
 BUBBLES = f"{WORLD}/plume/bubbles"
 # USD camera axes (x right, y up, looking along -z) in the body frame (x forward, y left, z up): columns
 R_BODY_USDCAM = np.array([[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
@@ -163,8 +165,9 @@ def build(stage: Usd.Stage, cfg: dict, scene) -> StageInfo:
             UsdGeom.Xformable(s).AddTranslateOp().Set(Gf.Vec3d(*map(float, p)))
             _bind(s, marker)
     _lights(stage, cfg)
-    # sensors: body frames x forward, y left, z up
-    _xform(stage, f"{WORLD}/sensors")
+    # sensors: body frames x forward, y left, z up, at their configured poses inside the rig (identity: the rig moves
+    # them all with the sonar)
+    _xform(stage, RIG)
     _xform(stage, SONAR, sonar_rotation(cfg), get(cfg, "sonar.position"))
     housing = UsdGeom.Cube.Define(stage, f"{SONAR}/housing")       # Oculus M750d-sized box behind the transducer
     housing.CreateSizeAttr(1.0)
@@ -190,9 +193,9 @@ def _lights(stage, cfg: dict) -> None:
     """The LED lamps on the sensor pole: sphere lights shaped to a cone of lamps[].cone_deg (full angle) towards
     their target; a dome only if lights.ambient_dome > 0 (deep water: none)."""
     lt = get(cfg, "lights")
-    UsdGeom.Xform.Define(stage, f"{WORLD}/lights")
+    UsdGeom.Xform.Define(stage, LAMPS)
     for i, lamp in enumerate(lt["lamps"]):
-        light = UsdLux.SphereLight.Define(stage, f"{WORLD}/lights/lamp_{i}")
+        light = UsdLux.SphereLight.Define(stage, f"{LAMPS}/lamp_{i}")
         light.CreateRadiusAttr(float(lamp["radius"]))
         light.CreateIntensityAttr(float(lamp["intensity"]))
         light.CreateColorAttr(Gf.Vec3f(*map(float, lamp["color"])))
@@ -202,7 +205,19 @@ def _lights(stage, cfg: dict) -> None:
         UsdGeom.Xformable(light).AddTransformOp().Set(_matrix(_look_at(lamp["position"], lamp["target"]),
                                                               lamp["position"]))
     if float(lt["ambient_dome"]) > 0:
-        UsdLux.DomeLight.Define(stage, f"{WORLD}/lights/dome").CreateIntensityAttr(float(lt["ambient_dome"]))
+        UsdLux.DomeLight.Define(stage, f"{WORLD}/dome").CreateIntensityAttr(float(lt["ambient_dome"]))
+
+
+def set_rig_pose(stage, cfg: dict, position, rot) -> None:
+    """Move the rig (sonar, camera, lamps) so that the sonar is at ``position``/``rot``: the rig's transform is the
+    rigid motion from the configured sonar pose to this one."""
+    m0 = np.eye(4)
+    m0[:3, :3], m0[:3, 3] = sonar_rotation(cfg), get(cfg, "sonar.position")
+    m = np.eye(4)
+    m[:3, :3], m[:3, 3] = rot, position
+    rig = m @ np.linalg.inv(m0)
+    op = UsdGeom.Xformable(stage.GetPrimAtPath(RIG)).GetOrderedXformOps()[0]
+    op.Set(_matrix(rig[:3, :3], rig[:3, 3]))
 
 
 def check_geometry(stage: Usd.Stage, scene, mesh_points: np.ndarray, mesh_faces: np.ndarray) -> int:

@@ -127,6 +127,29 @@ sonar:
   yaw_deg: 0.0                  # 0 looks along +x
   range: 3.5                    # range setting [m], at most the mode's max_range
   ping_rate_hz: 10.0            # at most the mode's max_ping_rate_hz
+  trajectory:                   # pose_source trajectory (the profile; uw/pose.py). Time 0 = end of the plume warm-up
+    preset: approach            # approach | lawnmower | orbit | hover | waypoints
+    speed: 0.15                 # [m/s] along the path
+    height: 1.0                 # [m] above the tank floor (approach, orbit, lawnmower)
+    pitch: track                # track: the axis points at the leak | a fixed pitch [deg, nose down]
+    roll_deg: 0.0
+    margin: 0.2                 # [m] from the walls, the sand (+0.1) and the surface
+    start_distance: 1.5         # approach: horizontal distance to the leak at the start and the end [m] (the start
+    end_distance: 0.6           #   is pulled in to stay inside the tank)
+    bearing_deg: 180.0          # approach: direction from the leak to the start (180: from the -x wall)
+    radius: 1.0                 # orbit: radius [m], start angle [deg] around the leak, sweep [deg], direction (+1 ccw)
+    start_deg: 180.0
+    sweep_deg: 360.0
+    direction: 1
+    lanes: 4                    # lawnmower: lanes along x, spread across y; pitch when pitch is track (nothing to
+    survey_pitch_deg: 30.0      #   track on a survey)
+    drift_m: 0.02               # hover at sonar.position (looking at the leak with pitch track): Ornstein-Uhlenbeck
+    drift_yaw_deg: 2.0          #   drift std of the position [m] and the yaw [deg], correlation time [s]
+    drift_time_s: 3.0
+    waypoints: []               # preset waypoints: [{position: [x, y, z], roll_deg, pitch_deg, yaw_deg, speed}, ...]
+    loop: false
+  static_cache_motion: {position_m: 0.005, angle_deg: 0.25}   # static_cache on_motion: recompute beyond these
+  ros_pose_topic: /uw/sonar_pose  # pose_source ros: geometry_msgs/PoseStamped of the sonar in the tank frame
   modes:                        # VERIFIED (datasheet): frequency, fan (h x v), beams, angular resolution (-3 dB beam
                                 # width), range resolution, min range, max range, max update rate
     lf: {frequency_hz: 750000.0, fov_h_deg: 130.0, fov_v_deg: 20.0, beams: 512, beamwidth_h_deg: 1.0,

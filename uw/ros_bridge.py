@@ -17,7 +17,8 @@ z forward; camera and camera_optical as usual):
   /sim/leak            geometry_msgs/PoseStamped: the hole, x axis along its outward normal; /sim/leak/flow_lpm
                        std_msgs/Float32 (gas flow at the hole's pressure); both latched
   /sim/plume           visualization_msgs/MarkerArray: one SPHERE_LIST of the bubbles (decimated)
-  /tf_static, /clock
+  /tf_static, /clock; /tf (tank -> oculus) per ping when the sonar moves
+Input (sonar.pose_source ros): ``RosPose`` takes the sonar's pose from a geometry_msgs/PoseStamped topic.
 """
 from __future__ import annotations
 
@@ -217,6 +218,7 @@ class RosSink(SensorSink):
             "leak": pub(PoseStamped, "/sim/leak", latched), "flow": pub(Float32, "/sim/leak/flow_lpm", latched),
             "plume": pub(MarkerArray, "/sim/plume", _qos({"depth": 1})),
             "tf_static": pub(TFMessage, "/tf_static", _qos({"depth": 1, "durability": "transient_local"})),
+            "tf": pub(TFMessage, "/tf", _qos({"depth": 10})),
             "clock": pub(Clock, "/clock", _qos({"depth": 1, "reliability": "best_effort"})),
         }
         self.msgs = {"Clock": Clock, "String": String, "Float32": Float32, "TFMessage": TFMessage}
@@ -263,9 +265,69 @@ class RosSink(SensorSink):
         self.pub["tf_static"].publish(self.msgs["TFMessage"](
             transforms=[transform_msg(t, p, c, r, x) for p, c, r, x in transforms]))
 
+    def transforms(self, t: float, transforms: list) -> None:
+        """Moving frames (a mobile sonar), same form, on /tf."""
+        self.pub["tf"].publish(self.msgs["TFMessage"](
+            transforms=[transform_msg(t, p, c, r, x) for p, c, r, x in transforms]))
+
     def close(self) -> None:
         try:
             self.node.destroy_node()
             self.rclpy.try_shutdown()
         except Exception as exc:  # noqa: BLE001 - shutting down anyway
             log.warning("ROS shutdown: %s", exc)
+
+
+def pose_from_msg(msg):
+    """geometry_msgs/PoseStamped -> (position (3,), body-to-world rotation 3x3)."""
+    q = msg.pose.orientation
+    x, y, z, w = q.x, q.y, q.z, q.w
+    n = math.sqrt(x * x + y * y + z * z + w * w) or 1.0
+    x, y, z, w = x / n, y / n, z / n, w / n
+    rot = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                    [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                    [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+    p = msg.pose.position
+    return np.array([p.x, p.y, p.z]), rot
+
+
+class RosPose:
+    """SensorPose from a ROS topic (sonar.pose_source ros): the latest geometry_msgs/PoseStamped of the sonar in the
+    tank frame; until one arrives, ``fallback`` (the configured pose). Polled at each ``at``."""
+    moving = True
+
+    def __init__(self, fallback, topic: str):
+        ensure_rclpy_path()
+        logging.getLogger("rosidl_generator_py").setLevel(logging.WARNING)
+        import rclpy
+        from geometry_msgs.msg import PoseStamped
+        if not rclpy.ok():
+            try:
+                from rclpy.signals import SignalHandlerOptions
+                rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+            except (ImportError, TypeError):
+                rclpy.init()
+        self.rclpy, self.fallback, self.latest = rclpy, fallback, None
+        self.node = rclpy.create_node("uw_sonar_pose")
+        self.node.create_subscription(PoseStamped, topic, self._on_pose, _qos({"depth": 1}))
+        self.count = 0
+        log.info("sonar pose from %s (until then the configured pose)", topic)
+
+    def _on_pose(self, msg) -> None:
+        self.latest = pose_from_msg(msg)
+        self.count += 1
+
+    def at(self, t: float):
+        from .pose import Pose
+        from .geometry import rpy_deg_of
+        self.rclpy.spin_once(self.node, timeout_sec=0.0)
+        if self.latest is None:
+            return self.fallback.at(t)
+        return Pose(self.latest[0], rpy_deg_of(self.latest[1]))
+
+    def positions(self, step: float = 0.05):
+        return self.fallback.positions(step)
+
+    def close(self) -> None:
+        self.node.destroy_node()
+

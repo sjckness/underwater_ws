@@ -24,7 +24,8 @@ minimum range, and the bubbles' share of the energy as two plume labels: all bub
 the direct path only; plus a geometric label: the cells whose main lobe contains a visible bubble.
 Echoes and the bubble extinction are summed in 64-bit fixed point, so a ping is bit-identical for the same config and
 seed (in any process: `sonar-only` and `sim` give the same images).
-Implemented (linus): StaticCache precomputed, SensorPose fixed, Beamformer fft_fresnel; the others are M6.
+Implemented: StaticCache precomputed | on_motion | none (``set_pose`` moves the sonar), Beamformer fft_fresnel
+(element_das is M6).
 """
 from __future__ import annotations
 
@@ -625,6 +626,28 @@ def speckle_kernel(grid: wp.array2d(dtype=wp.vec2), phi: wp.array2d(dtype=float)
 
 
 @wp.kernel
+def reverb_table_kernel(pos: wp.vec3, rot: wp.mat33, dirs: wp.array2d(dtype=wp.vec3), weight: wp.array2d(dtype=float),
+                        lo: wp.vec3, hi: wp.vec3, dr: float, scale: float, att: float, rep: int,
+                        rev: wp.array2d(dtype=float)):
+    """Volume reverberation amplitude std per (range bin, coarse u cell), spread over ``rep`` fine u cells: the
+    water-filled part of each cell's two-way beam at that range."""
+    j, c = wp.tid()
+    v = float(0.0)
+    if j > 0:
+        r = float(j) * dr
+        s = float(0.0)
+        for e in range(dirs.shape[1]):
+            w = weight[c, e]
+            if w > 0.0:
+                q = pos + r * (rot * dirs[c, e])
+                if q[0] > lo[0] and q[0] < hi[0] and q[1] > lo[1] and q[1] < hi[1] and q[2] > lo[2] and q[2] < hi[2]:
+                    s += w
+        v = wp.sqrt(scale * s / (r * r) * wp.exp(-4.0 * att * r) / 2.0)
+    for k in range(rep):
+        rev[j, c * rep + k] = v
+
+
+@wp.kernel
 def reverb_kernel(grid: wp.array2d(dtype=wp.vec2), rev: wp.array2d(dtype=float), seed: int):
     r, c = wp.tid()
     s = rev[r, c]
@@ -729,6 +752,8 @@ class Ping:
     plume_mask_geom: np.ndarray     # uint8 0/255: a visible bubble lies in the cell's main lobe (geometry only)
     range_m: np.ndarray
     bearing_deg: np.ndarray
+    position: np.ndarray            # the sonar's pose at this ping: acoustic centre [m]
+    rot: np.ndarray                 # and body-to-world rotation (x forward, y port, z up)
     timing_ms: dict = field(default_factory=dict)
 
 
@@ -779,9 +804,18 @@ def _vertical_root(level: float, taper: str) -> float:
 class Sonar:
     def __init__(self, cfg: dict, scene=None, scatterers=None, plume: dict | None = None, device: str = "cuda:0"):
         son, md = get(cfg, "sonar"), sonar_mode(cfg)
-        for key, ok in (("beamformer", "fft_fresnel"), ("static_cache", "precomputed"), ("pose_source", "fixed")):
-            if son[key] != ok:
-                raise NotImplementedError(f"sonar.{key} {son[key]!r} is milestone M6; implemented: {ok!r}")
+        if son["beamformer"] != "fft_fresnel":
+            raise NotImplementedError(f"sonar.beamformer {son['beamformer']!r} is milestone M6; implemented: "
+                                      "'fft_fresnel'")
+        self.static_cache = son["static_cache"]
+        if self.static_cache not in ("precomputed", "on_motion", "none"):
+            raise ConfigError(f"sonar.static_cache must be precomputed | on_motion | none, got {self.static_cache!r}")
+        if self.static_cache == "precomputed" and son["pose_source"] != "fixed":
+            raise ConfigError(f"sonar.static_cache precomputed needs pose_source fixed (got {son['pose_source']!r}): "
+                              "use on_motion or none")
+        self.motion = (float(son["static_cache_motion"]["position_m"]),
+                       math.radians(float(son["static_cache_motion"]["angle_deg"])))
+        self.cfg, self.scene = cfg, scene
         self.device = device
         self.timing_ms: dict = {}
         t0 = time.perf_counter()
@@ -900,13 +934,22 @@ class Sonar:
         self.n_scatterers = self.n_facets = 0
         self.dyn = None
         self.timing_ms["setup"] = (time.perf_counter() - t0) * 1e3
+        self.static_in = None                       # the scatterers on the GPU, kept when the pose can change
+        self.dyn_cap = 0
+        self.static_pose = (self.position.copy(), self.rot.copy())
         if scatterers is not None:
             t1 = time.perf_counter()
-            self._precompute(cfg, scatterers)
+            self._upload_static(cfg, scatterers)
+            self._compute_static()
+            if self.static_cache == "precomputed":
+                self.static_in = None
             self.timing_ms["static_precompute"] = (time.perf_counter() - t1) * 1e3
         t1 = time.perf_counter()
-        self.rev = wp.array(self._reverb(cfg, scene) if son["reverberation"] else np.zeros(shape, np.float32),
-                            dtype=float, device=device)
+        self.reverberation = bool(son["reverberation"])
+        self.rev = wp.zeros(shape, dtype=float, device=device)
+        if self.reverberation:
+            self._reverb_setup(cfg, scene)
+            self._reverb()
         self.ringdown = self._ringdown(son) if son["ringdown"] else None
         self.timing_ms["reverb_ringdown_tables"] = (time.perf_counter() - t1) * 1e3
         self.xs_w = wp.array(self.xs.astype(np.float32), dtype=float, device=device)
@@ -985,7 +1028,8 @@ class Sonar:
         z_w = self.rho * self.c / 1e6
         return (float(m["Z"]) - z_w) / (float(m["Z"]) + z_w)
 
-    def _precompute(self, cfg, sc):
+    def _upload_static(self, cfg, sc):
+        """The scatterers and coherent facets with their material properties, on the GPU."""
         mats = surface_materials(cfg)
         ms = [mats[n] for n in sc.material_names]
         dev = self.device
@@ -1001,33 +1045,66 @@ class Sonar:
         facets = sc.facets if sc.facets is not None else np.zeros((0, 3, 3), np.float32)
         tri = [wp.array(np.ascontiguousarray(facets[:, j]), dtype=wp.vec3, device=dev) for j in range(3)]
         fmat = wp.array(sc.facet_mat if sc.facet_mat is not None else np.zeros(0, np.int32), dtype=wp.int32, device=dev)
+        self.static_in = {"points": points, "tri": tri, "fmat": fmat, "r0": r0, "sh2": sh2,
+                          "n_points": len(sc.pos), "n_facets": len(facets)}
+        self.n_scatterers = len(sc.pos)
+        self.n_facets = len(facets)
+
+    def _compute_static(self):
+        """The static scene at the current pose: grid of the paths that miss the plume region, list of those that
+        cross it (attenuated every ping). Pass 1 counts the list, pass 2 stores it and deposits the rest."""
+        si, dev = self.static_in, self.device
         count = wp.zeros(1, dtype=wp.int32, device=dev)
         empty = [wp.zeros(1, dtype=wp.vec3, device=dev)] * 3 + [wp.zeros(1, dtype=wp.vec4, device=dev)]
 
         def run(store, dyn):
-            if len(sc.pos):
-                wp.launch(static_kernel, dim=len(sc.pos), device=dev,
-                          inputs=[self.p, self.planes, self.box, *points, store, self.acc, *dyn, count])
-            if len(facets):
-                wp.launch(facet_kernel, dim=len(facets), device=dev,
-                          inputs=[self.p, self.planes, self.box, *tri, fmat, r0, sh2, store, self.acc, *dyn, count])
-        # pass 1 counts the paths that cross the plume region, pass 2 stores them and deposits the rest
+            if si["n_points"]:
+                wp.launch(static_kernel, dim=si["n_points"], device=dev,
+                          inputs=[self.p, self.planes, self.box, *si["points"], store, self.acc, *dyn, count])
+            if si["n_facets"]:
+                wp.launch(facet_kernel, dim=si["n_facets"], device=dev,
+                          inputs=[self.p, self.planes, self.box, *si["tri"], si["fmat"], si["r0"], si["sh2"], store,
+                                  self.acc, *dyn, count])
         run(0, empty)
         n_dyn = int(count.numpy()[0])
-        self.dyn = [wp.zeros(max(n_dyn, 1), dtype=wp.vec3, device=dev) for _ in range(3)] + \
-                   [wp.zeros(max(n_dyn, 1), dtype=wp.vec4, device=dev)]
+        if self.dyn is None or n_dyn > self.dyn_cap:    # the list's arrays grow, never shrink (moving sonar)
+            self.dyn_cap = max(n_dyn, int(1.25 * self.dyn_cap), 1)
+            self.dyn = [wp.zeros(self.dyn_cap, dtype=wp.vec3, device=dev) for _ in range(3)] + \
+                       [wp.zeros(self.dyn_cap, dtype=wp.vec4, device=dev)]
         count.zero_()
         self.acc.zero_()
         run(1, self.dyn)
         wp.launch(resolve_kernel, dim=self.static_grid.shape, device=dev, inputs=[self.acc, self.static_grid, 0])
         wp.synchronize_device(dev)
         self.n_dyn = n_dyn
-        self.n_scatterers = len(sc.pos)
-        self.n_facets = len(facets)
+        self.static_pose = (self.position.copy(), self.rot.copy())
 
-    def _reverb(self, cfg, scene) -> np.ndarray:
-        """Per (range bin, u cell): amplitude std of volume reverberation, from the water inside each cell's
-        two-way beam (tank box, above the sand, below the surface)."""
+    # ----------------------------------------------------------------------------------------- pose
+    def set_pose(self, position, rot) -> None:
+        """Move the sonar (body-to-world rotation ``rot``). The static scene follows at the next ping as
+        sonar.static_cache says: none recomputes it every ping, on_motion when the pose has moved beyond
+        sonar.static_cache_motion since the last computation, precomputed never (moving it is an error)."""
+        position, rot = np.asarray(position, float), np.asarray(rot, float)
+        if self.static_cache == "precomputed" and self._moved(position, rot, (1e-9, 1e-9)):
+            raise ConfigError("sonar.static_cache precomputed: the sonar cannot move (use on_motion or none)")
+        self.position, self.rot = position, rot
+        self.p.pos = wp.vec3(*position)
+        self.p.rot_t = wp.mat33(*rot.T.flatten())
+
+    def _moved(self, position, rot, thresholds) -> bool:
+        p0, r0 = self.static_pose
+        cos = (np.trace(r0.T @ rot) - 1.0) / 2.0
+        return (np.linalg.norm(position - p0) > thresholds[0]
+                or math.acos(min(1.0, max(-1.0, cos))) > thresholds[1])
+
+    def _static_due(self) -> bool:
+        if self.static_in is None or self.static_cache == "precomputed":
+            return False
+        return self.static_cache == "none" or self._moved(self.position, self.rot, self.motion)
+
+    def _reverb_setup(self, cfg, scene):
+        """Pose-independent part of the reverberation table: (u cell, elevation) directions in the sonar frame and
+        their two-way gain x solid angle; the tank's water box."""
         son = get(cfg, "sonar")
         L, W, _ = (float(v) for v in get(cfg, "tank.size"))
         wl = float(get(cfg, "tank.water_level"))
@@ -1041,23 +1118,25 @@ class Sonar:
         ok = np.abs(sphi) < 1
         cphi = np.sqrt(np.clip(1 - sphi ** 2, 1e-9, 1))
         body = np.stack([np.cos(ce) * cphi, -np.cos(ce) * sphi, np.sin(ce)], -1)
-        world = body @ self.rot.T
         v = vertical_pattern(self.vert * np.sin(ce), self.vtaper)
         gain2 = (v ** 4) * cphi ** (4 * self.fan_n) * ok
         domega = (2.0 / nu_c) * de / cphi                             # solid angle of a (u, elevation) cell
         sv = 10 ** (float(son["volume_sv_db"]) / 10)
         sl2 = 10 ** (float(son["source_level_db"]) / 10)
-        att = self.alpha_db / (20 * math.log10(math.e))
-        out = np.zeros((self.n_r, nu_c), np.float32)
-        for j in range(1, self.n_r):
-            r = j * self.dr
-            pt = self.position + r * world
-            water = ((pt[..., 0] > 0) & (pt[..., 0] < L) & (pt[..., 1] > 0) & (pt[..., 1] < W)
-                     & (pt[..., 2] > z_sand) & (pt[..., 2] < wl))
-            inten = sl2 * sv * self.dr * np.sum(gain2 * domega * water, 1) / r ** 2 * math.exp(-4 * att * r)
-            out[j] = inten / (self.n_u / nu_c)                       # spread over the fine u cells
-        fine = np.repeat(out, self.n_u // nu_c, axis=1)
-        return np.sqrt(fine / 2).astype(np.float32)
+        dev = self.device
+        self.rev_in = {"dirs": wp.array(body.astype(np.float32), dtype=wp.vec3, device=dev),
+                       "weight": wp.array((gain2 * domega).astype(np.float32), dtype=float, device=dev),
+                       "lo": wp.vec3(0.0, 0.0, z_sand), "hi": wp.vec3(L, W, wl),
+                       "scale": sl2 * sv * self.dr / (self.n_u / nu_c), "rep": self.n_u // nu_c, "nu_c": nu_c}
+
+    def _reverb(self) -> None:
+        """Per (range bin, u cell) at the current pose, into self.rev: amplitude std of volume reverberation from the
+        water inside each cell's two-way beam (tank box, above the sand, below the surface)."""
+        ri = self.rev_in
+        wp.launch(reverb_table_kernel, dim=(self.n_r, ri["nu_c"]), device=self.device,
+                  inputs=[wp.vec3(*self.position), wp.mat33(*self.rot.flatten()), ri["dirs"], ri["weight"], ri["lo"],
+                          ri["hi"], self.dr, ri["scale"], self.alpha_db / (20 * math.log10(math.e)), ri["rep"],
+                          self.rev])
 
     def _ringdown(self, son):
         """Frozen per-element ring-down: random phases, amplitude decaying with e-folding ringdown_m, at the beam
@@ -1086,6 +1165,11 @@ class Sonar:
             t_last[0] = now
         self.seq += 1
         seed = self.seed + 104729 * self.seq
+        if self._static_due():
+            self._compute_static()
+            if self.reverberation:
+                self._reverb()
+            lap("static_recompute")
         wp.copy(self.grid, self.static_grid)
         self.ext_acc.zero_()
         n_bub = 0
@@ -1148,7 +1232,8 @@ class Sonar:
                    plume_share_all=self.share.numpy(), plume_mask_all=self.mask.numpy(),
                    plume_share_direct=self.share_d.numpy(), plume_mask_direct=self.mask_d.numpy(),
                    plume_mask_geom=self.mask_g.numpy(),
-                   range_m=self.range_m, bearing_deg=self.bearing, timing_ms=tm)
+                   range_m=self.range_m, bearing_deg=self.bearing, position=self.position.copy(), rot=self.rot.copy(),
+                   timing_ms=tm)
         lap("download")
         tm["total"] = sum(tm.values())
         return out

@@ -35,6 +35,9 @@ class SensorSink:
     def static_transforms(self, t: float, transforms: list) -> None:
         """Fixed frames [(parent, child, rotation 3x3, translation)]; only live sinks use them."""
 
+    def transforms(self, t: float, transforms: list) -> None:
+        """Moving frames (a mobile sonar), same form; only live sinks use them."""
+
     def close(self) -> None:
         pass
 

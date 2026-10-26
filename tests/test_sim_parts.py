@@ -83,3 +83,13 @@ def test_quaternions_and_static_frames():
     frames = main.static_frames(cfg, _sonar(cfg))
     assert [(p, c) for p, c, *_ in frames] == [("tank", "oculus"), ("oculus", "oculus_projected"),
                                                ("tank", "camera"), ("camera", "camera_optical")]
+
+
+def test_moving_frames_keep_the_camera_on_the_sonar():
+    cfg = config.load()
+    son = _sonar(cfg)
+    frames = {(p, c): (r, x) for p, c, r, x in main.static_frames(cfg, son, moving=True)}
+    assert ("tank", "oculus") not in frames and ("tank", "camera") not in frames
+    r, x = frames[("oculus", "camera")]
+    assert np.allclose(son.rot @ r, geometry.rot_rpy_deg(config.get(cfg, "camera.rpy_deg")))
+    assert np.allclose(son.position + son.rot @ np.asarray(x), config.get(cfg, "camera.position"))

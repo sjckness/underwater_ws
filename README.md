@@ -70,6 +70,11 @@ python -m uw sim --gui --set lights.ambient_dome=300 --set sim.bubble_material=i
 python -m uw sim --sink file --out output/datasets/NAME --duration 60 --no-realtime      # camera + sonar dataset
 ```
 
+A moving sonar (M3.5): `--set sonar.pose_source=trajectory --set sonar.trajectory.preset=approach|lawnmower|orbit|hover
+--set sonar.static_cache=none` (or `on_motion`); `pose_source=ros` takes the pose from `sonar.ros_pose_topic`
+(PoseStamped in the tank frame). The same options work for `sonar-only` and `tools/sonar_preview.py`. Each ping's pose
+is in its JSON and on `/tf`.
+
 Options: `--duration S` (sim seconds), `--no-realtime`, `--no-camera`, `--view side45|top|sonar` (GUI start view),
 `--screenshot T` (repeatable: at sim time T, the GUI window, its viewport and the camera image go to
 `output/sim/screenshots/`), `--stats-file F` (per-stage timing, JSON), plus `--profile/--preset/--set`.

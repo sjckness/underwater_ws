@@ -3,7 +3,8 @@
     python -m uw py tools/sonar_preview.py [--pings 20] [--video 50] [--preset buried] [--profile ...] [--set a.b=c]
 
 Without a pipe preset both run (exposed, buried); other presets (e.g. basin) apply to both. Written to
-output/sonar_preview/<preset>[+roll<deg>][+pitch<deg>][+yaw<deg>]/ (a pose angle appears when --set changes it):
+output/sonar_preview/<preset>[+roll<deg>][+pitch<deg>][+yaw<deg>]/ (a pose angle appears when --set changes it;
+a moving sonar: <preset>+<trajectory preset>+<static_cache>/, poses per ping from time 0):
 {static,plume}_{focus,nofocus}_{polar,fan}.png, overview.png, timing.json, and with --video N plume.mp4: N consecutive
 pings with the plume at the ping rate (H.264; the fan in metres, the pose in the title, the outlines of the plume
 labels mask_direct and mask_geom unless --no-contour, a side view of the tank with the sonar and its field of view) plus how the echo changes
@@ -26,7 +27,7 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 import warp as wp  # noqa: E402
 
-from uw import bubbles, config, deps, geometry, sinks, sonar  # noqa: E402
+from uw import bubbles, config, deps, geometry, pose, sinks, sonar  # noqa: E402
 
 PIPE_PRESETS = ("exposed", "buried")
 
@@ -38,30 +39,44 @@ def fan_extent(son, img):
     return (-w / 2 / scale, w / 2 / scale, -0.5 / scale, (h - 0.5) / scale)
 
 
-def side_view(ax, cfg, scene, sim, son):
-    """Inset: the tank in a side view (x-z at the sonar's y): sand, water level, pipe, plume centreline, the sonar and
-    its field of view (the wireframe projected onto x-z)."""
+def tank_views(ax_side, ax_top, scene, sim, son, path=None):
+    """Insets: the tank seen from the side (x-z at the sonar's y) and from above (x-y): sand, water level, pipe,
+    plume centreline, the sonar at its current pose and its field of view (the wireframe projected), the trajectory
+    (dashed)."""
     from uw.gui import fan_polylines
-    L, _, H = scene.size
+    L, W, H = scene.size
+    pa = scene.pipe_axis
+    lines = fan_polylines(son)
+    for ax in (ax_side, ax_top):
+        ax.cla()
     ys = son.position[1]
     xs = np.linspace(0, L, 200)
-    ax.fill_between(xs, 0, scene.sand.height(xs, np.full_like(xs, ys)), color="#c2b280")
-    ax.axhline(scene.water_level, color="#4a90d9", lw=1)
-    pa = scene.pipe_axis
-    ax.add_patch(plt.Circle((pa["x"], pa["z"]), pa["radius"], color="#333"))
+    ax_side.fill_between(xs, 0, scene.sand.height(xs, np.full_like(xs, ys)), color="#c2b280")
+    ax_side.axhline(scene.water_level, color="#4a90d9", lw=1)
+    ax_side.add_patch(plt.Circle((pa["x"], pa["z"]), pa["radius"], color="#333"))
+    ax_top.add_patch(plt.Rectangle((pa["x"] - pa["radius"], pa["y0"]), 2 * pa["radius"], pa["y1"] - pa["y0"],
+                                   color="#333"))
     if sim is not None:
         cl = sim.flow.plume["pos"]
-        ax.plot(cl[:, 0], cl[:, 2], color="#3cb4e6", lw=2, label="plume")
-    for line in fan_polylines(son):
-        ax.plot(line[:, 0], line[:, 2], color="#e6a800", lw=0.8)
-    ax.plot(*son.position[[0, 2]], "o", color="#d62728", ms=4)
-    ax.add_patch(plt.Rectangle((0, 0), L, H, fill=False, lw=1.2))
-    ax.set(xlim=(-0.05, L + 0.05), ylim=(-0.05, H + 0.05), aspect="equal", xlabel="x [m]", ylabel="z [m]")
-    ax.set_title("side view (fan projected)", fontsize=9)
-    ax.tick_params(labelsize=7)
+        ax_side.plot(cl[:, 0], cl[:, 2], color="#3cb4e6", lw=2)
+        ax_top.plot(cl[:, 0], cl[:, 1], color="#3cb4e6", lw=2)
+    for ax, (i, j), size in ((ax_side, (0, 2), (L, H)), (ax_top, (0, 1), (L, W))):
+        for line in lines:
+            ax.plot(line[:, i], line[:, j], color="#e6a800", lw=0.8)
+        if path is not None:
+            ax.plot(path[:, i], path[:, j], "--", color="#d62728", lw=0.8)
+        ax.plot(son.position[i], son.position[j], "o", color="#d62728", ms=4)
+        ax.add_patch(plt.Rectangle((0, 0), *size, fill=False, lw=1.2))
+        ax.set(xlim=(-0.05, size[0] + 0.05), ylim=(-0.05, size[1] + 0.05), aspect="equal")
+        ax.tick_params(labelsize=7)
+    ax_side.set_xlabel("x [m]", fontsize=8)
+    ax_side.set_ylabel("z [m]", fontsize=8)
+    ax_side.set_title("side view (fan projected)", fontsize=9)
+    ax_top.set_ylabel("y [m]", fontsize=8)
+    ax_top.set_title("top view", fontsize=9)
 
 
-def video(path, cfg, scene, sim, son, n, dt, title, contour=True):
+def video(path, cfg, scene, sim, son, n, dt, title, contour=True, motion=None, tau=0.0):
     """n consecutive pings with the plume as an H.264 MP4 (1 / dt frames per second): the fan in metres, the title
     with the pose, the outlines of the plume labels mask_direct and mask_geom (contour=True) and a side view of the
     tank. Plus how the echo changes from ping to ping: speckle correlation (sonar_stats.speckle_correlation) of
@@ -70,21 +85,27 @@ def video(path, cfg, scene, sim, son, n, dt, title, contour=True):
     from uw import sonar_stats
     ffmpeg = deps.require("imageio_ffmpeg", "imageio-ffmpeg", "0.5.1").get_ffmpeg_exe()
     pings = []
-    for _ in range(n):
+    for i in range(n):
         sim.step(dt)
+        if motion is not None and motion.moving:
+            here = motion.at(tau + (i + 1) * dt)
+            son.set_pose(here.position, here.rot)
         pings.append(son.ping(bubbles=sim))
+    track = motion.positions(0.02) if motion is not None and motion.moving else None
     fig = plt.figure(figsize=(12.8, 7.2), dpi=100)
-    ax = fig.add_axes([0.06, 0.08, 0.62, 0.82])
+    ax = fig.add_axes([0.05, 0.08, 0.6, 0.82])
     first = son.fan(pings[0].image)
     ext = fan_extent(son, first)
     im = ax.imshow(first, cmap="gray", vmin=0, vmax=255, extent=ext, interpolation="bilinear")
     ax.set(xlabel="across the fan [m] (starboard +)", ylabel="along the sonar axis [m]")
-    side_view(fig.add_axes([0.71, 0.45, 0.27, 0.45]), cfg, scene, sim, son)
+    ax_side, ax_top = fig.add_axes([0.69, 0.57, 0.29, 0.36]), fig.add_axes([0.69, 0.1, 0.29, 0.36])
     if contour:
-        fig.text(0.71, 0.36, "orange: plume label mask_direct, outline\n(bubbles' direct echo > 50 % of the pixel's "
-                 "energy;\nincludes their sidelobe leakage)", fontsize=9, color="#e67e00", va="top")
-        fig.text(0.71, 0.26, "cyan: geometric label mask_geom, outline\n(main-lobe cells of visible bubbles)",
-                 fontsize=9, color="#0aa5c8", va="top")
+        fig.text(0.05, 0.035, "orange: plume label mask_direct (bubbles' direct echo > 50 % of the pixel's energy, "
+                 "includes their sidelobe leakage)", fontsize=8, color="#e67e00")
+        fig.text(0.05, 0.01, "cyan: geometric label mask_geom (main-lobe cells of visible bubbles)", fontsize=8,
+                 color="#0aa5c8")
+    from types import SimpleNamespace
+    view = SimpleNamespace(theta_max=son.theta_max, fov_v_deg=son.fov_v_deg, range=son.range)
     hdr = ax.set_title("")
     yy, xx = np.mgrid[0:first.shape[0], 0:first.shape[1]]
     x_m = ext[0] + (xx + 0.5) * (ext[1] - ext[0]) / first.shape[1]
@@ -97,6 +118,9 @@ def video(path, cfg, scene, sim, son, n, dt, title, contour=True):
     t0 = sim.t - n * dt
     for i, p in enumerate(pings):
         im.set_data(son.fan(p.image))
+        if i == 0 or track is not None:
+            view.position, view.rot = p.position, p.rot
+            tank_views(ax_side, ax_top, scene, sim, view, track)
         for c in cs:
             c.remove()
         cs = []
@@ -105,7 +129,13 @@ def video(path, cfg, scene, sim, son, n, dt, title, contour=True):
                 region = sonar_stats.local_mean(mask / 255.0, (9, 7)) > 0.5
                 cs.append(ax.contour(x_m, y_m, son.fan(region.astype(np.uint8) * 255), levels=[127], colors=colour,
                                      linewidths=1.0))
-        hdr.set_text(f"{title}   ping {i + 1}/{n}, t = {t0 + (i + 1) * dt:.1f} s")
+        pose_txt = ""
+        if track is not None:
+            from uw.geometry import rpy_deg_of
+            r, pt, y = rpy_deg_of(p.rot)
+            pose_txt = (f"\nsonar at ({p.position[0]:.2f}, {p.position[1]:.2f}, {p.position[2]:.2f}) m, "
+                        f"roll {r:.0f}°, pitch {pt:.0f}°, yaw {y:.0f}°")
+        hdr.set_text(f"{title}   ping {i + 1}/{n}, t = {t0 + (i + 1) * dt:.1f} s{pose_txt}")
         fig.canvas.draw()
         proc.stdin.write(np.asarray(fig.canvas.buffer_rgba())[..., :3].tobytes())
     proc.stdin.close()
@@ -152,6 +182,11 @@ def run(cfg, name, n_pings, n_video=0, contour=True):
     t.update({f"sonar_{k}_ms": v for k, v in son.timing_ms.items()})
     t["scatterers"] = son.n_scatterers
     t["plume_box_paths"] = son.n_dyn
+    motion = pose.sensor_pose(cfg, scene)
+    tau = 0.0
+    if motion.moving:
+        start = motion.at(0.0)
+        son.set_pose(start.position, start.rot)
     fans = {}
     for focus in (True, False):
         tag = "focus" if focus else "nofocus"
@@ -167,8 +202,13 @@ def run(cfg, name, n_pings, n_video=0, contour=True):
         sim.step(dt)
         wp.synchronize()
         steps.append((time.perf_counter() - t0) * 1e3)
+        tau += dt
+        if motion.moving:
+            here = motion.at(tau)
+            son.set_pose(here.position, here.rot)
         pings.append(son.ping(bubbles=sim).timing_ms)
-    stages = {k: float(np.mean([p[k] for p in pings])) for k in pings[0]}
+    keys = list(dict.fromkeys(k for p in pings for k in p))
+    stages = {k: float(np.mean([p.get(k, 0.0) for p in pings])) for k in keys}
     t["ping_ms_mean"] = stages
     t["ping_ms_max"] = float(max(p["total"] for p in pings))
     t["bubble_step_ms_mean"] = float(np.mean(steps))
@@ -183,7 +223,11 @@ def run(cfg, name, n_pings, n_video=0, contour=True):
         sc_ = config.get(cfg, "sonar")
         title = (f"{name}: roll {sc_['roll_deg']:g}°, pitch {sc_['pitch_deg']:g}° down, yaw {sc_['yaw_deg']:g}°, "
                  f"{sc_['mode'].upper()} {'focused' if son.focus else 'unfocused'}")
-        t["video"] = video(os.path.join(out, "plume.mp4"), cfg, scene, sim, son, n_video, dt, title, contour)
+        if motion.moving:
+            title = (f"{name}: {sc_['trajectory']['preset']} at {sc_['trajectory']['speed']:g} m/s, "
+                     f"{sc_['mode'].upper()} {'focused' if son.focus else 'unfocused'}")
+        t["video"] = video(os.path.join(out, "plume.mp4"), cfg, scene, sim, son, n_video, dt, title, contour,
+                           motion=motion, tau=tau)
     with open(os.path.join(out, "timing.json"), "w") as f:
         json.dump(t, f, indent=1)
     return t
@@ -220,9 +264,11 @@ def main():
     for preset in pipes:
         cfg = config.load(overrides=args.overrides, profile=args.profile, presets=[preset, *others])
         default = config.load(profile=args.profile, presets=[preset, *others])
-        pose = [f"{k}{config.get(cfg, f'sonar.{k}_deg'):g}" for k in ("roll", "pitch", "yaw")
+        tags = [f"{k}{config.get(cfg, f'sonar.{k}_deg'):g}" for k in ("roll", "pitch", "yaw")
                 if config.get(cfg, f"sonar.{k}_deg") != config.get(default, f"sonar.{k}_deg")]
-        name = "+".join([preset, *others, *pose])
+        if config.get(cfg, "sonar.pose_source") == "trajectory":
+            tags = [config.get(cfg, "sonar.trajectory.preset"), config.get(cfg, "sonar.static_cache")]
+        name = "+".join([preset, *others, *tags])
         t = run(cfg, name, args.pings, args.video, not args.no_contour)
         s = t["ping_ms_mean"]
         print(f"{name}: precompute {t['sonar_static_precompute_ms']:.0f} ms ({t['scatterers'] / 1e6:.2f} M scatterers, "

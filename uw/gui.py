@@ -101,18 +101,29 @@ class Overlay:
         self.returns = bool(get(cfg, "sim.overlay_returns"))
         self.threshold = int(get(cfg, "sim.overlay_returns_min"))
         self.window = get_active_viewport_window()
+        self.sc = sc
+        self.pose0 = np.eye(4)
+        self.pose0[:3, :3], self.pose0[:3, 3] = son.rot, son.position
         with self.window.get_frame("uw_sonar_overlay"):
             self.view = sc.SceneView()
             with self.view.scene:
-                if self.fan:
-                    for line in fan_polylines(son):
-                        sc.Curve(line.tolist(), curve_type=sc.Curve.CurveType.LINEAR, colors=[FAN_COLOR],
-                                 thicknesses=[2.0])
+                self.motion = sc.Transform()                 # the fan follows a moving sonar
+                with self.motion:
+                    if self.fan:
+                        for line in fan_polylines(son):
+                            sc.Curve(line.tolist(), curve_type=sc.Curve.CurveType.LINEAR, colors=[FAN_COLOR],
+                                     thicknesses=[2.0])
                 self.points = sc.Points([[0.0, 0.0, 0.0]], colors=[[0.0, 0.0, 0.0, 0.0]], sizes=[1.0], visible=False)
         self.window.viewport_api.add_scene_view(self.view)
 
-    def update(self, image: np.ndarray) -> int:
-        """Show this polar image (uint8, range bins x beams); returns the number of points drawn."""
+    def update(self, image: np.ndarray, position=None, rot=None) -> int:
+        """Show this polar image (uint8, range bins x beams), taken at this sonar pose (default: the sonar's
+        current one); returns the number of points drawn."""
+        if position is not None:
+            m = np.eye(4)
+            m[:3, :3], m[:3, 3] = rot, position
+            motion = m @ np.linalg.inv(self.pose0)
+            self.motion.transform = self.sc.Matrix44(*motion.T.flatten().tolist())   # column-major
         if not self.returns:
             return 0
         pts, colors = returns_points(self.son, image, self.threshold)

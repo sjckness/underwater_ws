@@ -641,3 +641,51 @@ asynchronously), the render call itself takes 24 ms, the ping 36 ms. Unpaced and
 0.86; with `sim.bubble_stride=2` 0.87 and with `sim.bubble_render_hz=5` 0.84, so neither the instance count nor the
 instancer updates matter; it is the camera render sharing the GPU with CUDA. Without the camera, unpaced: 1.41 x
 real time (before: real time at 1.0 with little margin).
+
+## M3.5: mobile sonar, kinematic trajectories (2026-10-26)
+
+`sonar.pose_source`: fixed | trajectory | ros (uw/pose.py). Trajectories are waypoints with a speed per segment,
+interpolated by a monotone cubic (no overshoot into the walls at the lawnmower's corners), timed so that the mean
+speed is the configured one; presets approach (towards the leak), lawnmower, orbit (around the leak, looking at it),
+hover (Ornstein-Uhlenbeck drift of position and yaw). `pitch: track` keeps the sonar's axis on the leak.
+`tests/test_pose.py`: every preset stays inside the water margin, has no jumps (speed < 2 x the set one), mean speed
+within 20 %, 99 % of the accelerations below 5 m/s² (hover excepted: a random walk at the ping rate); the tracking
+presets look at the leak within 3°; approach closes in monotonically; orbit goes once round at its radius (±3 cm).
+
+`sonar.static_cache`: precomputed (fixed pose only; moving it is an error) | on_motion (recompute when the pose moved
+more than `static_cache_motion`, 5 mm / 0.25° by default) | none. The reverberation table moved to a Warp kernel
+for this (0.6 ms instead of 166 ms per pose; the two agree except 8 of 1.5 M cells where a sample lies exactly on
+the tank's boundary). With a trajectory, the adaptive scatterer spacing uses the closest distance from each surface
+patch to the whole path.
+
+Checks (`tests/gpu/test_mobile.py`):
+- a point target at the sonar's height stays where it is: the sonar moves 0.6 m and turns 50° in yaw, and every
+  ping's brightest pixel, taken back to the world with that ping's pose, is within 2 range bins + 1 beam of it;
+- a sonar moved with `set_pose` gives bit-identically the ping of a sonar configured at that pose;
+- on_motion recomputes only beyond its thresholds (3 mm and 0.2° no; 7 mm yes; 2 mm after that no).
+
+Every ping's pose goes into its JSON (position, roll/pitch/yaw, rotation; the leak's range/bearing/elevation in that
+pose's frame) and, live, on /tf (tank → oculus; the camera rides on the sonar: oculus → camera on /tf_static). In
+Isaac, sonar, camera and lamps form one rig that moves with the sonar; the GUI's fan wireframe follows it.
+
+Ping time with a moving sonar (40 pings, `sonar-only`, exposed pipe; linus):
+
+| | tank: ping (static recompute), recomputes | basin: ping (static recompute), recomputes |
+|---|---|---|
+| fixed, precomputed | 37 ms, – | 23 ms, – |
+| approach, none | 179 ms (154 ms), 40/40 | 372 ms (352 ms), 40/40 |
+| approach, on_motion | 176 ms (151 ms), 40/40 | 372 ms (352 ms), 40/40 |
+| hover (2 cm drift), none | 171 ms (143 ms), 40/40 | 339 ms (319 ms), 40/40 |
+| hover (2 cm drift), on_motion | 162 ms (144 ms), 37/40 | 311 ms (315 ms), 37/40 |
+
+At 0.15 m/s (1.5 cm per ping) and with a 2 cm drift the pose moves beyond 5 mm nearly every ping: on_motion only
+pays for stop-and-go motion. Both are inside the mobile budget (no limit on linus: offline datasets).
+
+Videos (`tools/sonar_preview.py --video`, tank exposed, static cache none; side and top views with the current fan
+and the path): `output/sonar_preview/exposed+approach+none/plume.mp4` (59 pings, 0.15 m/s, 1.5 → 0.6 m from the
+leak) and `output/sonar_preview/exposed+orbit+none/plume.mp4` (209 pings, one orbit of radius 1 m at 0.3 m/s). In
+the orbit the pipe sweeps through the fan, the walls and corners swing around, the plume stays at the fan's centre.
+The static speckle correlation from one ping to the next is 0.18–0.22 while moving (0.99 fixed): the speckle of the
+scene changes with the pose, as it should.
+
+Not modelled: motion during a ping, Doppler (Known gaps).
