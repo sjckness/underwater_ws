@@ -15,6 +15,10 @@ splits: {train: 0.70, val: 0.15, test: 0.15}   # by scenario, stratified by kind
 #   test and takes no part in the fractions, so the basin is never seen in training. Off: both sizes are in
 #   every split. dataset_stats reports the held-out and in-domain parts of the split apart.
 
+set:                            # fixed overrides for every scenario (a sampled value below wins)
+  recorder.compress: false      # zlib off the worker's critical path: 65 -> 8 ms per ping, ~3.5x the bytes.
+  recorder.png_level: 0         # v0.2 is written to a disk with room for it (see the dataset card).
+
 kind: {choice: {leak: 0.60, negative: 0.15, distractor: 0.25}}
 # negative: no leak; distractor: no leak, but more rocks and pipe glints (extra flanges, a smoother coating)
 

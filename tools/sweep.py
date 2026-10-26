@@ -145,7 +145,8 @@ def sample_scenario(sw: dict, index: int, rng: np.random.Generator) -> dict:
     pipe = draw(rng, sw["presets"]["pipe"])
     presets = [size, pipe]
     p: dict = {"kind": kind, "size": size, "pipe": pipe}
-    sets: dict = {"seed": int(rng.integers(1, 2 ** 31 - 1))}
+    # sw["set"]: fixed overrides for every scenario of the sweep (a sampled value below wins over them)
+    sets: dict = {**(sw.get("set") or {}), "seed": int(rng.integers(1, 2 ** 31 - 1))}
     base = config.load(presets=presets)
     L, W, _ = (float(v) for v in config.get(base, "tank.size"))
     lk, sn, sc = sw["leak"], sw["sonar"], sw["scene"]
