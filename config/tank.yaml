@@ -1,0 +1,126 @@
+# Underwater test tank: 3 x 3 x 3 m container, sand + rocks, gas pipe with a leak, fixed FLS (+ camera).
+# World frame: x, y along the tank walls, z up; origin = inner bottom corner of the tank. Units SI.
+# Override any value from the command line: --set leak.flow_lpm=30 --set pipe.cover=0.05
+
+seed: 7                         # one seed for everything procedural (sand, rocks, scatterer phases)
+
+tank:
+  size: [3.0, 3.0, 3.0]         # inner dimensions [m]
+  wall_thickness: 0.05
+  wall_material: concrete       # acoustic + visual material of the 4 walls (materials: below)
+  water_level: 2.9              # free surface height [m]; 0.1 m freeboard
+
+water:
+  temperature_c: 15.0
+  salinity_psu: 35.0            # 0 = fresh water
+  ambient_depth_m: 0.0          # extra hydrostatic head on top of the tank (0 = real tank at 1 atm).
+                                # >0 emulates a deep site for the bubble physics only (gas density, size).
+  # light: deep water = no daylight. Per-channel coefficients [R, G, B] in 1/m (clear oceanic, Jerlov IB-II)
+  light_attenuation: [0.42, 0.075, 0.055]
+  light_scattering: [0.02, 0.025, 0.03]
+
+sand:
+  thickness: 0.30               # mean sand surface height above the tank floor [m]
+  grid: 0.01                    # render/occlusion mesh spacing [m]
+  undulation_amp: 0.02          # low-frequency relief [m]
+  undulation_scale: 0.8         # [m]
+  ripple_amp: 0.008             # wave ripples, crest-to-mean [m]
+  ripple_wavelength: 0.11       # [m]
+  ripple_heading_deg: 25.0      # crest normal direction
+  material: sand
+
+rocks:
+  count: 14
+  radius_range: [0.03, 0.16]    # equivalent radius [m]
+  flatten: [0.5, 0.85]          # z scale
+  embed: [0.2, 0.5]             # fraction of the height sunk into the sand
+  keep_out: 0.25                # min distance from the pipe axis and the leak [m]
+  material: rock
+
+pipe:
+  outer_diameter: 0.168         # 6" pipe
+  axis: y                       # runs along y, wall to wall
+  x: 1.65                       # axis position across the tank
+  length_margin: 0.02           # gap to each wall
+  cover: -0.12                  # sand above the pipe crown [m]; <0: crown sticks out by that much
+                                # (-0.12: lying on the sand, ~30 % embedded; 0.05: buried under 5 cm)
+  material: steel_coated
+  flanges_at: [0.55, 2.40]      # bolted flange rings along the pipe [m from the y=0 wall]
+  supports: true                # concrete saddle blocks, only where the pipe bottom clears the sand
+
+leak:
+  enabled: true
+  position_along: 1.45          # [m] along the pipe axis from the y=0 wall
+  clock_deg: 45.0               # hole direction around the pipe: 0 = top, +90 = towards +x
+  gas: methane                  # methane | air | nitrogen | co2
+  source: pressure              # pressure: flow + jet from the pipe pressure and the hole (choked if >~0.85 bar g)
+                                # flow: fixed flow_lpm, no jet momentum
+  pipe_pressure_bar: 3.0        # gauge pressure inside the pipe
+  hole_diameter_mm: 1.0         # 3 bar g through 1 mm -> ~25 L/min methane at the hole ("medium")
+  discharge_coeff: 0.62         # sharp-edged hole
+  flow_lpm: 25.0                # source: flow only; at the hole's ambient pressure
+  # bubble size after jet breakup: log-normal number distribution
+  d50_mm: 3.0                   # number-median volume-equivalent diameter
+  sigma_ln: 0.5
+  d_range_mm: [0.5, 10.0]
+  # buried leak (pipe.cover > 0): gas reaches the sand surface through a few vents
+  vents: 3
+  vent_spread: 0.6              # vent offset std as a fraction of the cover depth
+  vent_switch_s: 2.5            # time scale of the intermittent vent switching
+  buried_size_factor: 1.6       # bubbles from sediment vents are larger than jet breakup bubbles
+  pockmark_radius: 0.04
+  pockmark_depth: 0.015
+
+plume:                          # integral buoyant-jet model (top-hat) for the liquid flow the bubbles ride on
+  entrainment_coeff: 0.08       # alpha; 0.05 (jet) .. 0.1 (bubble plume)
+  jet_radius0: 0.004            # liquid jet radius where the model starts (after the gas expansion zone) [m]
+  turbulence: 0.25              # velocity fluctuation std / local centreline velocity
+  meander_amp: 0.3              # centreline wander / local width
+  meander_time_s: 3.0
+  wobble: true                  # zigzag / helical path oscillation of bubbles > 1.8 mm
+  max_bubbles: 150000
+  dt: 0.004166667               # bubble integration step [s] (1/240)
+  warmup_s: 12.0                # simulated before the first frame so the plume has reached the surface
+
+lights:                         # artificial light only (deep water)
+  ambient_dome: 0.0             # dome intensity; 0 = pitch black outside the lamps
+  lamps:                        # LED lamps on the sensor pole
+    - {position: [0.12, 1.30, 1.15], target: [1.7, 1.4, 0.35], intensity: 60000.0, cone_deg: 45.0, color: [1.0, 0.97, 0.9]}
+    - {position: [0.12, 1.70, 1.15], target: [1.7, 1.6, 0.35], intensity: 60000.0, cone_deg: 45.0, color: [1.0, 0.97, 0.9]}
+
+materials:
+  # acoustic: Z = acoustic impedance [MRayl]; lambert_db = Lambert parameter mu [dB];
+  #           rms_slope = Kirchhoff facet slope std (smooth -> sharp specular glints)
+  # visual:   base colour, roughness, metallic
+  sand:         {Z: 3.2,  lambert_db: -27.0, rms_slope: 0.25, color: [0.62, 0.55, 0.42], roughness: 0.95, metallic: 0.0}
+  rock:         {Z: 5.5,  lambert_db: -17.0, rms_slope: 0.35, color: [0.36, 0.34, 0.31], roughness: 0.9,  metallic: 0.0}
+  concrete:     {Z: 8.0,  lambert_db: -32.0, rms_slope: 0.06, color: [0.55, 0.55, 0.53], roughness: 0.85, metallic: 0.0}
+  steel_coated: {Z: 30.0, lambert_db: -35.0, rms_slope: 0.04, color: [0.18, 0.2, 0.22],  roughness: 0.5,  metallic: 0.3}
+  glass:        {Z: 13.0, lambert_db: -40.0, rms_slope: 0.01, color: [0.7, 0.8, 0.8],    roughness: 0.05, metallic: 0.0}
+
+sonar:
+  model: Oculus M750d           # Blueprint Subsea. Datasheet values quoted from memory: verify before trusting
+  mode: lf                      # lf | hf (modes below)
+  position: [0.10, 1.50, 1.05]  # acoustic centre, on a pole at the -x wall
+  rpy_deg: [0.0, 15.0, 0.0]     # roll, pitch (positive = nose down), yaw; looks along +x
+  range: 3.5                    # range setting [m]
+  ping_rate_hz: 10.0
+  modes:
+    lf: {frequency_hz: 750000.0, fov_h_deg: 130.0, fov_v_deg: 20.0, beams: 512, beamwidth_h_deg: 1.0, range_resolution: 0.004}
+    hf: {frequency_hz: 1200000.0, fov_h_deg: 70.0, fov_v_deg: 12.0, beams: 512, beamwidth_h_deg: 0.6, range_resolution: 0.0025}
+  array_taper_sll_db: -28.0     # Taylor taper sidelobe level of the receive array
+  source_level_db: 206.0        # dB re 1 uPa @ 1 m (assumed; only sets the SNR together with noise_level_db)
+  noise_level_db: 52.0          # receiver noise referred to the input, dB re 1 uPa over the band (assumed)
+  tvg_db_per_decade: 30.0       # TVG: k log10(R) + 2 alpha R (30: area scattering)
+  display_db: [-6.0, 54.0]      # dB window above the noise floor mapped to 0..255
+  ringdown_m: 0.08              # transducer ring-down band at near range
+  multipath: [surface, walls]   # specular image paths: surface (pressure release), walls (Z of the wall material)
+  scatterer_spacing: 0.002      # surface sampling [m] for the acoustic scatterers (fixed in the world: frozen speckle)
+
+camera:
+  enabled: true
+  position: [0.10, 1.50, 0.95]  # just below the sonar
+  rpy_deg: [0.0, 18.0, 0.0]
+  resolution: [1280, 720]
+  hfov_deg: 80.0                # in-water field of view (flat port)
+  rate_hz: 10.0
