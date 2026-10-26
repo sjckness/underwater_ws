@@ -8,6 +8,9 @@ scenarios: 300
 pings: 60                       # per scenario, at sonar.ping_rate_hz (10 Hz: 6 s of sim time)
 workers: 2                      # parallel sonar-only processes (linus: 1-2)
 splits: {train: 0.70, val: 0.15, test: 0.15}   # by scenario, stratified by kind, pipe preset and flow decade
+# holdout: {preset: size, value: basin, split: test}   # optional domain split: every basin scenario goes to
+#   test and takes no part in the fractions, so the basin is never seen in training. Off: both sizes are in
+#   every split. dataset_stats reports the held-out and in-domain parts of the split apart.
 
 kind: {choice: {leak: 0.75, negative: 0.17, distractor: 0.08}}
 # negative: no leak; distractor: no leak, but more rocks and pipe glints (extra flanges, a smoother coating)

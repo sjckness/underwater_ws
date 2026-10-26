@@ -55,6 +55,7 @@ def load(root: Path):
             m = json.loads(f.read_text())
             leak = m.get("leak") or {}
             pings.append({"scenario": sc["id"], "kind": sc["kind"], "split": sc["split"], "stem": f.stem,
+                          "size": sc.get("params", {}).get("size"), "holdout": bool(sc.get("holdout")),
                           "mode": m["sonar"]["mode"], "pose_source": m["sonar"]["pose_source"],
                           "motion": sc.get("params", {}).get("motion")          # fixed views: pose_source poses
                           or ("fixed" if m["sonar"]["pose_source"] == "fixed" else "mobile"),
@@ -189,6 +190,36 @@ def examples(path: Path, root: Path, pings: list, n: int, rng) -> list:
     return [f"{p['scenario']}/{p['stem']}" for p in chosen]
 
 
+def split_report(done: list, pings: list) -> dict:
+    """The split is by scenario: this is the audit of that. ``leaked_scenarios`` must stay empty - a scenario (one
+    sampled scene, and for a fixed scenario its three views of that scene) must sit in exactly one split, or a
+    model sees its test scenes while training. ``by_size`` separates the held-out domain from the in-domain part
+    of each split when the sweep set ``holdout``."""
+    where: dict = {}
+    for p in pings:
+        where.setdefault(p["scenario"], set()).add(p["split"])
+    sizes = sorted({s.get("params", {}).get("size") for s in done} - {None})
+    splits = ("train", "val", "test")
+    out = {
+        "by": "scenario",
+        "leaked_scenarios": sorted(k for k, v in where.items() if len(v) > 1),
+        "scenarios": {sp: sum(s["split"] == sp for s in done) for sp in splits},
+        "pings": {sp: sum(p["split"] == sp for p in pings) for sp in splits},
+        "scenarios_by_size_split": {f"{sz}/{sp}": sum(s["split"] == sp and s.get("params", {}).get("size") == sz
+                                                      for s in done) for sz in sizes for sp in splits},
+    }
+    held = [s for s in done if s.get("holdout")]
+    if held:
+        kept = {sz for s in held for sz in [s.get("params", {}).get("size")]}
+        out["holdout"] = {
+            "scenarios": len(held), "split": sorted({s["split"] for s in held}),
+            "sizes": sorted(x for x in kept if x),
+            # the point of the domain split: the held-out size must not appear in train or val at all
+            "in_train_or_val": sum(s.get("holdout") and s["split"] in ("train", "val") for s in done),
+            "in_domain_test_scenarios": sum(s["split"] == "test" and not s.get("holdout") for s in done)}
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("root")
@@ -222,6 +253,7 @@ def main() -> int:
                       "missing": sum(s.get("status") == "missing" for s in sc)},
         "scenarios_by_kind_split": {f"{k}/{sp}": sum(s["kind"] == k and s["split"] == sp for s in done)
                                     for k in ("leak", "negative", "distractor") for sp in ("train", "val", "test")},
+        "split": split_report(done, pings),
         "pings": len(pings),
         "pings_by_kind": dict(Counter(p["kind"] for p in pings)),
         "leak_pings_in_view": sum(p["geom"] > 0 for p in lp),

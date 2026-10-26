@@ -51,6 +51,41 @@ def test_splits_by_scenario_and_stratified(sampled, tmp_path):
     assert [s["overrides"] for s in again] == [s["overrides"] for s in scenarios]   # deterministic
 
 
+def test_every_scenario_is_in_exactly_one_split(sampled):
+    """The split is by scenario, so a scenario carries one split and all of its pings and views inherit it; there
+    is no per-ping or per-view assignment anywhere that could put one scene in two splits."""
+    _, scenarios = sampled
+    assert all(sc["split"] in ("train", "val", "test") for sc in scenarios)
+    assert len({sc["id"] for sc in scenarios}) == len(scenarios)
+    # a fixed scenario's views are one scene (one seed): they cannot be split apart
+    for sc in scenarios:
+        views = sc["params"].get("views")
+        if views:
+            assert len({sc["split"]}) == 1 and len(views) >= 1
+
+
+def test_holdout_keeps_a_domain_out_of_training(sampled, tmp_path):
+    sw, _ = sampled
+    sw = {**sw, "holdout": {"preset": "size", "value": "basin", "split": "test"}}
+    scenarios = sweep.sample(sw, tmp_path / "holdout")
+    basin = [sc for sc in scenarios if sc["params"]["size"] == "basin"]
+    tank = [sc for sc in scenarios if sc["params"]["size"] == "tank"]
+    assert basin and tank
+    assert all(sc["split"] == "test" and sc["holdout"] for sc in basin)      # never seen in training
+    assert all(not sc["holdout"] for sc in tank)
+    assert {sc["split"] for sc in tank} == {"train", "val", "test"}          # tank still splits normally
+    # the fractions apply to the remaining scenarios, not to the whole set
+    for name, f in sw["splits"].items():
+        assert sum(sc["split"] == name for sc in tank) == pytest.approx(f * len(tank), abs=0.08 * len(tank))
+
+
+def test_holdout_rejects_an_unknown_split(sampled):
+    sw, _ = sampled
+    with pytest.raises(ValueError, match="holdout.split"):
+        sweep.assign_splits([], sw["splits"], np.random.default_rng(0),
+                            {"preset": "size", "value": "basin", "split": "nope"})
+
+
 @pytest.fixture(scope="module")
 def sampled_v02(tmp_path_factory):
     sw = yaml.safe_load((WS / "config" / "sweeps" / "v0.2.yaml").read_text())
