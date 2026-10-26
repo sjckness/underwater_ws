@@ -41,3 +41,18 @@ def test_blind_zone_and_tvg_fit():
     fit = ss.tvg_profile(db, RANGE, (0.5, 3.0))
     assert fit["k_db_per_decade"] == pytest.approx(-30, abs=0.3) and fit["b_db_per_m"] == pytest.approx(-0.5, abs=0.1)
     assert math.isfinite(ss.near_range(db, RANGE)["ringdown_slope_db_per_m"])
+
+
+def test_speckle_correlation_ignores_the_envelope():
+    """Fully developed speckle on a strong range trend: renewed speckle gives ~0 (the raw correlation would be high,
+    driven by the trend), the same speckle 1."""
+    rng = np.random.default_rng(5)
+    trend = np.outer(np.exp(-np.linspace(0, 6, 400)), np.ones(200))
+    a = trend * rng.exponential(size=trend.shape)
+    b = trend * rng.exponential(size=trend.shape)
+    mask = np.ones(trend.shape, bool)
+    assert np.corrcoef(a.ravel(), b.ravel())[0, 1] > 0.3
+    assert abs(ss.speckle_correlation(a, b, mask)) < 0.05
+    assert ss.speckle_correlation(a, 3 * a, mask) == pytest.approx(1.0)
+    box = ss.local_mean(np.arange(20.0).reshape(4, 5), (1, 3))
+    assert box[1, 2] == pytest.approx(7.0) and box.shape == (4, 5)

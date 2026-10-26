@@ -94,3 +94,27 @@ def tvg_profile(db, range_m, r_window) -> dict:
     return {"fit_window_m": list(r_window), "k_db_per_decade": float(coef[1]), "b_db_per_m": float(coef[2]),
             "a_db": float(coef[0]), "range_m": range_m.tolist(),
             "median_db": [None if not np.isfinite(v) else float(v) for v in prof]}
+
+
+def local_mean(intensity: np.ndarray, size=(7, 5)) -> np.ndarray:
+    """Box mean over size = (range bins, beams), edges by reflection."""
+    out = np.asarray(intensity, float)
+    for axis, n in enumerate(size):
+        pad = [(0, 0), (0, 0)]
+        pad[axis] = (n // 2, n - 1 - n // 2)
+        c = np.cumsum(np.pad(out, pad, mode="reflect"), axis=axis)
+        c = np.insert(c, 0, 0.0, axis=axis)
+        out = (np.take(c, range(n, c.shape[axis]), axis=axis) - np.take(c, range(0, c.shape[axis] - n), axis=axis)) / n
+    return out
+
+
+def speckle_correlation(a: np.ndarray, b: np.ndarray, mask: np.ndarray, size=(7, 5)) -> float:
+    """Correlation of two pings' speckle in the pixels of ``mask``: each intensity image divided by its own local mean
+    (``size``), so that the slowly varying envelope (spreading, beam pattern, the plume's shape) does not count; only
+    pixels whose whole window lies in the mask (at a region's edge the window straddles the edge, and the ratio there
+    follows the edge, not the speckle). 1: the same speckle (a static scene); 0: renewed speckle (scatterers moved
+    by more than a wavelength)."""
+    na = np.asarray(a, float) / local_mean(a, size)
+    nb = np.asarray(b, float) / local_mean(b, size)
+    inner = local_mean(np.asarray(mask, float), size) > 1 - 1e-9
+    return float(np.corrcoef(na[inner], nb[inner])[0, 1])

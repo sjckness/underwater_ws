@@ -12,20 +12,26 @@ services:
     ipc: host
     init: true                        # tini as PID 1: passes docker stop's SIGTERM on to Python, reaps zombies
     # The host user plus the image's isaac-sim group (/isaac-sim is 750 isaac-sim:isaac-sim): everything written
-    # to the workspace and the caches stays owned by the host user. Enough for Warp-only runs (py, test,
-    # sonar-only); the Kit app (sim, M3) may need more.
+    # to the workspace and the caches stays owned by the host user. The Kit app (sim) writes only under HOME.
     user: "${UW_UID:?start through python -m uw}:${UW_GID:?start through python -m uw}"
     group_add: [isaac-sim]
     entrypoint: ["/bin/bash"]
     environment:
       - ACCEPT_EULA=Y
       - PRIVACY_CONSENT=Y
-      - HOME=/tmp                     # the host uid has no writable home in the image
+      # The host uid has no home in the image: a persistent one. Kit keeps its caches there (shaders, textures:
+      # .cache/ov, .cache/nvidia/GLCache, .nv/ComputeCache), its data, config and logs (.local/share/ov,
+      # .nvidia-omniverse), so the first `sim` compiles the RTX shaders (minutes) and later starts reuse them.
+      - HOME=/uw_home
       - UW_IN_CONTAINER=1
       - UW_WS=${UW_WS}
       # Own ROS 2 domain, never an f1tenth one (0 and 42; 85 and 87 in its batches). Deliberately not taken from
-      # ROS_DOMAIN_ID, which a shell may have exported for f1tenth. The ROS bridge environment comes with `sim` (M3).
+      # ROS_DOMAIN_ID, which a shell may have exported for f1tenth.
       - ROS_DOMAIN_ID=${UW_ROS_DOMAIN_ID:-73}
+      # ROS 2 through the Isaac ROS bridge's internal Jazzy (rclpy for Python 3.11, FastDDS); the image has no
+      # /opt/ros. The launcher's BOOT adds the bridge's lib directory to LD_LIBRARY_PATH.
+      - ROS_DISTRO=jazzy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       - WARP_CACHE_PATH=/uw_cache/warp
       - CUDA_CACHE_PATH=/uw_cache/cuda      # the driver's JIT cache, kept between runs
       - CUDA_CACHE_MAXSIZE=4294967296
@@ -38,6 +44,12 @@ services:
       - ${HOME}/.cache/uw_cuda:/uw_cache/cuda:rw
       # pytest for `python -m uw test` (the image has none), installed there on first use
       - ${HOME}/.cache/uw_pydeps:/uw_cache/pydeps:rw
+      - ${HOME}/.cache/uw_home:/uw_home:rw
+      # Kit's portable cache and data folders (shader and derived-data caches, OmniGraph node cache, documents)
+      # sit inside the read-only Isaac install: writable copies from the persistent home
+      - ${HOME}/.cache/uw_home/kit_cache:/isaac-sim/kit/cache:rw
+      - ${HOME}/.cache/uw_home/kit_data:/isaac-sim/kit/data:rw
+      # `sim --gui` adds the X11 socket, the X authority file and DISPLAY (uw/launcher.py)
     working_dir: ${UW_WS}
     stdin_open: true
     tty: true

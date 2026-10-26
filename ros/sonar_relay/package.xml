@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>sonar_relay</name>
+  <version>0.1.0</version>
+  <description>Relays the underwater tank sim's sonar images (/oculus/polar + /oculus/meta) as marine_acoustic_msgs/ProjectedSonarImage.</description>
+  <maintainer email="fabio.carapellese@seamorphrobotics.com">underwater_ws</maintainer>
+  <license>Proprietary</license>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>marine_acoustic_msgs</exec_depend>
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

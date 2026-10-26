@@ -1,7 +1,9 @@
 """Target side of `python -m uw`, in the container or in the native Python: runs the command in this process.
 
-SIGTERM (docker stop) becomes a KeyboardInterrupt, like Ctrl-C, so that finally blocks run and pytest reports.
-Started by uw/launcher.py, which passes UW_WARP_PATH, UW_PYDEPS and UW_PYTEST_VERSION in the environment.
+SIGTERM (docker stop) becomes a KeyboardInterrupt, like Ctrl-C, so that finally blocks run and pytest reports
+(`sim` installs its own handlers: it stops its loop and closes the Kit app).
+Started by uw/launcher.py, which passes UW_WARP_PATH, UW_USD_PATH, UW_ISAAC_ROOT, UW_PYDEPS and UW_PYTEST_VERSION in
+the environment.
 """
 from __future__ import annotations
 
@@ -44,15 +46,16 @@ def run_test(args: list[str]) -> int:
 def main(argv: list[str]) -> int:
     if os.name == "posix":
         signal.signal(signal.SIGTERM, _interrupt)
-    warp = os.environ.get("UW_WARP_PATH")
-    if warp and Path(warp).is_dir() and warp not in sys.path:
-        sys.path.insert(1, warp)
+    cmd, args = argv[0], argv[1:]
+    # Warp from the Isaac install; USD (pxr) too, except in the Kit app, which sets up its own
+    for path in [os.environ.get("UW_WARP_PATH")] + ([] if cmd == "sim" else [os.environ.get("UW_USD_PATH")]):
+        if path and Path(path).is_dir() and path not in sys.path:
+            sys.path.insert(1, path)
     try:        # cache native code (cubin), not PTX: else the driver re-JITs every module in every new process
         import warp as wp
         wp.config.cuda_output = "cubin"
     except ImportError:
         pass
-    cmd, args = argv[0], argv[1:]
     try:
         if cmd == "py":
             return run_py(args)
@@ -61,6 +64,9 @@ def main(argv: list[str]) -> int:
         if cmd == "sonar-only":
             from . import sonar_only
             return sonar_only.main(args)
+        if cmd == "sim":
+            from . import main as sim_main
+            return sim_main.main(args)
     except KeyboardInterrupt:
         print("uw: interrupted", file=sys.stderr)
         return 130

@@ -445,9 +445,144 @@ direct-path label marks in any of the 50 pings):
 
 Qualitatively the plume sparkles rather than flickers:
 - **Speckle:** its texture renews completely from one ping to the next. The bubbles move about 6 cm per ping,
-  against a 2 mm wavelength, and the correlation does not fall from 1 to 5 pings apart: the correlated part is the
-  static background inside the region.
+  against a 2 mm wavelength, and the correlation does not fall from 1 to 5 pings apart. (Corrected in M3: the
+  "pixel correlation" above is the raw correlation of power over the union of the label, which the plume's shape,
+  the range fall-off and static pixels in the union dominate. The speckle correlation of M3 gives about 0, see
+  below.)
 - **Brightness and size:** they hold to a few tenths of a dB and about ±4 % of the label area. The roll-90° streak
   integrates many more bubbles and is steadier still.
 - **Probably steadier than a real seep**, which flares in puffs and clusters. The flow is constant, and the plume
   model has only slow meander and small-scale turbulence. Added to the Known gaps in `docs/PLAN.md`.
+
+## M3: Isaac integration and ROS 2 (2026-10-26)
+
+All on linus (RTX 5050 8 GB, i7-9700K, 16 GB RAM), tank preset, exposed pipe, unless noted. The GPU is shared with
+the desktop (about 1.5 GB) and an unrelated process holding 2 GB, so about 4.5 GB were free.
+
+### One geometry source
+
+`usd_scene.check_geometry` runs at every `sim` start: the USD meshes of the occluders (sand, rocks, pipe, flanges,
+supports), concatenated as `Scene.occluders` does, have exactly the vertices and triangles of the sonar's Warp BVH
+mesh (130 827 vertices, float32 bit-equal); every other mesh's USD points equal its numpy points.
+`tests/gpu/test_usd_scene.py` builds the stage in memory (pxr from the Isaac install, no Kit) for both pipe presets
+and also checks that one vertex moved by one float32 ulp fails the check, the sonar, camera and lamp poses, and the
+bubble instancer against the pool.
+
+### The same pings in `sim` and `sonar-only`
+
+The echoes and the bubble extinction were summed with float atomics, whose order varies: two `sonar-only` runs with
+the same seed already differed (raw dB by up to 0.0625 dB, one float16 step; plume shares by 1/255). They are now
+summed in 64-bit fixed point (2^-20 µPa; extinction 2^-32 1/m), whose sums do not depend on the order: a ping is
+bit-identical for the same config and seed. The ping time did not change measurably (35 ms vs 36 ms in M2.2).
+(Warp 1.8's `atomic_add` on int64 arrays silently does nothing; uint64 with two's complement works.)
+
+`tests/isaac/test_sim_identity.py` (`python -m uw test --isaac`, 45 s): `sim --sink file` (Kit app, RTX camera
+and bubble instancer running, 240 Hz substeps, a ping every 24) and `sonar-only` give identical arrays, PNGs and
+JSON (except the timings) for 10 pings.
+
+### Bubbles in the render
+
+`UsdGeom.PointInstancer` of a unit icosphere (80 triangles), scaled to ellipsoids of the bubble's volume: aspect from
+Wellek et al. (1966), short axis along the velocity relative to the water (slip and path oscillation). Material:
+OmniGlass with IOR 0.75 (gas in water); `sim.bubble_material=inspect` draws them opaque for looking at the plume.
+Update per frame, 62 000 bubbles:
+
+| path | GPU compaction | to the host | set | total |
+|---|---|---|---|---|
+| Fabric (usdrt, GPU arrays; `sim`) | 0.6–0.9 ms | none | 0.3–0.4 ms | 1.0–1.3 ms |
+| USD (host copy; tests, no Kit) | 0.6 ms | 1.0 ms (32 B per bubble) | 3.5 ms | 5.1 ms |
+
+The cost that remains is in the renderer: RTX rebuilds the instances for every change, about 20 ms per update
+(render of the camera frame 8 ms with the bubbles static, 13 ms hidden, 28–30 ms updated every frame; the material
+does not matter). Hence `sim.bubble_render_hz` (10, the camera rate; the GUI shows the bubbles at 10 Hz while the
+viewport refreshes at 20).
+
+### Performance and GPU memory
+
+VRAM: peak used memory of the `uw` process, `nvidia-smi` (`tools/gpu_mem.py`, host side). Timings from
+`--stats-file`, means over the run (ping = `Sonar.ping` incl. waiting for the queued bubble substeps).
+
+| mode | VRAM | real-time factor | ping mean / max | other stages per 100 ms of sim time |
+|---|---|---|---|---|
+| `sim`, headless, camera, ROS | 3.1 GB | 0.75–0.79 | 53 / 69 ms | bubble substeps 27 ms (launch), render 30 ms, camera read + publish 10 ms, sonar messages 9 ms |
+| `sim`, headless, no camera, ROS | 2.8 GB | 1.00 (real time) | 36 / 73 ms | bubble substeps 25 ms, app update 5 ms |
+| `sim --gui`, camera, ROS | 3.0 GB | 0.47 | 93 / 111 ms (107 of 300 over 100 ms) | 2 viewport renders 63 ms, overlay 14 ms |
+| `sonar-only`, file sink | 0.64 GB | (no pacing) | 36 / 70 ms | bubbles 15 ms, writing 63 ms |
+| `sonar-only`, ROS sink | 0.64 GB | (no pacing) | 35 / 63 ms | bubbles 16 ms, publishing 6 ms |
+
+Targets: full sim with camera < 7 GB: met (3.1 GB). Ping ≤ 100 ms: met headless and in `sonar-only`; with the GUI
+the mean is 93 ms and a third of the pings exceed 100 ms (the viewport competes for the GPU). Real time: only
+headless without the camera; see Known gaps in docs/PLAN.md for where the time goes.
+
+### ROS 2
+
+Topics, rates and the relay: `output/m3/ros_topics.txt` (not in git) has the `ros2 topic hz` output. With the sim at
+RTF 0.75–0.79, the sonar topics arrive at 6.7–6.8 Hz wall clock (10 Hz in sim time), `/clock` at 40 Hz (60 in sim
+time). The big images (`/oculus/polar_db` 1.8 MB, `/camera/image_raw` 2.7 MB, the relay's `/oculus/sonar_image`)
+measure 5.0–5.8 Hz: `ros2 topic hz` (Python) does not keep up with deserialising them. Twelve `ros2 topic hz`
+processes at once slowed the sim to RTF 0.5 (CPU). `ros/sonar_relay` republished 283 pings in 45 s as
+ProjectedSonarImage (frame `oculus_projected`, 512 beam directions, ranges, 750 kHz, 1506.7 m/s); `/oculus/meta`,
+`/tf_static` (4 frames) and `/sim/leak` arrive latched.
+
+### Container and Kit app as a non-root user
+
+- Kit writes into its portable folders `/isaac-sim/kit/cache` and `/isaac-sim/kit/data`, which the image keeps
+  read-only for us: without them the data store, the shader cache and the OmniGraph node cache fail and the app
+  crashes (exit 139). Both are now mounted from `~/.cache/uw_home/kit_{cache,data}`, and HOME is `~/.cache/uw_home`
+  (`.cache/ov`, GLCache, ComputeCache, config, logs persist): later starts reuse the compiled shaders (Kit up in
+  25 s, scene and plume setup 6–8 s).
+- `sim --gui` mounts the X11 socket and the X authority file and passes DISPLAY.
+- Replicator annotators deliver data only if the timeline already plays when they are attached (otherwise they stay
+  empty for good, with or without a World): `sim` plays it first.
+- The lamps were 75 cd (60 000 nits on a 2 cm sphere): the camera image was black. Now 4000 cd each
+  (800 000 nits, 4 cm radius); with no ambient light the camera sees the sand, pipe and rocks inside the two
+  cones and nothing else (`output/m3/camera_t25.png`).
+
+### Addendum: plume echo between pings, range rings, videos (review of the M2.2 roll-90° video)
+
+**The plume echo is not frozen.** The bubbles are stepped between pings in the video tool and in both run modes
+(median displacement 5.0 cm per ping, 25 wavelengths; 3 of 62 000 bubbles move less than 4 mm). Nothing caches the
+bubble contribution: it is deposited from the GPU pool every ping. What made it look frozen was the measure: the
+M2.2 "pixel correlation" (0.70) is the raw correlation of power over the union of the label, dominated by the plume's
+shape and the range fall-off. Measured instead by `sonar_stats.speckle_correlation` (each image over its local mean,
+7 bins × 5 beams, only pixels whose whole window is inside the region):
+
+| | plume, next ping | plume, 5 pings apart | static scene, next ping |
+|---|---|---|---|
+| exposed, roll 0°, pitch 15° | 0.01 | −0.01 | 1.00 |
+| exposed, roll 90° | −0.00 | 0.00 | 0.99 |
+| exposed, pitch 30° | 0.05 | −0.06 | 1.00 |
+| exposed, pitch 45° | −0.08 | (few pixels) | 1.00 |
+
+A plume from another seed gives 0.05 against the same ping: the plume speckle is new every ping. Without the window
+erosion the plume gave 0.19 (0.12 with an independent plume): the ratio at a region's edge follows the edge.
+`test_plume_speckle_renews_every_ping_static_sand_does_not` (speckle dynamics off): plume |r| < 0.1, sand > 0.9.
+The plume's brightness and outline do change slowly (energy ±0.4 dB at roll 0°): the Known gap "plume
+intermittency" stands.
+
+**The range rings are sidelobe leakage, not an artifact.** With the fan vertical, the beams looking down see the
+sand at near-normal incidence (strong: Kirchhoff with rms slope 0.25), and the plume column lies in the fan plane.
+Each strong echo leaks through the array's sidelobes into every beam at its range, so the range-to-range speckle of
+that echo is copied across the fan: rings. Evidence, roll 90°, static scene: the beams looking up (water only,
+0.8–1.6 m) are 13 dB above the noise floor, and their range profile correlates 0.93 with that of the beams on the
+sand (two up-looking beams 60° apart: 0.69). Taylor −45 dB instead of −28 dB lowers them by 7 dB. Multipath, noise,
+reverberation, ring-down and focusing change nothing. The beamformer itself is exact: a point target's sidelobes
+match the Taylor pattern of the same aperture within 0.1 dB from 10° to 110° off the beam (−48 to −52 dB), and the
+integrated sidelobe energy beyond 10° is −19.9 dB in both. Kept as is; the two inputs that set it (the M750d's
+sidelobe level, the sand's backscatter near normal incidence) are in the Known gaps. The same leakage of the plume
+column makes the roll-90° plume label an annulus across all beams at 1.5–2.4 m.
+
+**Videos** (`tools/sonar_preview.py --video 50`; fan in metres, pose in the title, the plume_direct label's outline,
+a side view of the tank with the sonar and its field of view):
+`output/sonar_preview/{exposed,exposed+roll90,exposed+pitch30,exposed+pitch45}/plume.mp4`.
+
+| | ping | plume-box paths | plume energy std / ping to ping | label pixels |
+|---|---|---|---|---|
+| pitch 15° (roll 0°) | 35 ms | 3.95 M | 0.40 / 0.53 dB | 4710 ± 184 |
+| pitch 30° | 22 ms | 2.33 M | 0.44 / 0.57 dB | 1710 ± 73 |
+| pitch 45° | 12 ms | 0.90 M | 0.58 / 0.82 dB | 900 ± 38 |
+| roll 90° (pitch 15°) | 40 ms | 4.31 M | 0.12 / 0.15 dB | 89 500 ± 995 |
+
+Steeper pitch sees less of the column (only its base above the pipe), so the label shrinks and the echo fluctuates
+more; it also sees more sand in front of the pipe, and fewer far-wall and plume-box paths make the ping cheaper.
+

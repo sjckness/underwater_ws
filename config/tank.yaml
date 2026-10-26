@@ -91,9 +91,11 @@ plume:                          # integral buoyant-jet model (top-hat) for the l
 
 lights:                         # artificial light only (deep water)
   ambient_dome: 0.0             # dome intensity; 0 = pitch black outside the lamps
-  lamps:                        # LED lamps on the sensor pole
-    - {position: [0.12, 1.30, 1.15], target: [1.7, 1.4, 0.35], intensity: 60000.0, cone_deg: 45.0, color: [1.0, 0.97, 0.9]}
-    - {position: [0.12, 1.70, 1.15], target: [1.7, 1.6, 0.35], intensity: 60000.0, cone_deg: 45.0, color: [1.0, 0.97, 0.9]}
+  lamps:                        # LED lamps on the sensor pole: USD sphere lights, intensity = luminance of the emitting
+                                # sphere [nits] (luminous intensity = intensity pi radius^2: 4000 cd), shaped to a cone of
+                                # cone_deg (full angle) towards target
+    - {position: [0.12, 1.30, 1.15], target: [1.7, 1.4, 0.35], intensity: 800000.0, radius: 0.04, cone_deg: 45.0, color: [1.0, 0.97, 0.9]}
+    - {position: [0.12, 1.70, 1.15], target: [1.7, 1.6, 0.35], intensity: 800000.0, radius: 0.04, cone_deg: 45.0, color: [1.0, 0.97, 0.9]}
 
 materials:
   # acoustic: Z = acoustic impedance [MRayl] (reflection at normal incidence from it, or `reflection` if given);
@@ -160,6 +162,32 @@ sonar:
 
 recorder:                       # python -m uw sonar-only datasets
   fan_png: false                # also write the Cartesian fan image per ping (derivable from the polar one)
+
+sim:                            # python -m uw sim: the Isaac app
+  realtime: true                # pace sim time to the wall clock (--no-realtime: as fast as it goes); the watchdog
+                                # reports pings over sonar.ping_budget_ms and sim time falling behind
+  max_lag_s: 0.5                # watchdog: warn when sim time is this far behind the wall clock
+  gui_fps: 20.0                 # GUI viewport refresh in sim time; headless renders only for the camera
+  bubbles_rendered: true        # bubble PointInstancer in the RTX scene (camera, GUI)
+  bubble_stride: 1              # render every n-th bubble slot (1: all)
+  bubble_render_hz: 10.0        # instancer updates (each makes RTX rebuild the instances: ~20 ms for 60 k bubbles)
+  bubble_mesh_level: 1          # bubble prototype: icosphere subdivision level (1: 80 triangles); -1: implicit sphere
+  bubble_material: glass        # glass: gas-in-water dielectric (IOR 0.75) | inspect: opaque light blue, for looking at
+                                # the plume in the GUI (the camera images then show it too)
+  max_refraction_bounces: 2     # RTX refraction depth through the bubbles (each bubble is two interfaces)
+  overlay_fan: true             # GUI only (omni.ui.scene: over the viewport, never in the camera images): the
+                                # wireframe of the sonar's field of view
+  overlay_returns: true         #   and the current sonar image as points on the fan's centre plane
+  overlay_returns_min: 170      #   pixels (0-255) from this value up are drawn (at most 6000 points)
+  view: side45                  # GUI viewport camera at start: side45 | top | sonar
+  viewport_resolution: [1280, 720]   # GUI viewport render size (not the window's: a maximised window costs GPU time)
+
+ros:                            # SensorSink "ros" (uw/ros_bridge.py); the domain is UW_ROS_DOMAIN_ID (default 73)
+  clock_hz: 60.0                # /clock (sim time)
+  plume_hz: 2.0                 # /sim/plume
+  plume_markers: 3000           # at most this many bubbles in /sim/plume (evenly decimated)
+  leak_hz: 1.0                  # /sim/leak, /sim/leak/flow_lpm
+  fan_width: 1024               # /oculus/fan (and recorder fan PNG) width [px]
 
 camera:
   enabled: true

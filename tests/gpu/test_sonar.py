@@ -9,7 +9,7 @@ import pytest
 
 wp = pytest.importorskip("warp", reason="Warp tests run in the container: python -m uw test")
 
-from uw import config, geometry, sonar  # noqa: E402
+from uw import bubbles, config, geometry, sonar, sonar_stats  # noqa: E402
 
 QUIET = ["sonar.receiver_noise=false", "sonar.reverberation=false", "sonar.ringdown=false",
          "sonar.speckle_sigma_rad=0", "sonar.multipath=[]"]
@@ -122,6 +122,36 @@ def test_sand_speckle_is_rayleigh(flat_tank, spacing, preset, rwin, bmax):
     mean = np.apply_along_axis(lambda v: np.convolve(v, k, "same"), 1, mean)
     norm = (inten / mean)[12:-12, 12:-12]
     assert norm.std() / norm.mean() == pytest.approx(1.0, abs=0.12)
+
+
+def test_plume_speckle_renews_every_ping_static_sand_does_not():
+    """Bubbles move about 5 cm between pings (25 wavelengths): the plume's speckle is new every ping (correlation ~0).
+    With speckle dynamics off, the sand's speckle stays (~1). Speckle correlation: each intensity image over its own
+    local mean (sonar_stats.speckle_correlation), so the plume's slowly changing shape does not count."""
+    cfg = config.load(overrides=["sonar.speckle_sigma_rad=0"])
+    scene = geometry.build_scene(cfg)
+    sim = bubbles.BubbleSim(cfg, scene)
+    sim.warmup(float(config.get(cfg, "plume.warmup_s")))
+    son = sonar.Sonar(cfg, scene, geometry.scatterers(cfg, scene), plume=sonar.plume_region(sim))
+    pings, moved = [], []
+    for _ in range(6):
+        before, alive = sim.pos.numpy(), sim.alive.numpy().astype(bool)
+        sim.step(1.0 / config.get(cfg, "sonar.ping_rate_hz"))
+        both = alive & sim.alive.numpy().astype(bool)
+        moved.append(np.median(np.linalg.norm(sim.pos.numpy()[both] - before[both], axis=1)))
+        pings.append(son.ping(bubbles=sim))
+    assert np.mean(moved) > 10 * 2 * math.pi / son.k                      # far more than a wavelength per ping
+    sand_box = np.zeros(pings[0].power.shape, bool)
+    sand_box[np.ix_((son.range_m > 2.15) & (son.range_m < 2.8), np.abs(son.bearing) < 25)] = True
+    plume_c, sand_c = [], []
+    for a, b in zip(pings[:-1], pings[1:]):
+        plume = (a.plume_share_direct > 0.9) & (b.plume_share_direct > 0.9)
+        sand = sand_box & (a.plume_share_all < 1e-3) & (b.plume_share_all < 1e-3)
+        assert plume.sum() > 300 and sand.sum() > 5000
+        plume_c.append(sonar_stats.speckle_correlation(a.power, b.power, plume))
+        sand_c.append(sonar_stats.speckle_correlation(a.power, b.power, sand))
+    assert abs(np.mean(plume_c)) < 0.1
+    assert np.mean(sand_c) > 0.9
 
 
 def test_surface_ghost_at_the_image_range():

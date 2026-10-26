@@ -3,7 +3,7 @@ venv, native Isaac), as config/runtime.yaml says.
 
     python -m uw py SCRIPT [args]        also py -m MODULE, py -c CODE
     python -m uw test [pytest args]
-    python -m uw sim [--gui]             M3
+    python -m uw sim [--gui] [args]      the Isaac app: USD stage, RTX camera, sonar in the loop, ROS 2
     python -m uw sonar-only [args]
 Config options go after the command and reach the Python side unchanged: --profile linus|workstation,
 --preset NAME (repeatable), --set a.b=c (repeatable).
@@ -26,12 +26,14 @@ from .config import merge
 
 WS = Path(__file__).resolve().parents[1]
 COMMANDS = ("py", "test", "sim", "sonar-only")
-STUBS = {"sim": "M3"}                           # command: milestone that implements it
+STUBS: dict[str, str] = {}                      # command: milestone that implements it
 
-# In the image: what python.sh does, except that Python is exec'd so that signals reach it ($0 = Isaac root).
+# In the image: what python.sh does, except that Python is exec'd so that signals reach it ($0 = Isaac root); plus
+# the ROS bridge's internal Jazzy libraries (read at process start, so they cannot be added from Python).
 BOOT = ('source "$0/setup_python_env.sh"; '
         'export CARB_APP_PATH="$0/kit" ISAAC_PATH="$0" EXP_PATH="$0/apps" LD_PRELOAD="$0/kit/libcarb.so" '
-        'PYTHONPATH="$UW_WS${PYTHONPATH:+:$PYTHONPATH}"; '
+        'PYTHONPATH="$UW_WS${PYTHONPATH:+:$PYTHONPATH}" '
+        'LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$0/exts/isaacsim.ros2.bridge/$ROS_DISTRO/lib:$UW_USD_PATH/bin"; '
         'exec "$0/kit/python/bin/python3" -m uw.runner "$@"')
 
 
@@ -47,17 +49,31 @@ def runtime() -> dict:
     return rt
 
 
-def warp_path(rt: dict, isaac_root: str | None) -> str:
-    return rt["warp_path"].format(isaac_root=isaac_root) if isaac_root else ""
+def warp_path(rt: dict, isaac_root: str | None, key: str = "warp_path") -> str:
+    return rt[key].format(isaac_root=isaac_root) if isaac_root else ""
 
 
-def docker_argv(rt: dict, cmd: str, args: list[str], *, tty: bool, workdir: Path, name: str) -> list[str]:
+def docker_argv(rt: dict, cmd: str, args: list[str], *, tty: bool, workdir: Path, name: str,
+                extra: list[str] = ()) -> list[str]:
     d = rt["docker"]
     root = d["isaac_root"]
-    env = {"UW_PYDEPS": d["pydeps"], "UW_WARP_PATH": warp_path(rt, root), "UW_PYTEST_VERSION": str(rt["pytest_version"])}
+    env = {"UW_PYDEPS": d["pydeps"], "UW_WARP_PATH": warp_path(rt, root), "UW_USD_PATH": warp_path(rt, root, "usd_path"),
+           "UW_PYTEST_VERSION": str(rt["pytest_version"]), "UW_ISAAC_ROOT": root}
     return ["docker", "compose", "-f", str(WS / d["compose_file"]), "run", "--rm", *([] if tty else ["-T"]),
-            "--name", name, "-w", str(workdir), *[x for k, v in env.items() for x in ("-e", f"{k}={v}")],
+            "--name", name, "-w", str(workdir), *[x for k, v in env.items() for x in ("-e", f"{k}={v}")], *extra,
             d["service"], "-c", BOOT, root, cmd, *args]
+
+
+def x11_args() -> list[str]:
+    """docker run options for a GUI: the X11 socket, the X authority file, DISPLAY."""
+    display = os.environ.get("DISPLAY")
+    if not display:
+        raise SystemExit("uw: --gui needs an X display (DISPLAY is not set)")
+    xauth = Path(os.environ.get("XAUTHORITY") or Path.home() / ".Xauthority")
+    out = ["-e", f"DISPLAY={display}", "-v", "/tmp/.X11-unix:/tmp/.X11-unix:ro"]
+    if xauth.is_file():
+        out += ["-v", f"{xauth}:/uw_xauth:ro", "-e", "XAUTHORITY=/uw_xauth"]
+    return out
 
 
 def run_docker(rt: dict, cmd: str, args: list[str]) -> int:
@@ -71,14 +87,15 @@ def run_docker(rt: dict, cmd: str, args: list[str]) -> int:
         args = [str(script), *args[1:]]
     cwd = Path.cwd().resolve()
     workdir = cwd if cwd.is_relative_to(WS) else WS
-    for d in ("uw_warp", "uw_cuda", "uw_pydeps"):       # docker would create them root-owned
+    for d in ("uw_warp", "uw_cuda", "uw_pydeps", "uw_home/kit_cache", "uw_home/kit_data"):   # else root-owned
         (Path.home() / ".cache" / d).mkdir(parents=True, exist_ok=True)
+    extra = x11_args() if cmd == "sim" and "--gui" in args else []
     env = {**os.environ, "UW_WS": str(WS), "UW_UID": str(os.getuid()), "UW_GID": str(os.getgid())}
     name = f"uw-{cmd}-{os.getpid()}"
     tty = sys.stdin.isatty() and sys.stdout.isatty()
     # Without a terminal the client gets its own session: a Ctrl-C (SIGINT to the process group) then reaches only
     # this process, which stops the container cleanly while the client stays attached for the last output.
-    proc = subprocess.Popen(docker_argv(rt, cmd, args, tty=tty, workdir=workdir, name=name), env=env,
+    proc = subprocess.Popen(docker_argv(rt, cmd, args, tty=tty, workdir=workdir, name=name, extra=extra), env=env,
                             start_new_session=not tty)
     stopping = False
 
@@ -103,6 +120,7 @@ def run_native(rt: dict, cmd: str, args: list[str]) -> int:
     n = rt["native"]
     env = {**os.environ, "UW_WS": str(WS), "UW_PYDEPS": str(Path(n["pydeps"]).expanduser()),
            "UW_WARP_PATH": warp_path(rt, n.get("isaac_root")), "UW_PYTEST_VERSION": str(rt["pytest_version"]),
+           "UW_USD_PATH": warp_path(rt, n.get("isaac_root"), "usd_path"), "UW_ISAAC_ROOT": n.get("isaac_root") or "",
            "PYTHONPATH": os.pathsep.join([str(WS), *filter(None, [os.environ.get("PYTHONPATH")])])}
     proc = subprocess.Popen([n["python"], "-m", "uw.runner", cmd, *args], env=env)
     if os.name == "posix":                              # SIGTERM to us: interrupt the target like Ctrl-C would

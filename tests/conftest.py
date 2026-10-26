@@ -8,6 +8,16 @@ from uw import config as uw_config
 
 def pytest_addoption(parser):
     uw_config.add_args(parser.addoption)
+    parser.addoption("--isaac", action="store_true",
+                     help="also run the tests that start the Isaac app (tests/isaac: about 2 min, 3 GB of VRAM)")
+
+
+def pytest_collection_modifyitems(config, items):
+    if not config.getoption("--isaac"):
+        skip = pytest.mark.skip(reason="starts the Isaac app: python -m uw test --isaac")
+        for item in items:
+            if "isaac" in item.keywords:
+                item.add_marker(skip)
 
 
 def pytest_report_header(config):

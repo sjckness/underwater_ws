@@ -1,6 +1,6 @@
 # Underwater gas-leak tank in Isaac Sim: FLS (+ camera) simulation
 
-> **Status (2026-10-26):** M0–M2 done (infra and launcher; scene, bubble plume, adaptive scatterers; bubble scattering, sonar standalone, minimal recorder; checks in `docs/validation.md`). Next: M3 Isaac integration.
+> **Status (2026-10-26):** M0–M3 done (infra and launcher; scene, bubble plume, adaptive scatterers; bubble scattering, sonar standalone, minimal recorder; Isaac integration with the bubble instancer, sonar in the loop, GUI overlay, ROS 2 topics and the host relay; checks in `docs/validation.md`). Next: M4 camera underwater model.
 > Runs on **linus** for now.
 
 ## Changes in this revision (2026-10-26)
@@ -75,7 +75,7 @@ A single geometry source (numpy) feeds two consumers:
   docker/compose.yaml       same image, host net, nvidia runtime, mounts ~/underwater_ws, Warp cache ~/.cache/uw_warp
   scripts/uw.sh             thin Linux wrapper: `uw.sh CMD ...` = `python -m uw CMD ...`
   uw/__main__.py launcher.py runner.py   entry point `python -m uw py|test|sim|sonar-only` (+ --profile/--preset/--set)
-  uw/config.py  water.py  plume.py  geometry.py  bubbles.py  scattering.py  sonar.py  sinks.py  camera_uw.py  usd_scene.py  ros_bridge.py  recorder.py  main.py
+  uw/config.py  water.py  plume.py  geometry.py  bubbles.py  scattering.py  sonar.py  sinks.py  camera_uw.py  usd_scene.py  ros_bridge.py  recorder.py  main.py  app.py  gui.py  sonar_only.py
   ros/sonar_relay/          host-side Jazzy node: Image+meta -> marine_acoustic_msgs/ProjectedSonarImage
   tools/                    plume_preview.py, sonar_preview.py, compare_real.py, sweep.py
   tests/                    pure-numpy tests on the host (pytest); Warp tests via uw.sh test
@@ -176,7 +176,7 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
 - **Performance on linus**: ping ≤100 ms; VRAM in `sonar-only` < 3 GB; full sim with camera < 7 GB, measured with `nvidia-smi` during a GUI run.
 
 ## For the next session
-- Continue at M2. `docs/validation.md` records what M1 checked and calibrated.
+- Continue at M4. `docs/validation.md` records what M1–M3 checked, calibrated and measured.
 - Run everything through `python -m uw` (or `scripts/uw.sh`), e.g. `python -m uw test`, `python -m uw py tools/x.py`. In the container the image has numpy 1.26, scipy, torch 2.7 cu128, cv2, matplotlib and trimesh; pytest is installed into `~/.cache/uw_pydeps` on first use. The host has pytest and numpy.
 - `~/.cache/isaac-sim/cache` is root-owned, so the Warp kernel cache goes to `~/.cache/uw_warp`.
 - Run no ROS process on the side while the f1tenth harness batches run (see the f1tenth CLAUDE.md). The tank sim uses its own ROS_DOMAIN_ID.
@@ -195,6 +195,24 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
   for bistatic angles too, and their wall paths are skipped. Fix: tabulate the gas sphere's scattering amplitude
   against ka and scattering angle (modal series, 2-D table), use it on the TX-via-mirror and RX-via-mirror paths, and
   add the wall paths (about 4x the bubble paths). M5, or M6 if it breaks the ping budget on linus.
+- **Real time with the camera on linus.** Headless with the RTX camera and the 62 k rendered bubbles the sim runs at
+  0.75 x real time (without the camera 1.0), with the GUI at 0.47 (docs/validation.md, M3). Per 100 ms of sim time:
+  bubble substeps 25 ms of Python/launch overhead (each substep uploads small arrays from pageable memory, which
+  serialises CPU and GPU), ping 53 ms, RTX render 30 ms (of which about 20 ms is the instancer's per-frame rebuild),
+  camera read 7–10 ms. Candidate fixes: recorded Warp launches and pinned, double-buffered uploads for the substep;
+  pipelining the ping's download behind the next substeps; asynchronous rendering with the camera stamped one frame
+  late. Not needed on the workstation profile.
+- **Sidelobe rings from strong near-normal echoes.** With the fan vertical (roll 90°), the sand straight below and the
+  plume column in the fan plane leak through the array's sidelobes into every beam at their ranges: concentric rings
+  across the fan (docs/validation.md, M3 addendum). The beamformer matches Taylor theory to 0.1 dB, so this is the
+  configured array (−28 dB Taylor, UNVERIFIED), not a numerical artifact. Two inputs to check against a real
+  recording: the M750d's actual sidelobe level (−40 dB removes most of the rings), and the sand's backscatter near
+  normal incidence (Kirchhoff with rms slope 0.25 gives about −1 dB at normal incidence, likely 10 dB more than real
+  sand).
+- **Plume labels include the sidelobe leakage.** A pixel is plume when the bubbles carry most of its energy, so the
+  leakage arcs of a strong plume echo are labelled too (with the fan vertical, an annulus across all beams). Right for
+  "what the bubbles cause in the image"; a detector trained on it learns the arcs as plume. Option for M5: a second,
+  geometric label (pixels whose resolution cell contains bubbles).
 - **Plume intermittency.** The plume echo is steadier than real seep footage suggests (energy ±0.4 dB from ping to
   ping): constant flow, slow meander and small-scale OU turbulence only, no large eddies or bubble clusters. To check
   against a real recording (M2 goal) before tuning; candidate fix with the LBM flow field (M6).
@@ -205,6 +223,6 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
 - Is there a physical lab tank we want to match? If yes, set the `tank` preset to its exact dimensions and wall material.
 
 ## Current state / assumptions to confirm later
-- M0–M1 committed (git log). OceanSim cloned under `third_party/` for reference only.
-- Assumed values, all in config: concrete tank walls; seawater at 15 °C; leak of 3 bar g methane through a 1 mm hole; source level 206 dB and noise level 52 dB; sonar on a wall pole at 1.05 m height, pitched 15° down, looking at the pipe; camera just below it.
+- M0–M2.2 committed (git log). OceanSim cloned under `third_party/` for reference only.
+- Assumed values, all in config: concrete tank walls; seawater at 15 °C; leak of 3 bar g methane through a 1 mm hole; source level 206 dB and noise level 52 dB; sonar on a wall pole at 1.05 m height, pitched 15° down, looking at the pipe; camera just below it; two LED lamps of about 4000 cd each (USD sphere lights, 45° cones), no ambient light.
 - Not modelled: bubble coalescence and breakup, dissolution, tank recirculation, elastic echoes of the pipe, Doppler within a ping.

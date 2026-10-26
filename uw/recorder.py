@@ -4,7 +4,7 @@ Per ping (SensorSink "sonar"), compressed:
 - <seq>.npz: polar_db (float16, dB re 1 uPa, row 0 = range 0, NaN in the blind zone), plume_share_all_u8 and
   plume_share_direct_u8 (bubbles' energy share, uint8 = round(255 min(share, 1))), range_m, bearing_deg;
 - PNGs: polar (far range at the top), mask_all, mask_direct (the plume labels, share > sonar.plume_mask_threshold),
-  fan if recorder.fan_png;
+  fan if recorder.fan_png (or ``fan=True``: the ROS sink publishes it);
 - <seq>.json: the leak's range/bearing in the sonar frame, the gas flow, the sonar pose, the config hash, the seed.
 """
 from __future__ import annotations
@@ -40,12 +40,14 @@ def leak_position(scene) -> np.ndarray | None:
     return leak.vents.mean(0) if leak.buried else leak.hole
 
 
-def sonar_message(seq: int, stamp: float, ping, son, cfg: dict, scene, sim=None) -> Message:
+def sonar_message(seq: int, stamp: float, ping, son, cfg: dict, scene, sim=None, fan: bool | None = None) -> Message:
     son_cfg = get(cfg, "sonar")
     meta = {"sonar": {"position": [float(v) for v in son.position],
                       **{f"{k}_deg": son_cfg[f"{k}_deg"] for k in ("roll", "pitch", "yaw")},
                       "mode": son_cfg["mode"], "range": son.range, "focus": bool(son.focus),
-                      "noise_floor_db": son.nf_db, "display_db": son.display},
+                      "noise_floor_db": son.nf_db, "display_db": son.display,
+                      "frequency_hz": son.frequency, "sound_speed": son.c, "beamwidth_h_deg": son.beamwidth_deg,
+                      "fov_v_deg": son.fov_v_deg},
             "config_hash": config_hash(cfg), "seed": cfg["seed"],
             "plume_mask_threshold": son.mask_threshold,
             "plume_pixels": {"all": int(np.count_nonzero(ping.plume_mask_all)),
@@ -60,8 +62,8 @@ def sonar_message(seq: int, stamp: float, ping, son, cfg: dict, scene, sim=None)
                         "mass_flow_g_s": sim.source.mdot * 1e3 if sim is not None else 0.0}
     images = {"polar": ping.image[::-1], "mask_all": ping.plume_mask_all[::-1],
               "mask_direct": ping.plume_mask_direct[::-1]}
-    if get(cfg, "recorder.fan_png"):
-        images["fan"] = son.fan(ping.image)
+    if get(cfg, "recorder.fan_png") if fan is None else fan:
+        images["fan"] = son.fan(ping.image, width=int(get(cfg, "ros.fan_width")))
     return Message("sonar", seq, stamp,
                    arrays={"polar_db": ping.db.astype(np.float16), "plume_share_all_u8": _u8(ping.plume_share_all),
                            "plume_share_direct_u8": _u8(ping.plume_share_direct),

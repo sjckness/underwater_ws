@@ -42,7 +42,18 @@ def test_native_py_script(tmp_path):
     assert f"script s.py ['--profile', 'workstation'] {tmp_path}" in r.stdout
 
 
-def test_stub_and_unknown_commands():
-    r = _uw("sim", "--gui")
-    assert r.returncode == 1 and "not implemented until M3" in r.stderr
-    assert _uw("bogus").returncode == 2
+def test_unknown_command():
+    r = _uw("bogus")
+    assert r.returncode == 2 and "unknown command" in r.stderr
+
+
+def test_gui_gets_the_x_display(monkeypatch, tmp_path):
+    xauth = tmp_path / "xauth"
+    xauth.write_text("cookie")
+    monkeypatch.setenv("DISPLAY", ":7")
+    monkeypatch.setenv("XAUTHORITY", str(xauth))
+    extra = launcher.x11_args()
+    assert "DISPLAY=:7" in extra and f"{xauth}:/uw_xauth:ro" in extra and "XAUTHORITY=/uw_xauth" in extra
+    argv = launcher.docker_argv(launcher.runtime(), "sim", ["--gui"], tty=True, workdir=launcher.WS, name="n",
+                                extra=extra)
+    assert argv.index("DISPLAY=:7") < argv.index(launcher.runtime()["docker"]["service"])

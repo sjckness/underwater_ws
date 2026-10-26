@@ -22,6 +22,8 @@ sum with an energy-preserving pulse envelope over the two nearest range bins. Ou
 beam), raw dB re 1 uPa, TVG (k log10 R + 2 alpha R), 8-bit window above the beam noise floor, blind zone below the
 minimum range, and the bubbles' share of the energy as two plume labels: all bubble paths (direct, surface ghosts) and
 the direct path only.
+Echoes and the bubble extinction are summed in 64-bit fixed point, so a ping is bit-identical for the same config and
+seed (in any process: `sonar-only` and `sim` give the same images).
 Implemented (linus): StaticCache precomputed, SensorPose fixed, Beamformer fft_fresnel; the others are M6.
 """
 from __future__ import annotations
@@ -41,6 +43,12 @@ from .geometry import sonar_rotation, surface_materials
 
 PI = wp.constant(math.pi)
 FAR = 1.0e6
+# Echoes and extinction are summed in 64-bit fixed point: integer atomics give the same sum in any order, so a ping
+# is bit-identical from run to run and between `sonar-only` and `sim` (float atomics are not: their order varies).
+# Two's complement in uint64: Warp 1.8's atomic_add on int64 arrays does nothing, on uint64 it works.
+ACC_SCALE = wp.constant(1048576.0)      # [1/uPa]: 2^20, a resolution of 1e-6 uPa, sums up to 4e12 uPa
+EXT_SCALE = wp.constant(4294967296.0)   # [m]: 2^32, extinction 2.3e-10 1/m, up to 9e8 1/m
+FIX_MAX = wp.constant(4.0e18)
 
 
 @wp.struct
@@ -129,8 +137,20 @@ def u_of(p: Params, d: wp.vec3) -> float:
 
 
 @wp.func
-def deposit(grid: wp.array2d(dtype=wp.vec2), p: Params, path: float, u: float, amp: float, phase: float):
-    """Complex echo into the two nearest range bins (cos/sin envelope: energy kept) and u cells (linear)."""
+def fix(v: float, scale: float) -> wp.uint64:
+    return wp.uint64(wp.int64(wp.round(wp.clamp(v * scale, -FIX_MAX, FIX_MAX))))
+
+
+@wp.func
+def accumulate(grid: wp.array3d(dtype=wp.uint64), j: int, i: int, z: wp.vec2):
+    wp.atomic_add(grid, j, i, 0, fix(z[0], ACC_SCALE))
+    wp.atomic_add(grid, j, i, 1, fix(z[1], ACC_SCALE))
+
+
+@wp.func
+def deposit(grid: wp.array3d(dtype=wp.uint64), p: Params, path: float, u: float, amp: float, phase: float):
+    """Complex echo into the two nearest range bins (cos/sin envelope: energy kept) and u cells (linear), summed in
+    fixed point (``grid``: range bin x u x (re, im), 1 / ACC_SCALE uPa)."""
     x = 0.5 * path / p.dr
     y = u / p.du + 0.5 * float(p.n_u)
     j = int(wp.floor(x))
@@ -141,10 +161,10 @@ def deposit(grid: wp.array2d(dtype=wp.vec2), p: Params, path: float, u: float, a
         z = wp.vec2(wp.cos(phase), wp.sin(phase)) * amp
         a0 = z * wp.cos(0.5 * PI * f)
         a1 = z * wp.sin(0.5 * PI * f)
-        wp.atomic_add(grid, j, i, a0 * (1.0 - g))
-        wp.atomic_add(grid, j, i + 1, a0 * g)
-        wp.atomic_add(grid, j + 1, i, a1 * (1.0 - g))
-        wp.atomic_add(grid, j + 1, i + 1, a1 * g)
+        accumulate(grid, j, i, a0 * (1.0 - g))
+        accumulate(grid, j, i + 1, a0 * g)
+        accumulate(grid, j + 1, i, a1 * (1.0 - g))
+        accumulate(grid, j + 1, i + 1, a1 * g)
 
 
 @wp.func
@@ -255,8 +275,9 @@ def optical_depth(ext: wp.array3d(dtype=float), bx: Box, a: wp.vec3, b: wp.vec3)
 
 @wp.func
 def route(p: Params, bx: Box, x: wp.vec3, qt: wp.vec3, qr: wp.vec3, amp: float, phase: float, path: float, u: float,
-          store: int, grid: wp.array2d(dtype=wp.vec2), dyn_x: wp.array(dtype=wp.vec3), dyn_qt: wp.array(dtype=wp.vec3),
-          dyn_qr: wp.array(dtype=wp.vec3), dyn_v: wp.array(dtype=wp.vec4), dyn_count: wp.array(dtype=wp.int32)):
+          store: int, grid: wp.array3d(dtype=wp.uint64), dyn_x: wp.array(dtype=wp.vec3),
+          dyn_qt: wp.array(dtype=wp.vec3), dyn_qr: wp.array(dtype=wp.vec3), dyn_v: wp.array(dtype=wp.vec4),
+          dyn_count: wp.array(dtype=wp.int32)):
     """A static path's echo: into the static grid, or (when it crosses the plume region and is not too weak) into
     the list attenuated every ping. Pass 1 (store 0) only counts the list."""
     dyn = int(0)
@@ -276,7 +297,7 @@ def route(p: Params, bx: Box, x: wp.vec3, qt: wp.vec3, qr: wp.vec3, amp: float, 
 @wp.func
 def emit(p: Params, bx: Box, x: wp.vec3, n: wp.vec3, mu: float, s2: float, r0: float, coh: int, sh2: float,
          area: float, ph: float, dt: wp.vec3, drx: wp.vec3, lt: float, lr: float, gt: float, gr: float, refl: float,
-         u: float, qt: wp.vec3, qr: wp.vec3, store: int, grid: wp.array2d(dtype=wp.vec2),
+         u: float, qt: wp.vec3, qr: wp.vec3, store: int, grid: wp.array3d(dtype=wp.uint64),
          dyn_x: wp.array(dtype=wp.vec3), dyn_qt: wp.array(dtype=wp.vec3), dyn_qr: wp.array(dtype=wp.vec3),
          dyn_v: wp.array(dtype=wp.vec4), dyn_count: wp.array(dtype=wp.int32)):
     """One path of one surface scatterer (random phase). dt, drx: unit vectors from the scatterer toward where the
@@ -331,7 +352,7 @@ def tri_integral(t0: float, t1: float, t2: float, area: float) -> wp.vec2:
 @wp.func
 def emit_facet(p: Params, bx: Box, c: wp.vec3, n: wp.vec3, v0: wp.vec3, v1: wp.vec3, v2: wp.vec3, area: float,
                r0: float, sh2: float, dt: wp.vec3, drx: wp.vec3, lt: float, lr: float, gt: float, gr: float,
-               refl: float, u: float, qt: wp.vec3, qr: wp.vec3, store: int, grid: wp.array2d(dtype=wp.vec2),
+               refl: float, u: float, qt: wp.vec3, qr: wp.vec3, store: int, grid: wp.array3d(dtype=wp.uint64),
                dyn_x: wp.array(dtype=wp.vec3), dyn_qt: wp.array(dtype=wp.vec3), dyn_qr: wp.array(dtype=wp.vec3),
                dyn_v: wp.array(dtype=wp.vec4), dyn_count: wp.array(dtype=wp.int32)):
     """One path of one coherent facet: Kirchhoff (physical optics) field -(i k R0 / 4 pi) int n.(s_i + s_s)
@@ -355,7 +376,7 @@ def static_kernel(p: Params, pl: Planes, bx: Box, pts: wp.array(dtype=wp.vec3), 
                   area: wp.array(dtype=float), mat: wp.array(dtype=wp.int32), ph0: wp.array(dtype=float),
                   mu: wp.array(dtype=float), s2: wp.array(dtype=float), r0: wp.array(dtype=float),
                   coh: wp.array(dtype=wp.int32), sh2: wp.array(dtype=float), store: int,
-                  grid: wp.array2d(dtype=wp.vec2), dyn_x: wp.array(dtype=wp.vec3), dyn_qt: wp.array(dtype=wp.vec3),
+                  grid: wp.array3d(dtype=wp.uint64), dyn_x: wp.array(dtype=wp.vec3), dyn_qt: wp.array(dtype=wp.vec3),
                   dyn_qr: wp.array(dtype=wp.vec3), dyn_v: wp.array(dtype=wp.vec4), dyn_count: wp.array(dtype=wp.int32)):
     i = wp.tid()
     x = pts[i]
@@ -395,7 +416,7 @@ def static_kernel(p: Params, pl: Planes, bx: Box, pts: wp.array(dtype=wp.vec3), 
 @wp.kernel
 def facet_kernel(p: Params, pl: Planes, bx: Box, fv0: wp.array(dtype=wp.vec3), fv1: wp.array(dtype=wp.vec3),
                  fv2: wp.array(dtype=wp.vec3), fmat: wp.array(dtype=wp.int32), r0: wp.array(dtype=float),
-                 sh2: wp.array(dtype=float), store: int, grid: wp.array2d(dtype=wp.vec2),
+                 sh2: wp.array(dtype=float), store: int, grid: wp.array3d(dtype=wp.uint64),
                  dyn_x: wp.array(dtype=wp.vec3), dyn_qt: wp.array(dtype=wp.vec3), dyn_qr: wp.array(dtype=wp.vec3),
                  dyn_v: wp.array(dtype=wp.vec4), dyn_count: wp.array(dtype=wp.int32)):
     """Coherent facets over the same paths as the scatterers (direct, image paths of every boundary)."""
@@ -443,7 +464,7 @@ def facet_kernel(p: Params, pl: Planes, bx: Box, fv0: wp.array(dtype=wp.vec3), f
 @wp.kernel
 def dynamic_kernel(p: Params, bx: Box, ext: wp.array3d(dtype=float), dyn_x: wp.array(dtype=wp.vec3),
                    dyn_qt: wp.array(dtype=wp.vec3), dyn_qr: wp.array(dtype=wp.vec3), dyn_v: wp.array(dtype=wp.vec4),
-                   grid: wp.array2d(dtype=wp.vec2)):
+                   grid: wp.array3d(dtype=wp.uint64)):
     i = wp.tid()
     x = dyn_x[i]
     qt = dyn_qt[i]
@@ -476,7 +497,7 @@ def bubble_sigma_kernel(r: wp.array(dtype=float), alive: wp.array(dtype=wp.int32
 
 @wp.kernel
 def extinction_kernel(pos: wp.array(dtype=wp.vec3), sext: wp.array(dtype=float), bx: Box, inv_vol: float,
-                      ext: wp.array3d(dtype=float)):
+                      ext: wp.array3d(dtype=wp.uint64)):
     i = wp.tid()
     if sext[i] > 0.0:
         q = pos[i]
@@ -484,13 +505,19 @@ def extinction_kernel(pos: wp.array(dtype=wp.vec3), sext: wp.array(dtype=float),
         iy = int(wp.floor((q[1] - bx.lo[1]) / bx.vox))
         iz = int(wp.floor((q[2] - bx.lo[2]) / bx.vox))
         if ix >= 0 and iy >= 0 and iz >= 0 and ix < ext.shape[0] and iy < ext.shape[1] and iz < ext.shape[2]:
-            wp.atomic_add(ext, ix, iy, iz, sext[i] * inv_vol)
+            wp.atomic_add(ext, ix, iy, iz, fix(sext[i] * inv_vol, EXT_SCALE))
+
+
+@wp.kernel
+def resolve_ext_kernel(acc: wp.array3d(dtype=wp.uint64), ext: wp.array3d(dtype=float)):
+    x, y, z = wp.tid()
+    ext[x, y, z] = float(wp.int64(acc[x, y, z])) / EXT_SCALE
 
 
 @wp.kernel
 def point_kernel(p: Params, pl: Planes, n_planes: int, bx: Box, ext: wp.array3d(dtype=float),
-                 pos: wp.array(dtype=wp.vec3), sig: wp.array(dtype=float), grid: wp.array2d(dtype=wp.vec2),
-                 grid2: wp.array2d(dtype=wp.vec2), grid3: wp.array2d(dtype=wp.vec2), to2: int):
+                 pos: wp.array(dtype=wp.vec3), sig: wp.array(dtype=float), grid: wp.array3d(dtype=wp.uint64),
+                 grid2: wp.array3d(dtype=wp.uint64), grid3: wp.array3d(dtype=wp.uint64), to2: int):
     """Point scatterers with backscattering cross-section sig (bubbles, test targets): direct path and the image
     paths of the first n_planes boundaries; extinction along every leg; phase of a soft sphere (pi). With to2 the
     echoes also go into grid2 (all paths) and grid3 (direct path only): the plume labels."""
@@ -536,6 +563,16 @@ def point_kernel(p: Params, pl: Planes, n_planes: int, bx: Box, ext: wp.array3d(
 
 
 # ------------------------------------------------------------------------------ per-ping grid effects
+
+@wp.kernel
+def resolve_kernel(acc: wp.array3d(dtype=wp.uint64), grid: wp.array2d(dtype=wp.vec2), add_to: int):
+    """Fixed-point sums -> complex grid (set, or added to it)."""
+    r, c = wp.tid()
+    z = wp.vec2(float(wp.int64(acc[r, c, 0])), float(wp.int64(acc[r, c, 1]))) / ACC_SCALE
+    if add_to != 0:
+        z = z + grid[r, c]
+    grid[r, c] = z
+
 
 @wp.kernel
 def speckle_kernel(grid: wp.array2d(dtype=wp.vec2), phi: wp.array2d(dtype=float), a: float, q: float, seed: int):
@@ -730,6 +767,8 @@ class Sonar:
         self.rot = sonar_rotation(cfg)
         # beams
         self.theta_max = math.radians(float(md["fov_h_deg"]) / 2)
+        self.fov_v_deg = float(md["fov_v_deg"])
+        self.frequency = f
         n_b = int(md["beams"])
         self.sine = son["beam_spacing"] == "uniform_sine"
         if self.sine:
@@ -806,12 +845,15 @@ class Sonar:
             self.box.hi = wp.vec3(*plume["hi"])
             dims = tuple(int(math.ceil(v / self.box.vox)) for v in np.asarray(plume["hi"]) - np.asarray(plume["lo"]))
         self.ext = wp.zeros(dims, dtype=float, device=device)
+        self.ext_acc = wp.zeros(dims, dtype=wp.uint64, device=device)
         # grids
         shape = (self.n_r, self.n_u)
         self.static_grid = wp.zeros(shape, dtype=wp.vec2, device=device)
         self.grid = wp.zeros(shape, dtype=wp.vec2, device=device)
         self.grid_b = wp.zeros(shape, dtype=wp.vec2, device=device)
         self.grid_d = wp.zeros(shape, dtype=wp.vec2, device=device)
+        # fixed-point accumulators (range bin x u x re/im) behind grid, grid_b, grid_d
+        self.acc, self.acc_b, self.acc_d = (wp.zeros((*shape, 2), dtype=wp.uint64, device=device) for _ in range(3))
         self.phi = wp.zeros(shape, dtype=float, device=device)
         a = math.exp(-1.0 / (float(son["ping_rate_hz"]) * float(son["speckle_time_s"])))
         self.speckle = (a, float(son["speckle_sigma_rad"]) * math.sqrt(1 - a * a))
@@ -922,18 +964,19 @@ class Sonar:
         def run(store, dyn):
             if len(sc.pos):
                 wp.launch(static_kernel, dim=len(sc.pos), device=dev,
-                          inputs=[self.p, self.planes, self.box, *points, store, self.static_grid, *dyn, count])
+                          inputs=[self.p, self.planes, self.box, *points, store, self.acc, *dyn, count])
             if len(facets):
                 wp.launch(facet_kernel, dim=len(facets), device=dev,
-                          inputs=[self.p, self.planes, self.box, *tri, fmat, r0, sh2, store, self.static_grid, *dyn,
-                                  count])
+                          inputs=[self.p, self.planes, self.box, *tri, fmat, r0, sh2, store, self.acc, *dyn, count])
         # pass 1 counts the paths that cross the plume region, pass 2 stores them and deposits the rest
         run(0, empty)
         n_dyn = int(count.numpy()[0])
         self.dyn = [wp.zeros(max(n_dyn, 1), dtype=wp.vec3, device=dev) for _ in range(3)] + \
                    [wp.zeros(max(n_dyn, 1), dtype=wp.vec4, device=dev)]
         count.zero_()
+        self.acc.zero_()
         run(1, self.dyn)
+        wp.launch(resolve_kernel, dim=self.static_grid.shape, device=dev, inputs=[self.acc, self.static_grid, 0])
         wp.synchronize_device(dev)
         self.n_dyn = n_dyn
         self.n_scatterers = len(sc.pos)
@@ -1001,9 +1044,7 @@ class Sonar:
         self.seq += 1
         seed = self.seed + 104729 * self.seq
         wp.copy(self.grid, self.static_grid)
-        self.grid_b.zero_()
-        self.grid_d.zero_()
-        self.ext.zero_()
+        self.ext_acc.zero_()
         n_bub = 0
         if bubbles is not None:
             n_bub = bubbles.cap
@@ -1014,25 +1055,32 @@ class Sonar:
                               self.tables.dlog_ka, sig, sext])
             if self.box.on:
                 wp.launch(extinction_kernel, dim=n_bub, device=dev,
-                          inputs=[bubbles.pos, sext, self.box, 1.0 / self.box.vox ** 3, self.ext])
+                          inputs=[bubbles.pos, sext, self.box, 1.0 / self.box.vox ** 3, self.ext_acc])
+        wp.launch(resolve_ext_kernel, dim=self.ext.shape, device=dev, inputs=[self.ext_acc, self.ext])
         lap("extinction_grid")
         if self.n_dyn:
-            wp.launch(dynamic_kernel, dim=self.n_dyn, device=dev, inputs=[p, self.box, self.ext, *self.dyn, self.grid])
+            self.acc.zero_()
+            wp.launch(dynamic_kernel, dim=self.n_dyn, device=dev, inputs=[p, self.box, self.ext, *self.dyn, self.acc])
+            wp.launch(resolve_kernel, dim=self.grid.shape, device=dev, inputs=[self.acc, self.grid, 1])
         lap("plume_box_paths")
         if self.speckle[1] > 0:
             wp.launch(speckle_kernel, dim=self.grid.shape, device=dev,
                       inputs=[self.grid, self.phi, self.speckle[0], self.speckle[1], seed])
         lap("speckle_dynamics")
+        for a in (self.acc, self.acc_b, self.acc_d):
+            a.zero_()
         if n_bub:
             wp.launch(point_kernel, dim=n_bub, device=dev,
-                      inputs=[p, self.planes, self.n_point_planes, self.box, self.ext, bubbles.pos, sig, self.grid,
-                              self.grid_b, self.grid_d, 1])
+                      inputs=[p, self.planes, self.n_point_planes, self.box, self.ext, bubbles.pos, sig, self.acc,
+                              self.acc_b, self.acc_d, 1])
         if targets:
             tpos = wp.array(np.array([t[0] for t in targets], np.float32), dtype=wp.vec3, device=dev)
             tsig = wp.array(np.array([t[1] for t in targets], np.float32), dtype=float, device=dev)
             wp.launch(point_kernel, dim=len(targets), device=dev,
-                      inputs=[p, self.planes, self.n_point_planes, self.box, self.ext, tpos, tsig, self.grid,
-                              self.grid_b, self.grid_d, 0])
+                      inputs=[p, self.planes, self.n_point_planes, self.box, self.ext, tpos, tsig, self.acc,
+                              self.acc_b, self.acc_d, 0])
+        for a, g, add_to in ((self.acc, self.grid, 1), (self.acc_b, self.grid_b, 0), (self.acc_d, self.grid_d, 0)):
+            wp.launch(resolve_kernel, dim=g.shape, device=dev, inputs=[a, g, add_to])
         lap("bubbles_targets")
         wp.launch(reverb_kernel, dim=self.grid.shape, device=dev, inputs=[self.grid, self.rev, seed + 1])
         lap("reverberation")

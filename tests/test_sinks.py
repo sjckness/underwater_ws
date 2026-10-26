@@ -37,7 +37,13 @@ def test_file_sink_writes_a_dataset(tmp_path):
     assert manifest["name"] == "t" and manifest["sensors"]["sonar"]["count"] == 2
 
 
-@pytest.mark.parametrize("kind, milestone", [("ros", "M3"), ("zenoh", "M7")])
-def test_live_sinks_are_later_milestones(kind, milestone):
-    with pytest.raises(NotImplementedError, match=milestone):
-        sinks.make_sink(kind)
+def test_zenoh_sink_is_a_later_milestone():
+    with pytest.raises(NotImplementedError, match="M7"):
+        sinks.make_sink("zenoh")
+
+
+def test_file_sink_ignores_time_and_frames(tmp_path):
+    with sinks.make_sink("file", out_dir=tmp_path) as sink:
+        sink.clock(1.0)
+        sink.static_transforms(0.0, [("tank", "oculus", np.eye(3), (0.0, 0.0, 1.0))])
+    assert not (tmp_path / "clock").exists()

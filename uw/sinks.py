@@ -1,7 +1,7 @@
 """Where sensor outputs go (plan: SensorSink = file | ros | zenoh; later oculus_emulator).
 
-A sensor produces ``Message``s; a sink delivers them. ``file`` writes a dataset; ``ros`` (M3) and ``zenoh`` (M7)
-publish live.
+A sensor produces ``Message``s; a sink delivers them. ``file`` writes a dataset; ``ros`` publishes live through the
+Isaac ROS bridge's internal Jazzy (uw/ros_bridge.py); ``zenoh`` (M7) will.
 """
 from __future__ import annotations
 
@@ -29,6 +29,12 @@ class SensorSink:
     def publish(self, msg: Message) -> None:
         raise NotImplementedError
 
+    def clock(self, t: float) -> None:
+        """Sim time; only live sinks use it."""
+
+    def static_transforms(self, t: float, transforms: list) -> None:
+        """Fixed frames [(parent, child, rotation 3x3, translation)]; only live sinks use them."""
+
     def close(self) -> None:
         pass
 
@@ -37,6 +43,13 @@ class SensorSink:
 
     def __exit__(self, *exc):
         self.close()
+
+
+class NullSink(SensorSink):
+    """Delivers nothing (e.g. a GUI session without ROS)."""
+
+    def publish(self, msg: Message) -> None:
+        pass
 
 
 class FileSink(SensorSink):
@@ -74,13 +87,16 @@ class FileSink(SensorSink):
 def make_sink(kind: str, **kwargs) -> SensorSink:
     if kind == "file":
         return FileSink(**kwargs)
+    if kind == "none":
+        return NullSink()
     if kind == "ros":
-        raise NotImplementedError("SensorSink 'ros' is milestone M3")
+        from .ros_bridge import RosSink
+        return RosSink(**kwargs)
     if kind == "zenoh":
         raise NotImplementedError("SensorSink 'zenoh' is milestone M7")
     if kind == "oculus_emulator":
         raise NotImplementedError("SensorSink 'oculus_emulator' is not scheduled yet (after M7)")
-    raise ValueError(f"unknown SensorSink {kind!r}: file | ros | zenoh | oculus_emulator")
+    raise ValueError(f"unknown SensorSink {kind!r}: file | ros | none | zenoh | oculus_emulator")
 
 
 def write_png(path, img: np.ndarray, level: int = 3) -> None:
