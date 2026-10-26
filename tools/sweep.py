@@ -41,6 +41,7 @@ from uw import config, geometry, pose  # noqa: E402
 
 F1TENTH = re.compile(r"sim_isaac\.sh|phase5_bringup|jazzy_parity|isaac_ws/launch\.sh|f1t_isaac")
 CHUNK = 20                       # scenarios per worker process (then a fresh one: no memory creep)
+MIN_FREE_SYSTEM_GB = 5.0         # pause below this on /, whatever disk the dataset is on (container, caches, logs)
 
 
 # ----------------------------------------------------------------------------------------------- sampling
@@ -447,9 +448,14 @@ def run(sw: dict, root: Path, workers: int, min_free_root_gb: float) -> int:
         why = f1tenth_active()
         if not why and (root / "PAUSE").exists():
             why = "PAUSE file"
-        free = shutil.disk_usage("/").free / 2 ** 30
+        # The dataset may live on another disk than the repo (--root): guard the one being filled, and keep a
+        # smaller guard on / for the container, the Warp cache and the logs of the launcher.
+        free = shutil.disk_usage(root).free / 2 ** 30
         if not why and free < min_free_root_gb:
-            why = f"only {free:.0f} GB free on /"
+            why = f"only {free:.0f} GB free on {root}"
+        free_sys = shutil.disk_usage("/").free / 2 ** 30
+        if not why and free_sys < MIN_FREE_SYSTEM_GB:
+            why = f"only {free_sys:.0f} GB free on /"
         if why:
             if not paused:
                 print(f"{time.strftime('%H:%M:%S')} pause: {why}", flush=True)
@@ -620,7 +626,8 @@ def main() -> int:
     ap.add_argument("--root", default="")
     ap.add_argument("--workers", type=int, default=0, help="default: the sweep file's")
     ap.add_argument("--max-scenarios", type=int, default=CHUNK)
-    ap.add_argument("--min-free-root-gb", type=float, default=27.0)
+    ap.add_argument("--min-free-root-gb", type=float, default=27.0,
+                    help="pause while the dataset root's disk has less than this free")
     args = ap.parse_args()
     if args.command == "worker":
         return worker(Path(args.root), args.max_scenarios)
