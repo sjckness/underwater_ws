@@ -76,6 +76,9 @@ def main(argv: list[str]) -> int:
             return run_py(args)
         if cmd == "test":
             return run_test(args)
+        if cmd == "sonar-only":
+            from . import sonar_only
+            return sonar_only.main(args)
     except KeyboardInterrupt:
         print("uw: interrupted", file=sys.stderr)
         return 130

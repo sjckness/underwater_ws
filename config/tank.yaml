@@ -100,22 +100,40 @@ materials:
   glass:        {Z: 13.0, lambert_db: -40.0, rms_slope: 0.01, color: [0.7, 0.8, 0.8],    roughness: 0.05, metallic: 0.0}
 
 sonar:
-  model: Oculus M750d           # Blueprint Subsea. Datasheet values quoted from memory: verify before trusting
+  model: Oculus M750d           # Blueprint Subsea. Values marked UNVERIFIED are from memory: check the datasheet
   mode: lf                      # lf | hf (modes below)
   position: [0.10, 1.50, 1.05]  # acoustic centre, on a pole at the -x wall
   rpy_deg: [0.0, 15.0, 0.0]     # roll, pitch (positive = nose down), yaw; looks along +x
   range: 3.5                    # range setting [m]
   ping_rate_hz: 10.0
-  modes:
-    lf: {frequency_hz: 750000.0, fov_h_deg: 130.0, fov_v_deg: 20.0, beams: 512, beamwidth_h_deg: 1.0, range_resolution: 0.004}
-    hf: {frequency_hz: 1200000.0, fov_h_deg: 70.0, fov_v_deg: 12.0, beams: 512, beamwidth_h_deg: 0.6, range_resolution: 0.0025}
-  array_taper_sll_db: -28.0     # Taylor taper sidelobe level of the receive array
+  modes:                        # UNVERIFIED — datasheet: frequency, fan, beam count and width, range resolution, min range
+    lf: {frequency_hz: 750000.0, fov_h_deg: 130.0, fov_v_deg: 20.0, beams: 512, beamwidth_h_deg: 1.0, range_resolution: 0.004, min_range: 0.1}
+    hf: {frequency_hz: 1200000.0, fov_h_deg: 70.0, fov_v_deg: 12.0, beams: 512, beamwidth_h_deg: 0.6, range_resolution: 0.0025, min_range: 0.1}
+  beam_spacing: uniform_angle   # uniform_angle | uniform_sine (UNVERIFIED — datasheet)
+  focus: true                   # dynamic near-field focusing of the receive array (UNVERIFIED — datasheet / Blueprint)
+  array_taper_sll_db: -28.0     # Taylor taper sidelobe level of the receive array (UNVERIFIED — datasheet)
+  taylor_nbar: 4
+  fan_edge_db: -3.0             # two-way horizontal gain at the fan edges (UNVERIFIED — datasheet)
+  vertical_edge_db: -3.0        # two-way vertical gain at +-fov_v/2 (sinc apertures; UNVERIFIED — datasheet)
   source_level_db: 206.0        # dB re 1 uPa @ 1 m (assumed; only sets the SNR together with noise_level_db)
-  noise_level_db: 52.0          # receiver noise referred to the input, dB re 1 uPa over the band (assumed)
+  noise_level_db: 52.0          # receiver noise spectrum level per element, dB re 1 uPa^2/Hz, over the band c/(2 dr)
+                                # and reduced by the array gain in the beams (assumed)
   tvg_db_per_decade: 30.0       # TVG: k log10(R) + 2 alpha R (30: area scattering)
-  display_db: [-6.0, 54.0]      # dB window above the noise floor mapped to 0..255
-  ringdown_m: 0.08              # transducer ring-down band at near range
+  display_db: [0.0, 80.0]       # dB window above the beam noise floor mapped to 0..255 (a display gain, not physics)
+  ringdown_db: 60.0             # transducer ring-down at zero range, dB above the beam noise floor (UNVERIFIED — datasheet)
+  ringdown_m: 0.08              # ring-down e-folding length (UNVERIFIED — datasheet)
+  volume_sv_db: -75.0           # volume backscattering strength of the tank water [dB re 1/m] (assumed)
+  surface_roughness_m: 0.0002   # rms height of the calm water surface (assumed)
+  boil_roughness_m: 0.005       # rms height where the plume breaks the surface (assumed)
   multipath: [surface, walls]   # specular image paths: surface (pressure release), walls (Z of the wall material)
+  receiver_noise: true          # switches for tests
+  reverberation: true
+  ringdown: true
+  speckle_sigma_rad: 0.1        # speckle dynamics: std of each cell's slow phase walk (assumed); 0 = frozen speckle
+  speckle_time_s: 2.0           # its correlation time (assumed)
+  extinction_voxel: 0.02        # bubble extinction grid [m]
+  u_grid: 2048                  # direction-cosine cells of the FFT beamformer (aperture sampled at half a wavelength)
+  plume_mask_threshold: 0.5     # dataset label: a pixel is plume when the bubbles carry more than this share of its energy
   scatterer_spacing: 0.002      # surface sampling [m] for the acoustic scatterers (fixed in the world: frozen speckle);
                                 # the base: scatterer_spacing_mode adaptive (profile) coarsens it far from the sonar
 

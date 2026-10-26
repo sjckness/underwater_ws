@@ -15,7 +15,7 @@ Linux it runs everything in the Isaac Sim container (image `isaac_ws_devcontaine
 | `python -m uw py tools/x.py [args]` | runs a script with Isaac's Python 3.11, Warp 1.8.2, torch, numpy; `py -m mod` and `py -c code` work too |
 | `python -m uw test [pytest args]` | pytest on `tests/` in the container, Warp tests on the GPU |
 | `python -m uw sim [--gui]` | full Isaac app with camera and ROS 2: not implemented until M3 |
-| `python -m uw sonar-only` | Warp-only bubbles + sonar without RTX, for datasets: not implemented until M2 |
+| `python -m uw sonar-only --pings N --out output/datasets/NAME` | Warp-only bubbles + sonar without RTX: writes a dataset |
 
 How commands run is set in `config/runtime.yaml`: `mode: docker` (Linux) or `native` (a local Python, e.g. a
 Windows venv with `warp-lang`, or a native Isaac install), and the install paths. Override per machine in
@@ -23,7 +23,7 @@ Windows venv with `warp-lang`, or a native Isaac install), and the install paths
 
 On the host, `pytest` runs the same tests without Warp (pure Python/numpy); the Warp tests are skipped there.
 
-Tools (run with `python -m uw py`): `tools/plume_preview.py` simulates the bubble plume for both pipe presets and writes side/top views, centreline profiles against the literature and a stats file. What the models were checked against, and where they disagree: [docs/validation.md](docs/validation.md).
+Tools (run with `python -m uw py`): `tools/plume_preview.py` (bubble plume, both pipe presets), `tools/sonar_preview.py` (sonar images, static and with the plume, focused and unfocused, timing), `tools/compare_real.py` (speckle, sidelobes, blind zone, TVG profile of a recording). What the models were checked against, and where they disagree: [docs/validation.md](docs/validation.md).
 
 The first `python -m uw test` installs pytest 7.4.4 (the host's version) into `~/.cache/uw_pydeps`, which needs network
 once; the image has no pytest.
@@ -61,8 +61,9 @@ message, `manifest.json`); `ros` (M3) and `zenoh` (M7) will publish live.
 
 ## Where things go
 
-- `output/`: everything the tools write; not in git. `output/plume_preview/<preset>/`: plume previews;
-  `output/cache/`: acoustic scatterers, one npz per geometry + spacing (rebuilt automatically when those change).
+- `output/`: everything the tools write; not in git. `output/plume_preview/<preset>/`, `output/sonar_preview/<preset>/`:
+  previews; `output/datasets/<name>/`: `sonar-only` datasets (per ping: raw dB polar npz, polar/fan/mask PNG, JSON;
+  `manifest.json`); `output/cache/`: acoustic scatterers, one npz per geometry + spacing (rebuilt automatically).
 - `~/.cache/uw_warp`: Warp kernel cache (not `~/.cache/isaac-sim/cache`, which is root-owned).
 - `~/.cache/uw_pydeps`: pytest for the container.
 

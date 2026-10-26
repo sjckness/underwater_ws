@@ -4,7 +4,7 @@
 # Backends marked (M6) are stubs that raise a clear error until then.
 profile:
   name: linus
-  # tank size is a preset (--preset tank | basin); basin only with adaptive scatterer spacing, from M2
+  # tank size is a preset (--preset tank | basin); basin needs the adaptive scatterer spacing (enabled at M2)
 
 sonar:
   scatterer_spacing_mode: adaptive    # adaptive: sonar.scatterer_spacing near the sonar, coarser with the

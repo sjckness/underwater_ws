@@ -1,6 +1,6 @@
 # Underwater gas-leak tank in Isaac Sim: FLS (+ camera) simulation
 
-> **Status (2026-10-26):** M0–M1 done (infra and launcher; scene, bubble plume, adaptive scatterers; checks in `docs/validation.md`). Next: M2 sonar standalone.
+> **Status (2026-10-26):** M0–M2 done (infra and launcher; scene, bubble plume, adaptive scatterers; bubble scattering, sonar standalone, minimal recorder; checks in `docs/validation.md`). Next: M3 Isaac integration.
 > Runs on **linus** for now.
 
 ## Changes in this revision (2026-10-26)
@@ -98,7 +98,7 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
    - Buried preset: no jet, larger bubbles, 3 sediment vents with intermittent OU switching.
    - Implementation: GPU ring buffer of 150 k bubbles, 240 Hz substeps, 12 s warm-up.
 4. **Bubble acoustic scattering** (`scattering.py`, new):
-   - Regime: at 750 kHz, a = 0.5–3 mm gives ka ≈ 1.5–10 (transition). Model: high-frequency fluid sphere (gas in water) using the Thuraisingham / Ainslie–Leighton closed-form approximation to Anderson's modal solution, valid for ka from ≪1 to ≫1. Pre-tabulated σ_bs(ka) and σ_ext(ka) as 1-D lookup textures (computed once, on the host, from the modal series for verification).
+   - Regime: at 750 kHz, a = 0.5–3 mm gives ka ≈ 1.5–10 (transition). Model: Stanton (1989) high-pass closed form for a gas-filled sphere (Rayleigh to geometric regime; Thuraisingham / Ainslie–Leighton only cover ka ≲ 1), checked against Anderson's modal series; extinction from a fit to the modal series. Pre-tabulated σ_bs(ka) and σ_ext(ka) as 1-D lookup textures (computed once, on the host, from the modal series for verification).
    - Extinction: σ_ext(ka) from the same model (tends to 2πa² only for ka≫1).
    - Resonance term kept in the formula but negligible here; no special handling.
    - Non-sphericity: equivalent-volume radius; optional aspect-dependent correction later.

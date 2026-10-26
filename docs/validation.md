@@ -173,3 +173,122 @@ areas and expected backscatter are kept:
 | Visible Lambert energy vs fixed | | −0.13 % | |
 
 Fixed 2 mm spacing in the basin would need about 16.5 M points.
+
+## M2: bubble scattering and the sonar (2026-10-26, profile `linus`, LF mode)
+
+### Bubble scattering (`uw/scattering.py`, `tests/test_scattering.py`)
+
+Reference: Anderson (1950) modal series for a fluid sphere, gas in water (methane at 1.27 bar, 15 °C:
+g = ρ_gas/ρ_w = 8.3·10⁻⁴, h = c_gas/c_w = 0.294). At 750 kHz the bubbles have ka = 1.6–16.
+
+Runtime closed forms, tabulated against ka for the GPU:
+- **Backscatter: Stanton (1989)** high-pass model for a gas-filled sphere, σ_bs = a² (ka)⁴ α² G / (1 + 4 (ka)⁴ α² /
+  (R² F)), with α = (1 − g h²)/(3 g h²) + (1 − g)/(1 + 2g), R = (gh − 1)/(gh + 1), F = 1 + 0.5 (ka)^−0.75 and
+  G = 1 + 85 exp(−5·10⁵ (ka − 0.0135)²). Constants as implemented in hydrac. Thuraisingham (1997) and Ainslie &
+  Leighton (2011) correct the resonance region (ka ≲ 1) and do not reach the geometric regime where these bubbles are.
+- **Extinction:** a two-parameter fit to the modal series, Q = σ_ext/(πa²) = 2 + 2/(1 + (ka/2.24)^0.95). I found no
+  published closed form covering ka 0.1–20.
+
+| | mean abs. error | bias | 95 % within | max |
+|---|---|---|---|---|
+| σ_bs, Stanton vs modal, ka 0.1–20 | 0.68 dB | −0.21 dB | 1.66 dB | 11.9 dB at ka = 2.14 (a narrow interior resonance of the ideal sphere) |
+| σ_ext, fit vs modal, ka 0.1–20 | 0.10 dB | | | 3.8 dB (same kind of spike) |
+
+Limits:
+- Modal σ_bs/a², averaged over ka 60–100, is 0.25 ± 5 %; Stanton at ka = 1000 gives 0.250.
+- Modal σ_ext/(πa²) at ka = 1000 is 2.02 (extinction paradox: 2).
+
+The drafts had no TS or σ_ext formulas to remove; the plan's note referred to an earlier draft.
+
+### Sonar model (`uw/sonar.py`, `tests/gpu/test_sonar.py`)
+
+| Check | Measured | Expected |
+|---|---|---|
+| Point target, 2 m, TS −30 dB, beam 300 | range bin 500, beam 300; level 162.98 dB re 1 µPa | bin 500, beam 300; SL − 40 log R − 2αR + TS + fan gain = 162.98 dB |
+| Beam pattern, 30 m, unfocused (4× the Fraunhofer distance) | −3 dB width 0.982°, first sidelobe −27.6 dB | 1°, −28 dB (Taylor, n̄ = 4) |
+| Near field, 1 m, focused | 0.980° | ≈ 1° |
+| Near field, 1 m, unfocused | 3.825° | 3.833° (exact spherical wavefront at the 127 elements) |
+| Sand speckle, flat sand, contrast std/mean of I / local mean | fixed 0.984, adaptive 0.983 (tank, 2.15–2.8 m); adaptive 0.989 (basin, 4–6 m) | 1 (Rayleigh); ⟨I²⟩/⟨I⟩² 1.97–1.98 (Rayleigh: 2) |
+| Surface ghosts, sonar 0.3 m below a calm surface, point 2 m ahead | bins 511 and 522; +1.22 dB and −9.61 dB re direct | bins 511 and 522; +1.22 dB, −9.59 dB (image geometry, vertical sinc) |
+| Blind zone | rows below 0.1 m all zero / NaN, with noise and ring-down on | nothing returned |
+
+- **Array:** 127 half-wavelength elements, L = 0.127 m, design width 0.993°, Fraunhofer distance L²/λ = 8.0 m. The
+  whole tank is in the near field.
+- **Basin enabled.** Adaptive spacing passes the speckle test where it is coarsest (4–6 m, about 6 mm, 9 scatterers
+  per resolution cell).
+- **Speckle test region:** |bearing| < 25°. Beyond about 32° the side walls are in the window and the contrast
+  rises to 1.2 (bright lines, not under-sampled speckle).
+
+### Parameters UNVERIFIED — datasheet (`config/tank.yaml`, sonar section)
+
+| Parameter | Value used |
+|---|---|
+| Frequencies | LF 750 kHz, HF 1.2 MHz |
+| Fan | 130° × 20° (LF), 70° × 12° (HF) |
+| Beams | 512 |
+| −3 dB beam width | 1.0° (LF), 0.6° (HF) |
+| Range resolution | 4 mm (LF), 2.5 mm (HF) |
+| Minimum range (blind zone) | 0.1 m |
+| Beam spacing | uniform in angle |
+| Near-field focusing | `focus: true` |
+| Receive taper | Taylor, −28 dB |
+| Horizontal gain at the fan edges | two-way −3 dB |
+| Vertical aperture | uniform (sinc), two-way −3 dB at ±fov_v/2 |
+| Ring-down | 60 dB above the beam noise floor at range 0, e-folding 0.08 m |
+
+Assumed (not datasheet values):
+
+| Parameter | Value used | Note |
+|---|---|---|
+| Source level | 206 dB re 1 µPa @ 1 m | |
+| Receiver noise | 52 dB re 1 µPa²/Hz | Read as a spectrum level per element over the band c/(2Δr) = 188 kHz. The beams then have an 84.3 dB noise floor, and sand is 25–40 dB above it. Read as a band level, sand would sit about 75 dB above the noise. |
+| Volume backscattering | −75 dB re 1/m | Below the noise in the tank. |
+| Calm surface | 0.2 mm rms | |
+| Plume boil | 5 mm rms | |
+| Speckle dynamics | 0.1 rad, 2 s | Tests use 0. |
+| Display window | 0–80 dB above the noise floor | Display gain only. |
+
+### Performance (linus, RTX 5050, warm kernel cache; `tools/sonar_preview.py`, `python -m uw sonar-only`)
+
+| | scatterers | plume-box paths | static precompute | sonar ping, mean (max) | bubble step per ping | peak VRAM |
+|---|---|---|---|---|---|---|
+| tank, exposed | 2.53 M | 4.9 M | 0.12 s | 32 ms (36) | 16 ms | 0.65 GB |
+| tank, buried | 2.41 M | 6.0 M | 0.12 s | 37 ms (43) | 17 ms | 0.65 GB |
+| basin, exposed | 4.75 M | 12.1 M | 0.3 s | 86 ms (94) | 16 ms | 1.3 GB |
+| basin, buried | 4.62 M | 14.2 M | 0.3 s | 97 ms (107) | 16 ms | 1.3 GB |
+
+- **Tank:** within the 100 ms budget, with or without the bubble step.
+- **Basin:** the sonar ping alone is within budget on average, but with the bubble step it is 2–13 % over. The
+  time goes into the per-ping extinction of the static paths that cross the plume region, 74–85 ms in the basin.
+  Fidelity was not reduced.
+- **Possible fixes**, not done: skip plume-box paths whose amplitude is far below the noise floor, or march the
+  extinction at one sample per voxel instead of two.
+- **First run after a change to `uw/sonar.py`:** Warp recompiles the kernels (about 15–35 s).
+- **Datasets:** writing a ping (compressed npz + 3 PNGs) takes about 100 ms on the CPU. The 200-ping smoke dataset
+  took 30 s.
+
+### Physically questionable in the images (open)
+
+- **Uniform vertical aperture.** Strong banding at 0.8–1.5 m (vertical sidelobes on the sand) and a bright nadir
+  line at the sonar's altitude (0.75 m). Both follow from the sinc pattern the plan specifies; a real transducer is
+  tapered and baffled, so these are probably too strong. To decide with the datasheet or a real recording.
+- **Sidelobe arcs across the whole fan.** They come from specular returns of the far wall, the tank corners and the
+  pipe. The levels are physical for smooth concrete (the wall acts as a mirror, about 187 dB re 1 µPa), but the far
+  Taylor sidelobes of a real array may be lower than the ideal taper.
+- **Specular glints.** The pipe and walls are built from many random-phase facets: their energy is right, but their
+  coherence is that of speckle rather than a mirror.
+- **Surface backscatter.** The calm surface is only a mirror (image paths); it scatters nothing itself.
+- **Bubble image paths** use the backscattering cross-section for bistatic angles too.
+- **Plume label** (bubble energy share > 0.5): it includes the upper plume seen through the vertical sidelobes and
+  its surface-path ghosts, in the plume's own shadow, out to 3.4 m. That is consistent with the definition, but a
+  stricter label (e.g. also above the noise floor + x dB) may suit detector training better.
+
+### Real-data comparison (skeleton, `tools/compare_real.py`, on our 200-ping smoke dataset)
+
+| Measure | Result | Note |
+|---|---|---|
+| Background, 2.15–2.8 m, ±25° | contrast 1.99, K shape 0.7 | The real tank with ripples, rocks and the plume shadow is K-distributed; pure speckle is the flat-sand test above. |
+| Blind zone | 0.100 m | |
+| Ring-down decay | −106 dB/m | −109 dB/m configured (e-folding 0.08 m). |
+| Brightest target | the pipe | An extended target, so its "sidelobe" is meaningless here; `--target` selects a window holding a point target (e.g. a calibration sphere in a real recording). |
+| Level vs range | | Shaped by the vertical beam pattern on the sand. Compare the curves with a real recording, not the fit constants. |

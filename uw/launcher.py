@@ -26,7 +26,7 @@ from .config import merge
 
 WS = Path(__file__).resolve().parents[1]
 COMMANDS = ("py", "test", "sim", "sonar-only")
-STUBS = {"sim": "M3", "sonar-only": "M2"}       # command: milestone that implements it
+STUBS = {"sim": "M3"}                           # command: milestone that implements it
 
 # In the image: what python.sh does, except that Python is exec'd so that signals reach it ($0 = Isaac root).
 BOOT = ('source "$0/setup_python_env.sh"; '
