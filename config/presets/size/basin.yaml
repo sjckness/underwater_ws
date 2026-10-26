@@ -1,0 +1,26 @@
+# Size preset "basin": 8 x 5 x 4 m. Ranges beyond the ~5 m Fraunhofer distance (far-field check), a longer
+# plume rise, less wall clutter. The tank scene in a bigger container: pipe, leak, sensors and lamps keep their
+# places relative to each other, centred across the 5 m width.
+# Provisional: enabled at M2, once adaptive scatterer spacing passes the speckle test (fixed 2 mm spacing would
+# need 20 M+ scatterers here). tank.yaml sets the same keys.
+tank:
+  size: [8.0, 5.0, 4.0]
+  water_level: 3.9
+
+pipe:
+  flanges_at: [1.55, 3.40]
+
+leak:
+  position_along: 2.45
+
+lights:
+  lamps:
+    - {position: [0.12, 2.30, 1.15], target: [1.7, 2.4, 0.35], intensity: 60000.0, cone_deg: 45.0, color: [1.0, 0.97, 0.9]}
+    - {position: [0.12, 2.70, 1.15], target: [1.7, 2.6, 0.35], intensity: 60000.0, cone_deg: 45.0, color: [1.0, 0.97, 0.9]}
+
+sonar:
+  position: [0.10, 2.50, 1.05]
+  range: 8.0                          # up to the far wall
+
+camera:
+  position: [0.10, 2.50, 0.95]

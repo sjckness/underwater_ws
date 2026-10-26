@@ -1,0 +1,27 @@
+# Hardware profile "workstation": e.g. RTX 4090 24 GB, 500 GB RAM. Same code as linus with bigger parameters
+# or alternative backends; until an alternative backend exists (M6) this profile keeps the default one and
+# names the option. Merged over config/tank.yaml, before presets and --set.
+# linus.yaml sets exactly the same keys (tests/test_config.py checks it).
+profile:
+  name: workstation
+  # tank size is a preset (--preset tank | basin); open seafloor patch later (M6)
+
+sonar:
+  scatterer_spacing_mode: fixed       # sonar.scatterer_spacing (2 mm) everywhere
+  pose_source: fixed                  # or trajectory: mobile sonar (M6)
+  static_cache: precomputed           # none with a mobile sonar (M6)
+  beamformer: fft_fresnel             # or element_das (M6)
+  ping_budget_ms:
+    static: 100
+    mobile: 300
+
+plume:
+  flow_field: integral                # or lbm (M6)
+  max_bubbles: 1000000                # 2 M once coalescence/breakup exist
+
+camera:
+  renderer: rtx_post                  # or rtx_volume (M6)
+
+dataset:
+  processes: 4                        # 3-4 parallel sonar-only processes
+  pose_cache_in_ram: true

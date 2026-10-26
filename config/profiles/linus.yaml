@@ -1,0 +1,29 @@
+# Hardware profile "linus": RTX 5050 8 GB. The default, and the machine everything must run on (slower and
+# smaller if need be). Merged over config/tank.yaml, before presets and --set.
+# workstation.yaml sets exactly the same keys (tests/test_config.py checks it).
+# Backends marked (M6) are stubs that raise a clear error until then.
+profile:
+  name: linus
+  # tank size is a preset (--preset tank | basin); basin only with adaptive scatterer spacing, from M2
+
+sonar:
+  scatterer_spacing_mode: adaptive    # adaptive: sonar.scatterer_spacing near the sonar, coarser with the
+                                      #   resolution cell further out | fixed: sonar.scatterer_spacing everywhere
+  pose_source: fixed                  # SensorPose: fixed | trajectory (mobile sonar, M6)
+  static_cache: precomputed           # StaticCache: precomputed | none (recompute every ping, needed when mobile)
+  beamformer: fft_fresnel             # Beamformer: fft_fresnel | element_das (64-128 channels, M6)
+  ping_budget_ms:
+    static: 100
+    mobile: null                      # no limit: mobile / element-level take >= 1 s/ping, offline datasets only
+
+plume:
+  flow_field: integral                # FlowField: integral | lbm (Warp, 2-way coupled, 1 cm cells, M6)
+  max_bubbles: 150000                 # GPU bubble pool
+
+camera:
+  renderer: rtx_post                  # rtx_post: RTX + Warp underwater post-process
+                                      #   | rtx_volume: RTX path tracing with a volumetric medium (M6)
+
+dataset:
+  processes: 1                        # parallel sonar-only processes
+  pose_cache_in_ram: false

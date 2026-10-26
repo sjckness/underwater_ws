@@ -1,0 +1,4 @@
+# Pipe preset "exposed": lying on the sand, crown 12 cm above it (~30 % embedded), sand banked against it.
+# The default: config/tank.yaml has this value. buried.yaml sets the same keys.
+pipe:
+  cover: -0.12

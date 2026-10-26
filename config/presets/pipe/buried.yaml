@@ -1,0 +1,4 @@
+# Pipe preset "buried": 5 cm of sand over the crown. The gas reaches the sand surface through sediment vents
+# (leak.vents, pockmarks): no jet, larger bubbles. Sonar penetration into the sediment: M5.
+pipe:
+  cover: 0.05

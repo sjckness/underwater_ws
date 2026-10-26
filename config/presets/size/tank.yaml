@@ -1,0 +1,23 @@
+# Size preset "tank": 3 x 3 x 3 m lab test tank, the sonar's near-field regime; fastest.
+# The default: config/tank.yaml has these values (tests/test_config.py checks it). basin.yaml sets the same keys.
+tank:
+  size: [3.0, 3.0, 3.0]
+  water_level: 2.9
+
+pipe:
+  flanges_at: [0.55, 2.40]
+
+leak:
+  position_along: 1.45
+
+lights:
+  lamps:
+    - {position: [0.12, 1.30, 1.15], target: [1.7, 1.4, 0.35], intensity: 60000.0, cone_deg: 45.0, color: [1.0, 0.97, 0.9]}
+    - {position: [0.12, 1.70, 1.15], target: [1.7, 1.6, 0.35], intensity: 60000.0, cone_deg: 45.0, color: [1.0, 0.97, 0.9]}
+
+sonar:
+  position: [0.10, 1.50, 1.05]
+  range: 3.5
+
+camera:
+  position: [0.10, 1.50, 0.95]

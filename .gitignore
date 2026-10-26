@@ -1,0 +1,11 @@
+# tool and dataset outputs
+output/
+# scatterer caches (regenerated from the config)
+*.npz
+# reference checkouts (OceanSim), cloned by hand
+third_party/
+# caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.cache/

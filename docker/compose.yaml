@@ -1,0 +1,40 @@
+# Isaac Sim 5.1 container for the underwater tank sim. Start it through scripts/uw.sh, which sets UW_WS,
+# UW_UID and UW_GID, names the container and removes it on exit.
+# Uses the image built for ~/isaac_ws as is; never builds or pulls (a rebuild would pull the ~20 GB
+# nvcr.io/nvidia/isaac-sim:5.1.0 base).
+name: uw
+services:
+  uw:
+    image: isaac_ws_devcontainer-isaac-sim:latest
+    pull_policy: never
+    runtime: nvidia
+    network_mode: host
+    ipc: host
+    init: true                        # tini as PID 1: passes docker stop's SIGTERM on to uw.sh, reaps zombies
+    # The host user plus the image's isaac-sim group (/isaac-sim is 750 isaac-sim:isaac-sim): everything written
+    # to the workspace and the caches stays owned by the host user. Enough for Warp-only runs (py, test,
+    # sonar-only); the Kit app (sim, M3) may need more.
+    user: "${UW_UID:?start through scripts/uw.sh}:${UW_GID:?start through scripts/uw.sh}"
+    group_add: [isaac-sim]
+    entrypoint: ["/bin/bash"]
+    environment:
+      - ACCEPT_EULA=Y
+      - PRIVACY_CONSENT=Y
+      - HOME=/tmp                     # the host uid has no writable home in the image
+      - UW_IN_CONTAINER=1
+      - UW_WS=${UW_WS}
+      # Own ROS 2 domain, never an f1tenth one (0 and 42; 85 and 87 in its batches). Deliberately not taken from
+      # ROS_DOMAIN_ID, which a shell may have exported for f1tenth. The ROS bridge environment comes with `sim` (M3).
+      - ROS_DOMAIN_ID=${UW_ROS_DOMAIN_ID:-73}
+      - WARP_CACHE_PATH=/uw_cache/warp
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      # same path as on the host: paths in arguments, logs and tracebacks are valid on both sides
+      - ${UW_WS:?start through scripts/uw.sh}:${UW_WS}:rw
+      # Warp kernel cache (~/.cache/isaac-sim/cache is root-owned)
+      - ${HOME}/.cache/uw_warp:/uw_cache/warp:rw
+      # pytest for `uw.sh test` (the image has none), installed there on first use
+      - ${HOME}/.cache/uw_pydeps:/uw_cache/pydeps:rw
+    working_dir: ${UW_WS}
+    stdin_open: true
+    tty: true
