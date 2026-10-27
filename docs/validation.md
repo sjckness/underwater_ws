@@ -811,6 +811,66 @@ stripe at bearing 0 in half the scenarios, no zlib (`recorder.compress=false`, `
   v0.1 (mask_geom stays on the column).
 - Size: four times the 60–90 GB expected from the 8-ping measurement. Recompression: open, see PLAN.md Dataset v0.2.
 
+### Recompressing v0.2 (2026-10-27, measured, not applied)
+
+v0.2 was written with `recorder.compress=false` and `recorder.png_level=0` to keep zlib off the worker's critical
+path, which cost 6.02 MB per ping. What that costs back in disk, and whether the planned uint16 change helps, was
+measured read-only on the median-size scenario of each (size × motion) cell, 90 pings each: `s0077` tank/fixed,
+`s0324` tank/mobile, `s0141` basin/fixed, `s0331` basin/mobile. Every candidate encoding went to an in-memory
+buffer; the dataset was not modified.
+
+Where the bytes are (per 20 pings of `s0077`, raw → deflate):
+
+| | stored now | deflate / PNG level 6 | ratio | distinct values |
+|---|---|---|---|---|
+| `polar_db` (float16) | 17.94 MB | 12.09 MB | 1.48x | – |
+| `plume_share_all_u8` | 8.97 MB | 2.21 MB | 4.06x | – |
+| `plume_share_direct_u8` | 8.97 MB | 1.97 MB | 4.56x | – |
+| polar PNG | 8.99 MB | 5.67 MB | 1.6x | 256 |
+| `mask_all` PNG | 8.99 MB | 0.31 MB | 29x | 2 |
+| `mask_direct` PNG | 8.99 MB | 0.28 MB | 33x | 2 |
+| `mask_geom` PNG | 8.99 MB | 0.07 MB | 136x | 2 |
+
+The masks are binary images in uncompressed 8-bit planes, which is where most of the waste is (in the basin, where
+the plume covers less of a longer image, `mask_geom` deflates 860x). `polar_db` is the incompressible part.
+
+**`polar_db` as uint16 is rejected.** Deflated size relative to the float16 in place:
+
+| encoding | `s0077` | `s0331` |
+|---|---|---|
+| float16 (now) | 100 % | 100 % |
+| uint16, 0.01 dB | **106.7 %** | **105.1 %** |
+| uint16, 0.05 dB | 100.5 % | 100.3 % |
+| uint16, 0.1 dB | 93.0 % | 91.9 % |
+| uint16 0.01 dB, hi/lo byte planes split | 94.0 % | 91.9 % |
+
+Quantising to 0.01 dB puts noise in the low bits and deflate does 5–7 % *worse* than on float16's smooth mantissa.
+Two more things the proposal had wrong: `polar_db` goes negative (min −1.73 dB in `s0331`, against +37.1 dB in
+`s0077`), so `round(db * 100)` clips at zero and loses the value — the scheme needs an offset; and uint16 at
+0.01 dB is the *more* precise of the two (0.005 dB against float16's 0.0625–0.125 dB at the 100–167 dB the images
+live in), so it was never a precision win. 0.1 dB steps or a byte split buy ~7 %, not worth a format change.
+
+**What pays is plain deflate on what the sweep wrote uncompressed**: npz `ZIP_DEFLATED` + PNG `compress_level=6`,
+lossless and bit-identical on a round trip.
+
+| scenario | now | recompressed | ratio | encode |
+|---|---|---|---|---|
+| `s0077` tank, fixed | 324.0 MB | 101.1 MB | 3.20x | 9.0 s |
+| `s0324` tank, mobile | 324.0 MB | 83.9 MB | 3.86x | 7.2 s |
+| `s0141` basin, fixed | 739.6 MB | 202.2 MB | 3.66x | 17.6 s |
+| `s0331` basin, mobile | 739.6 MB | 188.8 MB | 3.92x | 18.3 s |
+
+Projected over all 400 scenarios, weighted by the real cell counts (237 tank/fixed, 41 tank/mobile, 110
+basin/fixed, 12 basin/mobile) and each scenario's manifest `bytes`: **216.6 → 62.4 GB (201.7 → 58.1 GiB), 3.47x,
+6.02 → 1.73 MB per ping, 154 GB freed**, for 1.27 h of single-threaded encoding (~20 min over four workers) and
+217 GB read + 62 GB written. `/HDD2T` reads cold at 186 MB/s, so the pass is disk-bound at roughly 35–50 min.
+Re-encoding the masks as 1-bit PNG on top of that saves under 1 % (100.19 against 101.11 MB on `s0077`) and is not
+worth the format change.
+
+Conclusion for the recorder: keep `compress=false` / `png_level=0` while a sweep is running, since the measurement
+that motivated them stands (zlib was 63 of ~100 ms per write), and recompress afterwards as a separate pass. The
+scripts used are not committed; they read the dataset and write nothing.
+
 ## Real data: public sonar datasets (2026-10-26)
 
 Two public datasets were downloaded and compared with the sim. Nothing here is committed: the data lives in
