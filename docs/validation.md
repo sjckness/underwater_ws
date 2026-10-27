@@ -769,6 +769,48 @@ Sanity check (`tools/dataset_stats.py`; `stats/report.md`, `overview.png`, `exam
   x = 1.65 m in both sizes and the fixed sonar is always on the -x wall.
 - Distractors are few (14; the test split has one).
 
+### Second generation: v0.2 (linus, 2026-10-26/27)
+
+`config/sweeps/v0.2.yaml` at git 6893055, `/HDD2T/underwater_data/datasets/v0.2`, 22:33–00:10 (97 min). Changes
+from v0.1: 80 % of the fixed views aimed at the leak, the sonar pole on any of the four walls with the leak 1–2.5 m
+(tank) or 2.5–7 m (basin) away, 25 % distractors, three views of each fixed scene (30 pings each), a common-noise
+stripe at bearing 0 in half the scenarios, no zlib (`recorder.compress=false`, `png_level=0`).
+`tools/dataset_stats.py` on both datasets (1000 random pings image-checked each, seed 1):
+
+| | v0.1 | v0.2 |
+|---|---|---|
+| scenarios (leak / negative / distractor) | 300 (236 / 50 / 14) | 400 (246 / 53 / 101) |
+| distractor share (scenarios) | 4.7 % | 25.3 % |
+| pings | 18 000 (60 per scenario) | 36 000 (90; fixed: 3 views × 30) |
+| fixed / mobile scenarios | 257 / 43 | 347 / 53 |
+| sonar wall (x0 / x1 / y0 / y1) | all x0 | 216 / 68 / 58 / 58 |
+| splits, scenarios (train / val / test) | 209 / 49 / 42 | 281 / 60 / 59 (70.3 / 15.0 / 14.8 %) |
+| splits by kind (train / val / test) | leak 164/38/34, neg. 35/8/7, distr. 10/3/1 | leak 173/37/36, neg. 37/8/8, distr. 71/15/15 |
+| splits by size (train / val / test) | tank 150/35/31, basin 59/14/11 | tank 198/42/38, basin 83/18/21 |
+| scenarios in more than one split | none | none |
+| **leak scenarios never in view** (mask_geom empty in every ping) | **45 of 236 (19.1 %)** | **1 of 246 (0.4 %)** |
+| leak pings in view | 10 751 of 14 160 (75.9 %) | 20 645 of 22 140 (93.2 %) |
+| fixed leak views in view: aimed / random | – | 527 of 527 / 97 of 130 (75 %) |
+| leak range, pings p5 / p50 / p95: tank | 1.21 / 1.75 / 2.10 m | 1.06 / 1.73 / 2.37 m |
+| leak range, pings p5 / p50 / p95: basin | 1.15 / 1.97 / 3.02 m | 2.01 / 4.15 / 6.71 m |
+| leak pings with mask_direct but no mask_geom | 3 169 (22 %) | 1 461 (6.6 %) |
+| label pixels per leak ping, median: geom / direct / all | 716 / 5 998 / 7 880 | 1 459 / 10 302 / 13 392 |
+| leak pings with the leak off (ramp start, intermittent) | 1 536 | 1 529 |
+| image checks (NaN, empty, saturated, labels without a leak) | no flags; 0.08 % of pixels at 255 | no flags; 0.13 % at 255 |
+| ping: fixed / mobile | 31 / 183 ms | 38 / 271 ms |
+| throughput, worker time | 4.2 pings/s, 2.3 h | 6.2 pings/s, 3.1 h |
+| size | 25.7 GiB, 1.53 MB per ping | 202 GiB (216.6 GB), 6.0 MB per ping |
+
+- The aiming works: every aimed view has the plume in a cell's main lobe, and the random views (20 %) are in view
+  about as often as v0.1's were (75 %). The one leak scenario never in view, s0100, is a mobile lawnmower survey in
+  the basin that passes the plume at a distance with the leak outside the fan's slab.
+- The basin now gives the ranges it was added for (median 4.2 m, up to 6.7 m); the tank's stay at 1–2.4 m.
+- Splits stay balanced per kind and per size. No held-out domain was set (both sizes in every split).
+- The example grid (`stats/examples.png`) shows the plume in view at varied ranges and angles to the pipe, the
+  bearing-0 stripe where it was switched on, and the energy label's leakage arcs around strong close plumes as in
+  v0.1 (mask_geom stays on the column).
+- Size: four times the 60–90 GB expected from the 8-ping measurement. Recompression: open, see PLAN.md Dataset v0.2.
+
 ## Real data: public sonar datasets (2026-10-26)
 
 Two public datasets were downloaded and compared with the sim. Nothing here is committed: the data lives in
