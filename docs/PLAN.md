@@ -1,6 +1,13 @@
 # Underwater gas-leak tank in Isaac Sim: FLS (+ camera) simulation
 
-> **Status (2026-10-26):** M0–M3.5 and M5 done (infra and launcher; scene, bubble plume, adaptive scatterers; bubble scattering, sonar standalone, minimal recorder; Isaac integration with the bubble instancer, sonar in the loop, GUI overlay, ROS 2 topics and the host relay; M3.1 geometric plume label and CUDA graph bubble substeps; M3.5 mobile sonar; M5 dataset sweeps and the first dataset v0.1; checks in `docs/validation.md`). Next: real-data validation (sources below), M4 camera underwater model.
+> **Status (2026-10-27):** M0–M3.5 and M5 done (infra and launcher; scene, bubble plume, adaptive scatterers;
+> bubble scattering, sonar standalone, minimal recorder; Isaac integration with the bubble instancer, sonar in the
+> loop, GUI overlay, ROS 2 topics and the host relay; M3.1 geometric plume label and CUDA graph bubble substeps;
+> M3.5 mobile sonar; M5 dataset sweeps with datasets v0.1 and v0.2; checks in `docs/validation.md`). Real-data
+> validation is adopted for the two public datasets that exist (`ab7243b`) and blocked on a real Oculus tank
+> recording for the rest; M6 is deferred on that. **Current main track: M7, ROS 2 HIL over Ethernet**, whose step 1
+> (`docs/ros_hil.md`) also carries the M8a vehicle design. M4 (camera underwater model) is unscheduled behind it.
+> Order of work: "Where this session stopped".
 > Runs on **linus** for now.
 
 ## Changes in this revision (2026-10-26)
@@ -140,7 +147,7 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
 - **(b) Sensor outputs** go through a `SensorSink` interface (`uw/sinks.py`): backends `file` (datasets), `ros`, `zenoh`; later `oculus_emulator`.
 - **(c) Real-time mode** besides sim time: wall-clock pacing with a watchdog that reports pings over budget.
 - **(d) Sim and ROS decoupled:** the sim publishes over Zenoh; a relay on linus republishes to ROS 2. ROS is optional on the sim side.
-- **(e) Hardware in the loop:** milestones M7 (open loop) and M8 (closed loop) below.
+- **(e) Hardware in the loop:** milestones M7 (open loop), M8a (the ROV platform) and M8b (closed loop) below.
 
 ## Milestones (each ends runnable and checked; I ask before each commit)
 - **M0 Infra**: compose file, `scripts/uw.sh` (incl. `sonar-only` stub), README, `.gitignore` (output/, third_party/), pytest skeleton.
@@ -166,7 +173,64 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
   4. Jetson side: a minimal subscriber that measures latency and drops, plus a Docker image for the Jetson.
   5. Loopback on one machine first, then over Ethernet; report latency, rate and drops.
   Rule for this track: **the sonar and scattering code stays independent of ROS** — the bridge only wraps it.
-- **M8 HIL closed loop**: ROV dynamics model, commands from the Jetson, mobile sonar (M3.5). Needs the workstation for real time.
+- **M8a ROV platform in the sim (BlueROV2 / BlueROV2 Heavy)**: a real vehicle to fly instead of a kinematic pose.
+  The kinematic trajectories of M3.5 **stay** and remain the way datasets are generated: they are repeatable and
+  cheap, and nothing in a dataset needs thruster dynamics. M8a is what M8b commands.
+  1. **Isaac model**: the BlueROV2 (6 thrusters, 4 horizontal vectored + 2 vertical) and the Heavy (8 thrusters,
+     4 vectored + 4 vertical) as a rigid body with the frame, floats and payload as visual geometry.
+  2. **Hydrodynamics as external forces, not a custom integrator**: a Fossen model (added mass, linear and
+     quadratic damping, restoring forces from the buoyancy/gravity offset) evaluated per physics step and applied
+     to the body as a wrench. Isaac/PhysX integrates it. Thruster thrust curves (per-thruster, with the
+     forward/reverse asymmetry of the T200) and a thrust-allocation matrix from the geometry, so the input is a
+     body wrench and the output per-thruster PWM.
+  3. **Payload as on the real vehicles**: the Oculus on its mount, the camera and the lamps at the places and
+     orientations the real payload uses, so a pose from the sim means the same thing as a pose from the hardware.
+  4. **Parameters**: mass, volume, inertia, centres of gravity and buoyancy, thrust curves and damping from
+     published sources (BlueRobotics specs, the BlueROV2 papers that identify Fossen coefficients), each tagged
+     **VERIFIED** (traceable to a datasheet or a paper) or **UNVERIFIED** (assumed), as the sonar table in
+     docs/validation.md already does.
+  5. **ArduSub SITL** through ArduPilot's external-simulator interface (the JSON/UDP sensor-and-actuator protocol):
+     the sim sends IMU, depth and attitude, ArduSub returns the thruster outputs. **ArduSub stays unforked** — it is
+     the low level (attitude and depth hold, arming, failsafes), configured only through parameters and Lua
+     scripting. Everything above that level is **ROS 2**. Evaluate both bridges before choosing: **MAVROS**
+     (mature, Sub-aware) and ArduPilot's **native DDS/microROS** backend (fewer hops, but its Sub support needs
+     checking). The result of that evaluation goes in `docs/ros_hil.md`.
+- **M8b HIL closed loop**: the Jetson stack commands the sim ROV through ArduSub (guided setpoints or manual
+  wrenches), closing the loop sim → sonar/camera → detection → command → sim. Leak-search behaviours on top:
+  lawnmower survey, bearing-following approach to a detection, hold-and-inspect at close range. Needs the
+  workstation for real time (linus runs it slower than real time, which is fine for everything but latency numbers).
+- **M9 Large scenes with localized physics**: today the whole scene carries full physics, which is why the tank and
+  the basin are the only sizes. For open-seafloor scenes the cost has to follow the sensor, not the scene.
+  - A **lightweight statistical layer everywhere**: sand and far structure as a backscatter field with the right
+    first- and second-order statistics (level, Rayleigh/K contrast, correlation length) rather than resolved
+    scatterers.
+  - **Full physics only in the ROI**: resolved scatterers, coherent facets, bubbles and multipath inside the region
+    the sonar can actually see this ping (the fan's slab plus the plume box), moving with the ROV.
+  - **Continuity across the boundary is a test, not a hope**: the mean level, the speckle contrast and the
+    correlation length must match across the ROI edge within tolerance, checked on a scene whose ROI boundary is
+    swept through a uniform sand patch (no visible seam in the image, no step in the statistics).
+  - **Scene tiling**: the seafloor and its structure as tiles generated and cached per tile, so a survey can run
+    beyond one tank-sized box, with the scatterer and facet caches keyed per tile.
+- **M10 Baseline leak detector on v0.2**: the dataset exists, so the detector that justifies it comes next; it is
+  also what tells us which labels and which v0.3 changes matter.
+  - **Baseline**: single-frame segmentation on `mask_geom` (the geometric label, free of sidelobe leakage) from the
+    polar `polar_db` image; a small U-Net is enough.
+  - **Main model**: temporal, because a plume is distinguished from a bright static object by how it moves — a
+    stack of 4–8 consecutive pings, or a ConvLSTM / temporal transformer over the ping sequence.
+  - **Optional head**: regression of the leak's gas flow (the per-ping flow is in the ping JSON), as a second task.
+  - **Metrics per split** (train/val/test, and per kind and per size, which `dataset_stats` already reports), plus
+    the two error modes this dataset was rebuilt to measure: **false positives on the random (non-aimed) views and
+    on the distractor scenarios**.
+  - **Deployment**: export for the Jetson and measure its latency, so M7's end-to-end number includes the detector.
+
+**Open items, not yet milestones:**
+- A **round (cylindrical) tank preset**, after the diffuse-wall check: a curved wall focuses the specular return and
+  rings differently from flat walls, and many real test tanks are cylindrical. Sequenced after the check because the
+  check is what tells us how much of the wall return is specular in the first place.
+- **2-D sonar profiles for other heads**: Oculus **M1200d** (the head the DeeperSense data was recorded with, so it
+  is the one we can compare against) and Tritech **Gemini 720i / 1200ik**. Same model, different parameter sets:
+  frequency, beam count and spacing, fan, range and resolution, taper.
+- **3-D / multibeam-volume sonar is out of scope.**
 
 ## Real-data validation (priority over new physics)
 Sources to obtain:
@@ -195,10 +259,28 @@ scenarios exactly.
 - Faster writing: `recorder.compress` false and `recorder.png_level` 0 drop zlib from the worker's critical path
   (M5 measured 63 ms of a ~100 ms write in zlib). Disk is the trade; the sweep passes both from the scenario config.
 
+**Generated and analysed** (6893055, 2026-10-26/27; docs/validation.md "Second generation: v0.2"):
+- The sweep ran to `/HDD2T/underwater_data/datasets/v0.2`: **400/400 scenarios, 0 failed**, 36 000 pings, 97 min
+  wall clock, **201.7 GiB (216.6 GB)**, splits 281/60/59 scenarios (train/val/test).
+- `tools/dataset_stats.py` on v0.1 and v0.2, 1000 random pings image-checked each: leak scenarios never in view
+  19.1 % → 0.4 %, all 527 aimed views in view, basin leak ranges now p50 4.15 m up to 6.71 m, splits balanced per
+  kind and per size with no scenario in two splits, no image flags.
+- Size came out **2.5× the 60–90 GB estimated from an 8-ping sample** (6.0 MB per ping, not ~2.4): that sample was
+  tank-sized and the basin's longer range axis doubles every array. Estimate from the real range-bin count per size
+  preset next time, not from one pilot scenario.
+
 **Open:**
 - More *kinds* of distractor: only the count was raised. Other strong point clouds (a fish school, suspended
   sediment, a second pipe) so that a detector cannot key on "anything bright above the sand".
-- Store polar_db as uint16 (0.01 dB steps) instead of float16 to shrink the npz; drop the soft shares if unused.
+- **Recompression of v0.2 (measured 2026-10-27, docs/validation.md; not applied yet).** `polar_db` as uint16 at
+  0.01 dB is **rejected**: deflate makes it 5–7 % *larger* than the float16 in place (quantisation noise in the low
+  bits), `polar_db` goes negative so the scheme needs an offset anyway, and float16 is the coarser of the two, so it
+  was never a precision win either. 0.1 dB steps or a hi/lo byte split give only ~7 %. What does pay is plain
+  **deflate on what the sweep wrote uncompressed**: npz `ZIP_DEFLATED` + PNG `compress_level=6` is lossless and
+  bit-identical on a round trip, and projects **216.6 → 62.4 GB (3.47×, 6.02 → 1.73 MB per ping, 154 GB freed)** for
+  ~1.27 h of single-threaded encoding, disk-bound at 35–50 min over four workers. Three of the four PNGs per ping
+  are binary masks in uncompressed 8-bit planes (29–860×); re-encoding them as 1-bit PNG adds under 1 % on top, so
+  it is not worth the format change. Still open: run the pass, and drop the soft shares if unused.
 - Leak flow driving the plume flow field while it changes (Known gaps).
 - Scatterer sampling on the GPU (the other half of "faster setup").
 - Calibrate against real data first where it exists (Real-data validation); the UNVERIFIED table in
@@ -226,29 +308,32 @@ scenarios exactly.
 - **Visual**: compare with published Oculus M750d imagery of tanks and bubble plumes (bright far wall and corners, sidelobe arcs, plume speckle and shadow, surface ghosts), and the camera with deep-sea ROV footage (lamp haze cone, snow).
 - **Performance on linus**: ping ≤100 ms; VRAM in `sonar-only` < 3 GB; full sim with camera < 7 GB, measured with `nvidia-smi` during a GUI run.
 
-## Where this session stopped (2026-10-26)
+## Where this session stopped (2026-10-27)
 Done and pushed:
 - `ab7243b` real-data work adopted and merged (UATD + DeeperSense loaders in `tools/compare_real.py`, which now
   runs without `PYTHONPATH`; `tools/deepersense_index.py` + `docs/deepersense_tank_recordings.md`; one "Real data:
   public sonar datasets" section in `docs/validation.md` with the stripe finding as a subsection); M6 deferred;
   Dataset v0.2 split into done/open; `recorder.compress` / `recorder.png_level`.
 - `b8b786f` splits: the by-scenario rule stated and tested, optional held-out domain, `dataset_stats` split report.
+- `6893055` the **v0.2 sweep ran and was analysed**: 400/400 scenarios, 0 failed, 36 000 pings, 97 min, 201.7 GiB in
+  `/HDD2T/underwater_data/datasets/v0.2`, splits 281/60/59; `tools/dataset_stats.py` on v0.1 and v0.2 (see
+  "Dataset v0.2" above and docs/validation.md "Second generation: v0.2").
+- `9a7965f` those statistics written up in `docs/validation.md`.
+- Recompression of v0.2 measured (2026-10-27): uint16 rejected, plain deflate projects 3.47×. Details under
+  "Dataset v0.2" → Open. **Not applied to the dataset yet.**
 
 **Not started, in this order:**
-1. **Launch the v0.2 sweep.** Decided but not run: output to `/HDD2T/underwater_data/datasets/v0.2` (1.7 TB free;
-   the root disk has 33 GB and v0.1 alone was 25.7 GiB), with `recorder.compress=false` and `recorder.png_level=0`.
-   Measured on 8 pings: write 65.2 → 7.6 ms per ping, size 8 → 28 MB, so expect roughly 60–90 GB. `nohup` with
-   `nice`/`ionice`, and no other GPU job while it runs. Benchmark `/HDD2T` write throughput first (it is a spinning
-   disk; the sweep needs ~15 MB/s sustained) and fall back to `compress=true` if it cannot keep up.
-2. **`docs/ros_hil.md`** (M7 step 1 above) — CPU-only, so it is the work to do while the sweep holds the GPU.
-3. **Fix `KeyError: 'rms_slope'`** at `uw/sonar.py:1065`: with `materials.<m>.coherent=false` the material has no
-   `rms_slope` (the coherent materials carry `rms_height_m` + `correlation_m` instead, and `geometry.py:281`
-   derives `rms_slope = sqrt(2) * rms_height / correlation` only for their incoherent part). Then rerun the
-   diffuse-scattering check and log it in `docs/validation.md`: re-render the tank scene with walls, corners and
-   pipe forced to purely diffuse (`materials.concrete.coherent=false materials.steel_coated.coherent=false`) and
-   recompute the bearing-window speckle contrast, against the 2.0–3.7 the coherent scene gives.
-   `output/probe/coh_baseline` (60 pings) already holds the baseline; `coh_diffuse` and `coh_diffuse_nomp` are
-   empty dirs left by the crash, delete them first. The three paired runs, same seed and ping count:
+1. **Fix `KeyError: 'rms_slope'`** at `uw/sonar.py:1067`: with `materials.<m>.coherent=false` the material has no
+   `rms_slope` (the coherent materials carry `rms_height_m` + `correlation_m` instead, and
+   `geometry.surface_materials` at `geometry.py:289` derives `rms_slope = sqrt(2) * rms_height / correlation` only
+   inside its `if m.get("coherent")` branch). Add a test that resolves a material with `coherent=false` and uploads
+   it. Then rerun the diffuse-scattering check and log it in `docs/validation.md`: re-render the tank scene with
+   walls, corners and pipe forced to purely diffuse (`materials.concrete.coherent=false
+   materials.steel_coated.coherent=false`) and recompute the bearing-window speckle contrast, against the 2.0–3.7
+   the coherent scene gives. `output/probe/coh_baseline` already holds the baseline (60 pings, written as 6 files
+   per ping, so 360 files in `sonar/` — match the ping count, not the file count); `coh_diffuse` and
+   `coh_diffuse_nomp` are empty dirs left by the crash, delete them first. The three paired runs, same seed and
+   ping count:
    ```
    python -m uw sonar-only --pings 60 --sink file --out output/probe/coh_baseline
    python -m uw sonar-only --pings 60 --sink file --out output/probe/coh_diffuse \
@@ -260,10 +345,22 @@ Done and pushed:
    The third drops the specular wall image paths as well, to separate the two mechanisms. Read the contrast per
    bearing window with `sonar_stats.background` over 2.15–2.8 m, the windows used in docs/validation.md
    (±25°, ±(35–55)°, ±(40–60)°).
-4. **`dataset_stats.py` on v0.2** once the sweep finishes.
+2. **`docs/ros_hil.md`**: M7 step 1 (topics, message types, QoS, clock, rates, bandwidth) **plus the M8a vehicle
+   design** (the Isaac/Fossen/thruster model, the ArduSub SITL interface, and the MAVROS vs native-DDS evaluation).
+   CPU-only.
+3. **M10 baseline detector on v0.2**: propose the training setup, then the baseline and the temporal model. The
+   dataset is on disk and needs no GPU-side simulation, so it is the first thing that uses v0.2 for its purpose.
+4. **M7 steps 2–5**: the sim-side bridge with the ROV pose on a command topic, rosbag2 profiles, the Jetson
+   subscriber and its image, loopback then Ethernet with latency, rate and drop numbers.
+5. **M8a** the ROV platform, then **M8b** the closed loop, then **M9** large scenes with localized physics.
+
+Deferred, pick up when convenient: run the recompression pass over v0.2 (3.47×, 154 GB freed, 35–50 min
+disk-bound); the remaining "Dataset v0.2 → Open" items before a v0.3.
 
 Environment notes: `~/underwater_data/real` is a symlink to `/HDD2T/underwater_data/real` (the 6.8 GB of DeeperSense
 and UATD data, intact); the GPU is otherwise free; the f1tenth telegram bot holds 2 GB of VRAM permanently.
+`/HDD2T` has 1.5 TB free and reads cold at 186 MB/s; the root disk is at 93 % (32 GB free), so nothing large goes
+outside `/HDD2T`.
 
 ## For the next session
 - `docs/validation.md` records what M1–M3 and M5 checked, calibrated and measured.
