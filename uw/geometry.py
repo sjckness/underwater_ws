@@ -277,16 +277,21 @@ def sonar_rotation(cfg: dict) -> np.ndarray:
 
 def surface_materials(cfg: dict) -> dict:
     """Resolved properties of every surface material name a scene uses: the entries of ``materials`` plus one per
-    tank wall, "wall:<id>" (the wall material or the absorbing lining, with the wall's own rms roughness). Coherent
-    materials get rms_slope = sqrt(2) rms_height / correlation for their incoherent part."""
+    tank wall, "wall:<id>" (the wall material or the absorbing lining, with the wall's own rms roughness).
+
+    A material given as a Gaussian surface (rms_height_m + correlation_m) gets rms_slope = sqrt(2) rms_height /
+    correlation for its incoherent part, whether or not its coherent term is switched on: the slope describes the
+    surface, while ``coherent`` only selects whether the mirror-like Kirchhoff term is computed on top. Without
+    this, forcing ``materials.<m>.coherent=false`` left the material with no rms_slope at all.
+    """
     mats = {k: dict(v) for k, v in get(cfg, "materials").items()}
     for wid, w in get(cfg, "tank.walls").items():
         m = dict(mats["lining" if w["lining"] else get(cfg, "tank.wall_material")])
-        if m.get("coherent"):
+        if "rms_height_m" in m:
             m["rms_height_m"] = float(w["rms_height_m"])
         mats[f"wall:{wid}"] = m
     for m in mats.values():
-        if m.get("coherent"):
+        if "rms_slope" not in m and "rms_height_m" in m and "correlation_m" in m:
             m["rms_slope"] = max(math.sqrt(2.0) * m["rms_height_m"] / m["correlation_m"], 1e-3)
     return mats
 

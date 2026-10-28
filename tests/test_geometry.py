@@ -77,3 +77,30 @@ def test_scatterer_cache(tmp_path):
     geometry.scatterers(config.load(overrides=["sonar.scatterer_spacing=0.012", "sonar.scatterer_spacing_mode=fixed"]),
                         cache_dir=str(tmp_path))
     assert len(list(tmp_path.glob("scatterers_*.npz"))) == 2
+
+
+# ------------------------------------------------------------------------- materials
+
+def test_every_material_has_an_rms_slope_with_the_coherent_term_off():
+    """`materials.<m>.coherent=false` (the diffuse-only comparison runs) must still leave an rms_slope: it is the
+    surface's own property, and the sonar's incoherent Kirchhoff term reads it for every material."""
+    diffuse = [f"materials.{m}.coherent=false" for m in ("concrete", "steel_coated", "glass", "lining")]
+    for ov in ([], diffuse):
+        mats = geometry.surface_materials(config.load(overrides=ov))
+        for name, m in mats.items():
+            assert "rms_slope" in m, f"{name} has no rms_slope (overrides={ov})"
+            assert m["rms_slope"] > 0.0, name
+    on, off = (geometry.surface_materials(config.load(overrides=ov)) for ov in ([], diffuse))
+    for name in on:
+        assert off[name]["rms_slope"] == pytest.approx(on[name]["rms_slope"]), name
+    assert off["concrete"]["rms_slope"] == pytest.approx(np.sqrt(2.0) * 0.0005 / 0.01)
+    assert not off["concrete"].get("coherent") and on["concrete"]["coherent"]
+
+
+def test_walls_keep_their_own_roughness_without_the_coherent_term():
+    """A wall's rms_height_m overrides the base material's, so forcing the walls diffuse must not silently fall
+    back to the material default."""
+    cfg = config.load(overrides=["materials.concrete.coherent=false", "tank.walls.x0.rms_height_m=0.004"])
+    mats = geometry.surface_materials(cfg)
+    assert mats["wall:x0"]["rms_height_m"] == pytest.approx(0.004)
+    assert mats["wall:x0"]["rms_slope"] == pytest.approx(np.sqrt(2.0) * 0.004 / 0.01)
