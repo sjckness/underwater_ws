@@ -811,7 +811,7 @@ stripe at bearing 0 in half the scenarios, no zlib (`recorder.compress=false`, `
   v0.1 (mask_geom stays on the column).
 - Size: four times the 60–90 GB expected from the 8-ping measurement. Recompression: open, see PLAN.md Dataset v0.2.
 
-### Recompressing v0.2 (2026-10-27, measured, not applied)
+### Recompressing v0.2 (measured 2026-10-27, applied 2026-10-28, in progress)
 
 v0.2 was written with `recorder.compress=false` and `recorder.png_level=0` to keep zlib off the worker's critical
 path, which cost 6.02 MB per ping. What that costs back in disk, and whether the planned uint16 change helps, was
@@ -862,14 +862,38 @@ lossless and bit-identical on a round trip.
 
 Projected over all 400 scenarios, weighted by the real cell counts (237 tank/fixed, 41 tank/mobile, 110
 basin/fixed, 12 basin/mobile) and each scenario's manifest `bytes`: **216.6 → 62.4 GB (201.7 → 58.1 GiB), 3.47x,
-6.02 → 1.73 MB per ping, 154 GB freed**, for 1.27 h of single-threaded encoding (~20 min over four workers) and
-217 GB read + 62 GB written. `/HDD2T` reads cold at 186 MB/s, so the pass is disk-bound at roughly 35–50 min.
+6.02 → 1.73 MB per ping, 154 GB freed**, and 217 GB read + 62 GB written.
 Re-encoding the masks as 1-bit PNG on top of that saves under 1 % (100.19 against 101.11 MB on `s0077`) and is not
 worth the format change.
 
+**The pass as run** (`tools/recompress.py`, started 2026-10-28 10:20, single-threaded under `nice -n 10 ionice -c3`;
+log `/HDD2T/underwater_data/datasets/v0.2_recompress.log`). The *size* projection holds: the first 18 scenarios came
+out at **3.69x**, a little better than the 3.47x projected, with 0 failures. The *time* projection was wrong by about
+8x, and the reason is worth recording.
+
+| scenario size | encode only (measured 2026-10-27) | the pass as run | factor |
+|---|---|---|---|
+| 324 MB | 9.0 s | 65–67 s | 7.4x |
+| 518 MB | – | 104–108 s | – |
+| 740 MB | 17.6 s | 149–156 s | 8.9x |
+
+That is ~113 s per scenario over the real mix, so **~13 h single-threaded for all 400** against the 1.27 h projected,
+and the process sits at **95 % of one core: the pass is CPU-bound, not disk-bound at 35–50 min**. The projection timed
+the *encoder* alone, into an in-memory buffer. The pass does far more than encode, deliberately: it decodes every
+original, encodes into `<root>/.recompress/<id>`, then re-decodes **both** copies twice — once comparing the npz
+arrays and the PNG pixels raw, once comparing what `uw.dataset.load_ping` returns from each — and replaces a
+scenario's files only if all of that matches. Roughly five decodes and one encode per ping, in place of one encode:
+that is the whole factor. The verification is the right trade for rewriting 216 GB in place; what was missing is that
+nobody measured *it*, only the encoding it protects.
+
+Parallelising would need a `--shard i/n` option, since `--limit` takes the head of the todo list and two instances
+would pick the same scenarios and collide on the same `.recompress/<id>` directory. Not done: one core for 13 h is
+cheaper than changing the tool while it rewrites the dataset, and `/HDD2T` has 1.5 TB free, so the 154 GB is not
+urgent. Final size and ratio go here when the pass finishes.
+
 Conclusion for the recorder: keep `compress=false` / `png_level=0` while a sweep is running, since the measurement
-that motivated them stands (zlib was 63 of ~100 ms per write), and recompress afterwards as a separate pass. The
-scripts used are not committed; they read the dataset and write nothing.
+that motivated them stands (zlib was 63 of ~100 ms per write), and recompress afterwards as a separate pass
+(`tools/recompress.py`).
 
 ## Real data: public sonar datasets (2026-10-26)
 
@@ -986,6 +1010,72 @@ what the bag request above is for.
 **What is not comparable.** The absolute level (nothing here is calibrated), the TVG profile (the maker's TVG is
 applied in the 8-bit data and is only recoverable from a `send_gain` bag), and the sidelobe level: neither dataset
 has a point target, so the −2 to −9 dB in that row is the skirt of an extended target, not an array sidelobe.
+
+### What makes the tank's background contrast 2.0–3.7 (2026-10-28)
+
+The real-data comparison above left the tank's background contrast at 2.0 (±25°) and 2.3–3.7 in the other bearing
+windows, against ~1.0 for real bottom, with "specular walls, corners and the pipe built from random-phase facets,
+plus rocks, ripples and the plume shadow" as a list of suspects. Seven paired 60-ping runs of the tank scene, same
+seed (7) and same ping count, now separate them. Contrast is `sonar_stats.background` over 2.15–2.8 m, averaged
+over the 60 pings (±1 sd of the per-ping spread), in the windows the comparison used. This needed the
+`KeyError: 'rms_slope'` fix below, which is why it could not be run before.
+
+| window | baseline | glints off | glints off, no wall paths | no leak | no leak, no wall paths | flat sand, no leak | flat sand, no wall paths |
+|---|---|---|---|---|---|---|---|
+| ±25° | 2.129 | 2.129 | 2.142 | 2.102 | 2.108 | **0.981** | 0.980 |
+| +(35–55)° | 2.237 | 2.458 | 1.640 | 2.141 | 1.577 | 1.855 | 1.531 |
+| −(35–55)° | 2.180 | 1.963 | 1.537 | 2.502 | 1.653 | 1.908 | 1.510 |
+| +(40–60)° | 1.835 | 1.869 | 1.217 | 1.878 | 1.239 | 1.480 | 1.130 |
+| −(40–60)° | 1.835 | 1.717 | 1.188 | 1.897 | 1.225 | 1.511 | 1.153 |
+
+Per-ping sd is 0.002–0.025 throughout, so every difference above 0.05 is real. The runs are
+`output/probe/coh_{baseline,diffuse,diffuse_nomp,noleak,noleak_nomp,flat,flat_nomp}`, "glints off" being
+`materials.concrete.coherent=false materials.steel_coated.coherent=false`, "no wall paths"
+`sonar.multipath=[surface]`, and "flat sand" additionally `rocks.count=0 sand.ripple_amp=0
+sand.undulation_amp=0`; `output/probe/coh_contrast.py` reads them.
+
+**The coherent glints are not the cause.** Switching the whole Kirchhoff specular term off leaves ±25° at 2.129,
+identical to three decimal places, and moves the wall windows by ±0.2 in *either* direction — the specular energy
+it removes comes back as the incoherent part of the same surfaces (factor 1 − χ²), which is what the model
+intends. That suspect is cleared.
+
+**The plume is not the cause either.** Switching the leak off leaves ±25° at 2.102. It does move the wall windows
+by up to ±0.3, in both directions (extinction and shadowing of the wall image paths, which fall differently on the
+two sides), so it perturbs those windows without explaining their level.
+
+**The central window is sand relief.** With the ripples (8 mm), the undulation (2 cm) and the 14 rocks removed,
+±25° falls from 2.10 to **0.981** — the Rayleigh 1.0, and the same 0.98 the flat-sand speckle test gives (M2).
+So the excess at ±25° is entirely the relief of the modelled bottom: resolved ripple and rock structure inside the
+window, which is scene content, not speckle statistics. Nothing is wrong with the speckle model.
+
+**The wall windows are relief plus wall image paths.** On the flat scene the wall windows still read 1.48–1.91,
+and dropping the specular wall image paths takes them to 1.13–1.53; on the full scene the same change takes
+2.14–2.50 down to 1.54–1.65. So those windows carry two contributors of similar size, the bottom relief and the
+walls' mirror paths, and no single switch brings them to 1.0.
+
+**What this means for the real comparison.** The tank's contrast is high because the tank is a small, cluttered,
+rippled box seen at 2–3 m, not because of a defect in the scattering model: every mechanism that could have been
+a defect (the coherent term, the plume) is ruled out, and the one that dominates is geometry we chose to put in
+the scene. Comparing like for like against the DFKI basin's ~1.0 therefore needs either a window without ripples,
+rocks and walls in it, or a recording from a tank of our geometry (the bag request). Two consequences for the
+parameter table: `sand.ripple_amp` and `rocks.count` move from "scene dressing" to parameters the background
+statistics are sensitive to, and the open gap "specular walls, corners and the pipe from random-phase facets" is
+narrowed to the wall image paths alone.
+
+### `KeyError: 'rms_slope'` with the coherent term off (fixed 2026-10-28)
+
+`uw/sonar.py` reads `rms_slope` for every material when it uploads the scatterers, but
+`geometry.surface_materials` derived it only inside `if m.get("coherent")`, so `materials.<m>.coherent=false`
+crashed the run after 8.8 s — which is what blocked the comparison above on 2026-10-26. The slope is a property of
+the surface (√2 h / correlation length of its Gaussian profile), while `coherent` only selects whether the
+mirror-like Kirchhoff term is computed on top, so it is now derived whenever a material carries `rms_height_m` and
+`correlation_m` and does not already state a slope. A wall's own `rms_height_m` is likewise applied whatever the
+flag says, so forcing the walls diffuse no longer silently falls back to the base material's roughness.
+`tests/test_geometry.py` covers both (every material keeps a positive, unchanged slope with the flag off; a wall
+keeps its own roughness); both fail without the fix.
+
+Side measurement from the paired runs, per ping on linus: the coherent facet integral costs 41.2 → 28.0 ms, and
+the specular wall image paths a further 28.0 → 17.0 ms, of the sonar's time in the tank scene with the plume.
 
 ### Which UNVERIFIED parameters the data constrains
 

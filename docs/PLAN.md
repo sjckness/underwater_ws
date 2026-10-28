@@ -1,6 +1,6 @@
 # Underwater gas-leak tank in Isaac Sim: FLS (+ camera) simulation
 
-> **Status (2026-10-27):** M0–M3.5 and M5 done (infra and launcher; scene, bubble plume, adaptive scatterers;
+> **Status (2026-10-28):** M0–M3.5 and M5 done (infra and launcher; scene, bubble plume, adaptive scatterers;
 > bubble scattering, sonar standalone, minimal recorder; Isaac integration with the bubble instancer, sonar in the
 > loop, GUI overlay, ROS 2 topics and the host relay; M3.1 geometric plume label and CUDA graph bubble substeps;
 > M3.5 mobile sonar; M5 dataset sweeps with datasets v0.1 and v0.2; checks in `docs/validation.md`). Real-data
@@ -267,20 +267,27 @@ scenarios exactly.
   kind and per size with no scenario in two splits, no image flags.
 - Size came out **2.5× the 60–90 GB estimated from an 8-ping sample** (6.0 MB per ping, not ~2.4): that sample was
   tank-sized and the basin's longer range axis doubles every array. Estimate from the real range-bin count per size
-  preset next time, not from one pilot scenario.
+  preset next time, not from one pilot scenario — and **sample the whole size range**: scenarios run 324 → 1183 MB
+  (p50 518), while both this estimate and the recompression timing below looked only at the 324 and 740 MB cells. A
+  **time** projection must also price in *verifying* a pass, not just doing it: the recompression encoder was timed
+  alone and came out ~8× optimistic (docs/validation.md).
 
 **Open:**
 - More *kinds* of distractor: only the count was raised. Other strong point clouds (a fish school, suspended
   sediment, a second pipe) so that a detector cannot key on "anything bright above the sand".
-- **Recompression of v0.2 (measured 2026-10-27, docs/validation.md; not applied yet).** `polar_db` as uint16 at
-  0.01 dB is **rejected**: deflate makes it 5–7 % *larger* than the float16 in place (quantisation noise in the low
-  bits), `polar_db` goes negative so the scheme needs an offset anyway, and float16 is the coarser of the two, so it
-  was never a precision win either. 0.1 dB steps or a hi/lo byte split give only ~7 %. What does pay is plain
+- **Recompression of v0.2 (measured 2026-10-27; running since 2026-10-28 10:20, docs/validation.md).** `polar_db` as
+  uint16 at 0.01 dB is **rejected**: deflate makes it 5–7 % *larger* than the float16 in place (quantisation noise in
+  the low bits), `polar_db` goes negative so the scheme needs an offset anyway, and float16 is the coarser of the two,
+  so it was never a precision win either. 0.1 dB steps or a hi/lo byte split give only ~7 %. What does pay is plain
   **deflate on what the sweep wrote uncompressed**: npz `ZIP_DEFLATED` + PNG `compress_level=6` is lossless and
   bit-identical on a round trip, and projects **216.6 → 62.4 GB (3.47×, 6.02 → 1.73 MB per ping, 154 GB freed)** for
-  ~1.27 h of single-threaded encoding, disk-bound at 35–50 min over four workers. Three of the four PNGs per ping
-  are binary masks in uncompressed 8-bit planes (29–860×); re-encoding them as 1-bit PNG adds under 1 % on top, so
-  it is not worth the format change. Still open: run the pass, and drop the soft shares if unused.
+  ~13 h of single-threaded encoding — CPU-bound on the pass's per-scenario verification, not disk-bound at the 35–50
+  min first projected (docs/validation.md). Three of the four PNGs per ping are binary masks in uncompressed 8-bit
+  planes (29–860×); re-encoding them as 1-bit PNG adds under 1 % on top, so it is not worth the format change. **The
+  pass is running** since 2026-10-28 10:20 (single-threaded under `nice`/`ionice`; log
+  `/HDD2T/underwater_data/datasets/v0.2_recompress.log`): 3.69× on the first 18 scenarios, 0 failures, ETA around
+  midnight. Still open after it: the final size and ratio in a follow-up commit, and dropping the soft shares if
+  unused.
 - Leak flow driving the plume flow field while it changes (Known gaps).
 - Scatterer sampling on the GPU (the other half of "faster setup").
 - Calibrate against real data first where it exists (Real-data validation); the UNVERIFIED table in
@@ -308,8 +315,8 @@ scenarios exactly.
 - **Visual**: compare with published Oculus M750d imagery of tanks and bubble plumes (bright far wall and corners, sidelobe arcs, plume speckle and shadow, surface ghosts), and the camera with deep-sea ROV footage (lamp haze cone, snow).
 - **Performance on linus**: ping ≤100 ms; VRAM in `sonar-only` < 3 GB; full sim with camera < 7 GB, measured with `nvidia-smi` during a GUI run.
 
-## Where this session stopped (2026-10-27)
-Done and pushed:
+## Where this session stopped (2026-10-28)
+Done and pushed before 2026-10-28 (`origin/main` stood at `6893055`):
 - `ab7243b` real-data work adopted and merged (UATD + DeeperSense loaders in `tools/compare_real.py`, which now
   runs without `PYTHONPATH`; `tools/deepersense_index.py` + `docs/deepersense_tank_recordings.md`; one "Real data:
   public sonar datasets" section in `docs/validation.md` with the stripe finding as a subsection); M6 deferred;
@@ -318,44 +325,38 @@ Done and pushed:
 - `6893055` the **v0.2 sweep ran and was analysed**: 400/400 scenarios, 0 failed, 36 000 pings, 97 min, 201.7 GiB in
   `/HDD2T/underwater_data/datasets/v0.2`, splits 281/60/59; `tools/dataset_stats.py` on v0.1 and v0.2 (see
   "Dataset v0.2" above and docs/validation.md "Second generation: v0.2").
+
+Committed on 2026-10-27 but left unpushed, pushed on 2026-10-28:
 - `9a7965f` those statistics written up in `docs/validation.md`.
-- Recompression of v0.2 measured (2026-10-27): uint16 rejected, plain deflate projects 3.47×. Details under
-  "Dataset v0.2" → Open. **Not applied to the dataset yet.**
+- `f84513b` the recompression of v0.2 measured: uint16 rejected, plain deflate projected at 3.47×; details under
+  "Dataset v0.2" → Open.
+- `2dbacc5` the PLAN revision that deferred M6, made M7 the main track and added M8a/M8b, M9 and M10.
+
+Done on 2026-10-28:
+- `KeyError: 'rms_slope'` fixed with tests (`geometry.surface_materials` derives the slope from the Gaussian surface
+  whatever the `coherent` flag says), the empty probe dirs deleted, and the **diffuse-scattering check run**: seven
+  paired 60-ping runs attribute the tank's 2.0–3.7 background contrast to **sand relief and the specular wall image
+  paths**, and clear the coherent glints and the plume entirely (±25° falls to 0.981, the Rayleigh value, once the
+  ripples, the undulation and the rocks are removed). docs/validation.md, "What makes the tank's background contrast
+  2.0–3.7".
+- `tools/recompress.py` committed (verified per scenario through the dataset loader, resumable, CPU-only) and the
+  **recompression pass started** at 10:20, still running (below). docs/validation.md and this file corrected where
+  they still called the pass unapplied and 35–50 min long.
 
 **Not started, in this order:**
-1. **Fix `KeyError: 'rms_slope'`** at `uw/sonar.py:1067`: with `materials.<m>.coherent=false` the material has no
-   `rms_slope` (the coherent materials carry `rms_height_m` + `correlation_m` instead, and
-   `geometry.surface_materials` at `geometry.py:289` derives `rms_slope = sqrt(2) * rms_height / correlation` only
-   inside its `if m.get("coherent")` branch). Add a test that resolves a material with `coherent=false` and uploads
-   it. Then rerun the diffuse-scattering check and log it in `docs/validation.md`: re-render the tank scene with
-   walls, corners and pipe forced to purely diffuse (`materials.concrete.coherent=false
-   materials.steel_coated.coherent=false`) and recompute the bearing-window speckle contrast, against the 2.0–3.7
-   the coherent scene gives. `output/probe/coh_baseline` already holds the baseline (60 pings, written as 6 files
-   per ping, so 360 files in `sonar/` — match the ping count, not the file count); `coh_diffuse` and
-   `coh_diffuse_nomp` are empty dirs left by the crash, delete them first. The three paired runs, same seed and
-   ping count:
-   ```
-   python -m uw sonar-only --pings 60 --sink file --out output/probe/coh_baseline
-   python -m uw sonar-only --pings 60 --sink file --out output/probe/coh_diffuse \
-     --set materials.concrete.coherent=false --set materials.steel_coated.coherent=false
-   python -m uw sonar-only --pings 60 --sink file --out output/probe/coh_diffuse_nomp \
-     --set materials.concrete.coherent=false --set materials.steel_coated.coherent=false \
-     --set sonar.multipath='[surface]'
-   ```
-   The third drops the specular wall image paths as well, to separate the two mechanisms. Read the contrast per
-   bearing window with `sonar_stats.background` over 2.15–2.8 m, the windows used in docs/validation.md
-   (±25°, ±(35–55)°, ±(40–60)°).
-2. **`docs/ros_hil.md`**: M7 step 1 (topics, message types, QoS, clock, rates, bandwidth) **plus the M8a vehicle
+1. **`docs/ros_hil.md`**: M7 step 1 (topics, message types, QoS, clock, rates, bandwidth) **plus the M8a vehicle
    design** (the Isaac/Fossen/thruster model, the ArduSub SITL interface, and the MAVROS vs native-DDS evaluation).
    CPU-only.
-3. **M10 baseline detector on v0.2**: propose the training setup, then the baseline and the temporal model. The
+2. **M10 baseline detector on v0.2**: propose the training setup, then the baseline and the temporal model. The
    dataset is on disk and needs no GPU-side simulation, so it is the first thing that uses v0.2 for its purpose.
-4. **M7 steps 2–5**: the sim-side bridge with the ROV pose on a command topic, rosbag2 profiles, the Jetson
+3. **M7 steps 2–5**: the sim-side bridge with the ROV pose on a command topic, rosbag2 profiles, the Jetson
    subscriber and its image, loopback then Ethernet with latency, rate and drop numbers.
-5. **M8a** the ROV platform, then **M8b** the closed loop, then **M9** large scenes with localized physics.
+4. **M8a** the ROV platform, then **M8b** the closed loop, then **M9** large scenes with localized physics.
 
-Deferred, pick up when convenient: run the recompression pass over v0.2 (3.47×, 154 GB freed, 35–50 min
-disk-bound); the remaining "Dataset v0.2 → Open" items before a v0.3.
+Running in the background since 2026-10-28 10:20: the recompression pass over v0.2 (3.69× so far, ~154 GB freed, ~13 h
+single-threaded, ETA around midnight; log `/HDD2T/underwater_data/datasets/v0.2_recompress.log`). It needs no
+attention beyond a follow-up commit with the final size and ratio. Deferred, pick up when convenient: the remaining
+"Dataset v0.2 → Open" items before a v0.3.
 
 Environment notes: `~/underwater_data/real` is a symlink to `/HDD2T/underwater_data/real` (the 6.8 GB of DeeperSense
 and UATD data, intact); the GPU is otherwise free; the f1tenth telegram bot holds 2 GB of VRAM permanently.
@@ -393,6 +394,16 @@ outside `/HDD2T`.
   the camera stamped one frame late, or the workstation profile.
 - **The per-ping sonar kernels are not a CUDA graph.** The ping is GPU-bound (plume-box paths 27 of 36 ms) and has
   torch FFTs between its Warp kernels; a graph would save well under 1 ms of launches. Revisit for M7 (latency).
+- **The tank's background contrast is 2.0–3.7, real bottom is ~1.0.** Measured out on 2026-10-28
+  (docs/validation.md): it is the modelled **sand relief** (ripples, undulation, rocks — removing them takes ±25° to
+  the Rayleigh 0.981) plus the **specular wall image paths** in the wall-bearing windows. The coherent glint term
+  and the plume are ruled out, so this is scene content, not a defect in the scattering model. What it changes is
+  the comparison: `sand.ripple_amp` and `rocks.count` are parameters the background statistics are sensitive to, and
+  a like-for-like comparison with the DFKI basin needs a window free of ripples, rocks and walls, or a recording
+  from a tank of our geometry.
+- **`surface_materials` corner cases.** A per-wall `rms_height_m` is ignored if `tank.wall_material` is a
+  slope-only material (sand/rock), and a future explicit `rms_slope` on a Gaussian material would go stale
+  under a wall override — unreachable with current configs, guard is one line.
 - **Sidelobe rings from strong near-normal echoes.** With the fan vertical (roll 90°), the sand straight below and the
   plume column in the fan plane leak through the array's sidelobes into every beam at their ranges: concentric rings
   across the fan (docs/validation.md, M3 addendum). The beamformer matches Taylor theory to 0.1 dB, so this is the
