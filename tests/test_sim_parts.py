@@ -80,16 +80,18 @@ def test_quaternions_and_static_frames():
     assert np.allclose(main.R_BODY_OPTICAL @ [0, 0, 1], [1, 0, 0])
     assert np.allclose(main.R_BODY_OPTICAL @ [1, 0, 0], [0, -1, 0])
     cfg = config.load()
-    frames = main.static_frames(cfg, _sonar(cfg))
-    assert [(p, c) for p, c, *_ in frames] == [("tank", "oculus"), ("oculus", "oculus_projected"),
-                                               ("tank", "camera"), ("camera", "camera_optical")]
+    frames = main.static_frames(cfg)
+    assert [(p, c) for p, c, *_ in frames] == [("oculus", "oculus_projected"), ("oculus", "camera"),
+                                               ("camera", "camera_optical")]
 
 
-def test_moving_frames_keep_the_camera_on_the_sonar():
+def test_static_frames_carry_no_world_anchored_edge():
+    """/tf_static has mount offsets only: the sonar's true pose is ground truth, whether it moves or not
+    (docs/ros_hil.md §2.5 rule 4). The camera therefore always rides the sonar."""
     cfg = config.load()
     son = _sonar(cfg)
-    frames = {(p, c): (r, x) for p, c, r, x in main.static_frames(cfg, son, moving=True)}
-    assert ("tank", "oculus") not in frames and ("tank", "camera") not in frames
+    frames = {(p, c): (r, x) for p, c, r, x in main.static_frames(cfg)}
+    assert not [c for p, c in frames if p == "tank"]
     r, x = frames[("oculus", "camera")]
     assert np.allclose(son.rot @ r, geometry.rot_rpy_deg(config.get(cfg, "camera.rpy_deg")))
     assert np.allclose(son.position + son.rot @ np.asarray(x), config.get(cfg, "camera.position"))

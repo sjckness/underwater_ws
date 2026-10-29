@@ -27,7 +27,13 @@ def _sonar_message(n_r=40, n_b=16):
     db[:3] = np.nan
     meta = {"sonar": {"frequency_hz": 750e3, "sound_speed": 1506.7, "beamwidth_h_deg": 1.0, "fov_v_deg": 20.0,
                       "range": 0.2, "mode": "lf", "focus": True, "noise_floor_db": 70.0, "display_db": [0, 80],
-                      "position": [0.1, 1.5, 1.05], "roll_deg": 0.0, "pitch_deg": 15.0, "yaw_deg": 0.0}}
+                      "tvg_db_per_decade": 30.0, "absorption_db_per_m": 0.25,
+                      # ground truth, present in every per-ping meta and allowed on no published topic but /gt
+                      "position": [0.1, 1.5, 1.05], "roll_deg": 0.0, "pitch_deg": 15.0, "yaw_deg": 0.0,
+                      "rotation": [[0.9659258, 0.0, 0.2588190], [0.0, 1.0, 0.0], [-0.2588190, 0.0, 0.9659258]],
+                      "pose_source": "fixed"},
+            "plume_mask_threshold": 0.5, "plume_pixels": {"all": 120, "direct": 90, "geom": 36},
+            "leak": {"position": [1.7, 1.45, 0.4], "range_m": 1.6, "flow_lpm": 2.0}}
     return sinks.Message("sonar", 3, 12.3, arrays={"polar_db": db, "range_m": np.arange(n_r) * 0.004,
                                                    "bearing_deg": np.linspace(-65, 65, n_b)},
                          images={"polar": polar[::-1]}, meta=meta), polar
@@ -46,6 +52,12 @@ def test_bridge_messages():
     meta = ros_bridge.sonar_meta(msg)
     assert meta["projected_frame_id"] == "oculus_projected" and len(meta["bearing_deg"]) == 16
     json.dumps(meta)
+    s = msg.meta["sonar"]
+    gt = ros_bridge.pose_stamped_msg(msg.stamp, "tank", s["position"], s["rotation"])
+    assert gt.header.frame_id == "tank" and (gt.header.stamp.sec, gt.header.stamp.nanosec) == (12, 300000000)
+    assert [gt.pose.position.x, gt.pose.position.y, gt.pose.position.z] == s["position"]
+    q = gt.pose.orientation
+    assert np.allclose([q.x, q.y, q.z, q.w], ros_bridge.quat_xyzw(np.array(s["rotation"])))
     K = np.array([[600.0, 0, 640], [0, 600.0, 360], [0, 0, 1]])
     ci = ros_bridge.camera_info_msg(1.0, "camera_optical", K, 1280, 720)
     assert list(ci.k) == list(K.ravel()) and ci.p[0] == 600.0 and ci.p[10] == 1.0
@@ -60,6 +72,23 @@ def test_bridge_messages():
     tf = ros_bridge.transform_msg(0.0, "oculus", "oculus_projected", ros_bridge.R_SONAR_PROJECTED, (0, 0, 0))
     r = tf.transform.rotation
     assert np.allclose([r.x, r.y, r.z, r.w], ros_bridge.quat_xyzw(ros_bridge.R_SONAR_PROJECTED))
+
+
+def test_sonar_meta_leaks_no_ground_truth():
+    """docs/ros_hil.md §2.5 rule 2. /oculus/meta is the one metadata topic the detector must subscribe to, and the
+    per-ping meta it is built from carries the sonar's true pose, the leak's range and bearing, and
+    plume_pixels.geom — which *is* the in_view target. So sonar_meta() is a fixed key list and one `**s` splat
+    away from shipping the answer. Needs no ROS: sonar_meta() is pure."""
+    msg, _ = _sonar_message()
+    assert set(msg.meta["sonar"]) & set(ros_bridge.META_FORBIDDEN)       # the fixture does carry the truth
+    meta = ros_bridge.sonar_meta(msg)
+    for key in ros_bridge.META_FORBIDDEN:
+        assert key not in meta, f"{key} must not reach /oculus/meta"
+    text = json.dumps(meta)
+    for word in ("plume", "mask", "leak", "in_view", "roll", "pitch", "yaw", "position"):
+        assert word not in text, f"{word!r} in the published meta"
+    # and the whole gain chain must be there, or the 8-bit polar image is not invertible (§2.4)
+    assert {"display_db", "tvg_db_per_decade", "absorption_db_per_m", "noise_floor_db"} <= set(meta)
 
 
 def test_relay_projected_sonar_image():

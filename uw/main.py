@@ -103,21 +103,22 @@ class Stats:
                 for k, v in self.t.items() if v}
 
 
-def static_frames(cfg: dict, son, moving: bool = False) -> list:
-    """The fixed frames. A fixed sonar: tank -> oculus and tank -> camera; a moving one: the camera rides with the
-    sonar (oculus -> camera, its configured offset), and tank -> oculus goes on /tf every ping."""
+def static_frames(cfg: dict) -> list:
+    """The mount offsets, for /tf_static: oculus -> oculus_projected, and the camera on the sonar
+    (oculus -> camera -> camera_optical), from the configured rig positions.
+
+    **No world-anchored edge.** tank -> oculus is the sonar's true pose, and the simulator publishing it on /tf or
+    /tf_static would hand any detector doing a TF lookup the answer (docs/ros_hil.md §2.5 rule 4). It goes to
+    /gt/sonar_pose and /gt/tf instead, so tank -> oculus does not resolve until an estimator publishes it. The
+    camera is expressed relative to the sonar whether the sonar moves or not: both are payload on the same rig,
+    and only their relative offset is not ground truth."""
     from .geometry import rot_rpy_deg, sonar_rotation
     from .ros_bridge import FRAMES, R_SONAR_PROJECTED
     out = [(FRAMES["sonar"], FRAMES["sonar_projected"], R_SONAR_PROJECTED, (0.0, 0.0, 0.0))]
-    if not moving:
-        out.insert(0, (FRAMES["world"], FRAMES["sonar"], son.rot, son.position))
     if get(cfg, "camera.enabled"):
         cam_rot, cam_pos = rot_rpy_deg(get(cfg, "camera.rpy_deg")), np.asarray(get(cfg, "camera.position"), float)
-        if moving:
-            s_rot, s_pos = sonar_rotation(cfg), np.asarray(get(cfg, "sonar.position"), float)
-            out.append((FRAMES["sonar"], FRAMES["camera"], s_rot.T @ cam_rot, s_rot.T @ (cam_pos - s_pos)))
-        else:
-            out.append((FRAMES["world"], FRAMES["camera"], cam_rot, cam_pos))
+        s_rot, s_pos = sonar_rotation(cfg), np.asarray(get(cfg, "sonar.position"), float)
+        out.append((FRAMES["sonar"], FRAMES["camera"], s_rot.T @ cam_rot, s_rot.T @ (cam_pos - s_pos)))
         out.append((FRAMES["camera"], FRAMES["camera_optical"], R_BODY_OPTICAL, (0.0, 0.0, 0.0)))
     return out
 
@@ -130,7 +131,6 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
 
     from . import bubbles, geometry, pose, recorder, sinks, sonar, surface, usd_scene
     from .app import render_settings_report
-    from .ros_bridge import FRAMES
 
     t_setup = time.perf_counter()
     wp.config.quiet = True
@@ -185,7 +185,7 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
         sink = sinks.make_sink("none")
     dt = sim.dt if sim is not None else float(get(cfg, "plume.dt"))
     t0 = sim.t if sim is not None else 0.0
-    sink.static_transforms(t0, static_frames(cfg, son, motion.moving))
+    sink.static_transforms(t0, static_frames(cfg))
     setup_s = time.perf_counter() - t_setup
     log.info("setup %.1f s; render settings %s", setup_s, render_settings_report())
 
@@ -245,8 +245,6 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                     son.set_pose(here.position, here.rot)
                 ping = son.ping(bubbles=sim, extra=boil.update(son.position) if boil is not None else ())
                 t_c = time.perf_counter()
-                if motion.moving:
-                    sink.transforms(t, [(FRAMES["world"], FRAMES["sonar"], ping.rot, ping.position)])
                 sink.publish(recorder.sonar_message(count["pings"], sim.t if sim is not None else t, ping, son, cfg,
                                                     scene, sim, fan=True if live else None))
                 if overlay is not None:

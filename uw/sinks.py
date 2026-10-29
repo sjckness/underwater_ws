@@ -33,10 +33,9 @@ class SensorSink:
         """Sim time; only live sinks use it."""
 
     def static_transforms(self, t: float, transforms: list) -> None:
-        """Fixed frames [(parent, child, rotation 3x3, translation)]; only live sinks use them."""
-
-    def transforms(self, t: float, transforms: list) -> None:
-        """Moving frames (a mobile sonar), same form; only live sinks use them."""
+        """Mount offsets [(parent, child, rotation 3x3, translation)]; only live sinks use them. There is no
+        moving-frame counterpart: the sim does not publish /tf (docs/ros_hil.md §2.5 rule 4), and the true sonar
+        pose travels with the ping, on /gt (uw/ros_bridge.py)."""
 
     def close(self) -> None:
         pass

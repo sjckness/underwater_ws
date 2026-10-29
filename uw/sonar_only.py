@@ -68,8 +68,8 @@ def run(cfg: dict, pings: int, sink, plume: bool = True, fan: bool | None = None
         info.update({"config_hash": recorder.config_hash(cfg), "seed": cfg["seed"],
                      "labels": {"threshold": son.mask_threshold, **recorder.LABELS}, "config": cfg})
     t_start = sim.t if sim is not None else 0.0
-    sink.static_transforms(t_start, [("oculus", "oculus_projected", R_SONAR_PROJECTED, (0, 0, 0))]
-                           + ([] if motion.moving else [("tank", "oculus", son.rot, son.position)]))
+    # mount offsets only: tank -> oculus is the true pose and goes to /gt (docs/ros_hil.md §2.5 rule 4)
+    sink.static_transforms(t_start, [("oculus", "oculus_projected", R_SONAR_PROJECTED, (0, 0, 0))])
     step_ms, ping_ms, write_ms, static_ms = [], [], [], []
     for i in range(pings):
         t = time.perf_counter()
@@ -84,8 +84,6 @@ def run(cfg: dict, pings: int, sink, plume: bool = True, fan: bool | None = None
         ping = son.ping(bubbles=sim, extra=boil.update(son.position) if boil is not None else ())
         t2 = time.perf_counter()
         sink.clock(stamp)
-        if motion.moving:
-            sink.transforms(stamp, [("tank", "oculus", ping.rot, ping.position)])
         sink.publish(recorder.sonar_message(i, stamp, ping, son, cfg, scene, sim, fan=fan))
         t3 = time.perf_counter()
         step_ms.append((t1 - t) * 1e3)

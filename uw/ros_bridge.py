@@ -6,7 +6,7 @@ bridge's libraries on LD_LIBRARY_PATH. Domain: ROS_DOMAIN_ID, which the containe
 
 Topics (frames: tank = world, origin at the inner bottom corner; oculus = sonar acoustic centre, x forward, y port,
 z up; oculus_projected = the same point with the axes of marine_acoustic_msgs/ProjectedSonarImage, x up, y starboard,
-z forward; camera and camera_optical as usual):
+z forward; camera and camera_optical as usual; gt_oculus = the sonar's *true* pose, ground truth only):
   /oculus/polar        sensor_msgs/Image mono8, rows = range bins (row 0 = range 0), columns = beams (port to
                        starboard, bearing_deg in /oculus/meta); the display image (TVG, display_db window)
   /oculus/polar_db     sensor_msgs/Image 32FC1, same layout: raw level dB re 1 uPa, NaN in the blind zone
@@ -17,7 +17,14 @@ z forward; camera and camera_optical as usual):
   /sim/leak            geometry_msgs/PoseStamped: the hole, x axis along its outward normal; /sim/leak/flow_lpm
                        std_msgs/Float32 (gas flow at the hole's pressure); both latched
   /sim/plume           visualization_msgs/MarkerArray: one SPHERE_LIST of the bubbles (decimated)
-  /tf_static, /clock; /tf (tank -> oculus) per ping when the sonar moves
+  /gt/sonar_pose       geometry_msgs/PoseStamped: the sonar's TRUE pose in the tank frame, per ping; /gt/tf carries
+                       the same thing as tank -> gt_oculus. Ground truth: no Jetson node subscribes it, and it is
+                       not latched (docs/topic_map.md §4.8, docs/ros_hil.md §2.5)
+  /tf_static, /clock   the payload mount chain and sim time
+**The sim never publishes /tf.** The live sonar pose is the estimator's or ArduSub's to publish, never the
+simulator's (docs/ros_hil.md §2.5 rule 4): a detector doing a TF lookup would otherwise read the truth. /tf_static
+therefore carries only mount offsets (oculus -> oculus_projected, oculus -> camera, camera -> camera_optical) and
+no world-anchored edge at all, so tank -> oculus does not resolve until something estimates it.
 Input (sonar.pose_source ros): ``RosPose`` takes the sonar's pose from a geometry_msgs/PoseStamped topic.
 """
 from __future__ import annotations
@@ -36,7 +43,7 @@ from .sinks import Message, SensorSink
 log = logging.getLogger(__name__)
 
 FRAMES = {"world": "tank", "sonar": "oculus", "sonar_projected": "oculus_projected", "camera": "camera",
-          "camera_optical": "camera_optical"}
+          "camera_optical": "camera_optical", "gt_sonar": "gt_oculus"}
 # oculus_projected axes (x up, y starboard, z forward) in the oculus frame (x forward, y port, z up): columns
 R_SONAR_PROJECTED = np.array([[0.0, 0.0, 1.0], [0.0, -1.0, 0.0], [1.0, 0.0, 0.0]])
 
@@ -176,15 +183,42 @@ def plume_markers_msg(t: float, pos: np.ndarray, diameter: np.ndarray, max_point
     return MarkerArray(markers=[m])
 
 
+#: the only keys of meta["sonar"] that reach /oculus/meta. Deliberately a fixed list and not a `**s` splat: the
+#: per-ping meta also holds the sonar's true pose and plume_pixels.geom, which *is* the in_view target, and one
+#: careless splat would publish the answer (docs/ros_hil.md §2.5 rule 2, asserted in tests/test_ros_messages.py).
+META_KEYS = ("frequency_hz", "sound_speed", "beamwidth_h_deg", "fov_v_deg", "range", "mode", "focus",
+             "noise_floor_db", "display_db", "tvg_db_per_decade", "absorption_db_per_m")
+#: what must never appear in it: the pose (a real Oculus reports none of it) and anything label-shaped.
+META_FORBIDDEN = ("position", "rotation", "roll_deg", "pitch_deg", "yaw_deg", "plume_pixels", "plume_mask_threshold",
+                  "leak", "pose_source")
+
+
 def sonar_meta(msg: Message) -> dict:
-    """What a consumer needs to place the polar image (latched on /oculus/meta)."""
+    """What a consumer needs to place the polar image and undo its gain chain (latched on /oculus/meta).
+
+    Carries no pose: the sonar's true pose goes to /gt/sonar_pose instead, since a real Oculus publishes neither
+    position nor attitude and this is the one metadata topic the detector must subscribe to. Carries the whole
+    gain chain, because the 8-bit quantization is only invertible with it: display_db [lo, hi], tvg_db_per_decade
+    and absorption_db_per_m are our analogue of the real bag's single dynamic_reconfigure/Config."""
     s = msg.meta["sonar"]
     return {"frame_id": FRAMES["sonar"], "projected_frame_id": FRAMES["sonar_projected"],
             "layout": "rows = range bins (row 0 = range_m[0]), columns = beams (bearing_deg, + starboard)",
             "range_m": [round(float(v), 6) for v in msg.arrays["range_m"]],
             "bearing_deg": [round(float(v), 5) for v in msg.arrays["bearing_deg"]],
-            **{k: s[k] for k in ("frequency_hz", "sound_speed", "beamwidth_h_deg", "fov_v_deg", "range", "mode", "focus",
-                                 "noise_floor_db", "display_db", "position", "roll_deg", "pitch_deg", "yaw_deg")}}
+            **{k: s[k] for k in META_KEYS}}
+
+
+def pose_stamped_msg(t: float, frame: str, position, rot):
+    """geometry_msgs/PoseStamped from a position and a body-to-world rotation matrix."""
+    from geometry_msgs.msg import PoseStamped
+
+    m = PoseStamped()
+    m.header.stamp = _stamp(t)
+    m.header.frame_id = frame
+    m.pose.position.x, m.pose.position.y, m.pose.position.z = (float(v) for v in position)
+    q = quat_xyzw(np.asarray(rot, float))
+    m.pose.orientation.x, m.pose.orientation.y, m.pose.orientation.z, m.pose.orientation.w = map(float, q)
+    return m
 
 
 class RosSink(SensorSink):
@@ -217,8 +251,10 @@ class RosSink(SensorSink):
             "image": pub(Image, "/camera/image_raw", sensor), "camera_info": pub(CameraInfo, "/camera/camera_info", sensor),
             "leak": pub(PoseStamped, "/sim/leak", latched), "flow": pub(Float32, "/sim/leak/flow_lpm", latched),
             "plume": pub(MarkerArray, "/sim/plume", _qos({"depth": 1})),
+            # ground truth: never latched, so a node that never asked for it cannot receive it on join
+            "gt_sonar_pose": pub(PoseStamped, "/gt/sonar_pose", _qos({"depth": 10})),
+            "gt_tf": pub(TFMessage, "/gt/tf", _qos({"depth": 100})),
             "tf_static": pub(TFMessage, "/tf_static", _qos({"depth": 1, "durability": "transient_local"})),
-            "tf": pub(TFMessage, "/tf", _qos({"depth": 10})),
             "clock": pub(Clock, "/clock", _qos({"depth": 1, "reliability": "best_effort"})),
         }
         self.msgs = {"Clock": Clock, "String": String, "Float32": Float32, "TFMessage": TFMessage}
@@ -241,6 +277,10 @@ class RosSink(SensorSink):
             if meta != self.meta:
                 self.pub["meta"].publish(self.msgs["String"](data=json.dumps(meta)))
                 self.meta = meta
+            s = msg.meta["sonar"]                   # the true pose, to /gt only — never /oculus/meta, never /tf
+            self.pub["gt_sonar_pose"].publish(pose_stamped_msg(t, FRAMES["world"], s["position"], s["rotation"]))
+            self.pub["gt_tf"].publish(self.msgs["TFMessage"](transforms=[
+                transform_msg(t, FRAMES["world"], FRAMES["gt_sonar"], s["rotation"], s["position"])]))
         elif msg.sensor == "camera":
             frame = FRAMES["camera_optical"]
             rgb = msg.images["rgb"]
@@ -261,13 +301,9 @@ class RosSink(SensorSink):
         self.pub["clock"].publish(self.msgs["Clock"](clock=_stamp(t)))
 
     def static_transforms(self, t: float, transforms: list) -> None:
-        """[(parent, child, rotation 3x3, translation)] on /tf_static."""
+        """[(parent, child, rotation 3x3, translation)] on /tf_static: mount offsets only. All of them must go in
+        one call — a depth-1 TRANSIENT_LOCAL writer replays only its last message to a late joiner."""
         self.pub["tf_static"].publish(self.msgs["TFMessage"](
-            transforms=[transform_msg(t, p, c, r, x) for p, c, r, x in transforms]))
-
-    def transforms(self, t: float, transforms: list) -> None:
-        """Moving frames (a mobile sonar), same form, on /tf."""
-        self.pub["tf"].publish(self.msgs["TFMessage"](
             transforms=[transform_msg(t, p, c, r, x) for p, c, r, x in transforms]))
 
     def close(self) -> None:
