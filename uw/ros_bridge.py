@@ -4,27 +4,36 @@ Works inside the Kit app (`sim`) and in a plain container Python (`sonar-only --
 bridge's libraries on LD_LIBRARY_PATH. Domain: ROS_DOMAIN_ID, which the container sets from UW_ROS_DOMAIN_ID
 (default 73), never an f1tenth domain. All stamps are sim time; /clock carries it.
 
-Topics (frames: tank = world, origin at the inner bottom corner; oculus = sonar acoustic centre, x forward, y port,
-z up; oculus_projected = the same point with the axes of marine_acoustic_msgs/ProjectedSonarImage, x up, y starboard,
-z forward; camera and camera_optical as usual; gt_oculus = the sonar's *true* pose, ground truth only):
-  /oculus/polar        sensor_msgs/Image mono8, rows = range bins (row 0 = range 0), columns = beams (port to
-                       starboard, bearing_deg in /oculus/meta); the display image (TVG, display_db window)
-  /oculus/polar_db     sensor_msgs/Image 32FC1, same layout: raw level dB re 1 uPa, NaN in the blind zone
-  /oculus/fan          sensor_msgs/Image mono8, Cartesian fan (apex at the bottom centre)
-  /oculus/meta         std_msgs/String JSON, latched: range_m, bearing_deg, frequency, sound speed, beam widths, ...
-                       (what ros/sonar_relay needs for ProjectedSonarImage)
-  /camera/image_raw    sensor_msgs/Image rgb8; /camera/camera_info
-  /sim/leak            geometry_msgs/PoseStamped: the hole, x axis along its outward normal; /sim/leak/flow_lpm
-                       std_msgs/Float32 (gas flow at the hole's pressure); both latched
-  /sim/plume           visualization_msgs/MarkerArray: one SPHERE_LIST of the bubbles (decimated)
-  /gt/sonar_pose       geometry_msgs/PoseStamped: the sonar's TRUE pose in the tank frame, per ping; /gt/tf carries
-                       the same thing as tank -> gt_oculus. Ground truth: no Jetson node subscribes it, and it is
-                       not latched (docs/topic_map.md §4.8, docs/ros_hil.md §2.5)
-  /tf_static, /clock   the payload mount chain and sim time
+Topics and frames follow docs/topic_map.md; TOPIC_TEMPLATES and frames() below are the only place they are named,
+and ros.vehicle picks the namespace and the frame prefix (default rov1). Frames: map = the tank, origin at the
+inner bottom corner, ENU; rov1/sonar_fls = the sonar's acoustic centre, x forward, y port, z up;
+rov1/sonar_fls_projected = the same point with the axes of marine_acoustic_msgs/ProjectedSonarImage, x up,
+y starboard, z forward; rov1/camera_front(_optical) as usual; gt/rov1/sonar_fls = the sonar's *true* pose, ground
+truth only.
+
+  /rov1/sensors/sonar_fls/image        sensor_msgs/Image mono8, rows = range bins (row 0 = range 0), columns =
+                                       beams (port to starboard, bearing_deg in …/meta); the display image (TVG,
+                                       display_db window). ros/sonar_relay turns it into ProjectedSonarImage on
+                                       …/sonar_fls/sonar_image, and only that crosses the link
+  /rov1/sensors/sonar_fls/meta         std_msgs/String JSON, latched: range_m, bearing_deg, frequency, sound
+                                       speed, beam widths and the whole gain chain. No pose, no label
+  /rov1/sensors/camera_front/image_raw sensor_msgs/Image rgb8; …/camera_front/camera_info
+  /gt/polar_db                         sensor_msgs/Image 32FC1: the calibrated level, dB re 1 uPa, NaN in the
+                                       blind zone. Ground truth, and 4x the bytes of the ping: never crosses
+  /gt/leak/pose                        geometry_msgs/PoseStamped: the hole, x axis along its outward normal;
+                                       /gt/leak/flow_lpm std_msgs/Float32 (gas flow at the hole's pressure)
+  /gt/plume/markers                    visualization_msgs/MarkerArray: one SPHERE_LIST of the bubbles (decimated)
+  /gt/sonar_pose                       geometry_msgs/PoseStamped: the sonar's TRUE pose in map, per ping; /gt/tf
+                                       carries the same thing as map -> gt/rov1/sonar_fls
+  /sim/debug/sonar_fan                 sensor_msgs/Image mono8, Cartesian fan: derived from the polar image on
+                                       this side, so off unless ros.publish_fan
+  /tf_static, /clock                   the payload mount chain and sim time, both global by necessity
+Nothing under /gt is latched: a node that never asked for ground truth must not receive it on join (§2.5 rule 3).
 **The sim never publishes /tf.** The live sonar pose is the estimator's or ArduSub's to publish, never the
 simulator's (docs/ros_hil.md §2.5 rule 4): a detector doing a TF lookup would otherwise read the truth. /tf_static
-therefore carries only mount offsets (oculus -> oculus_projected, oculus -> camera, camera -> camera_optical) and
-no world-anchored edge at all, so tank -> oculus does not resolve until something estimates it.
+therefore carries only mount offsets (sonar_fls -> sonar_fls_projected, sonar_fls -> camera_front, camera_front ->
+camera_front_optical) and no world-anchored edge at all, so map -> rov1/sonar_fls does not resolve until something
+estimates it.
 Input (sonar.pose_source ros): ``RosPose`` takes the sonar's pose from a geometry_msgs/PoseStamped topic.
 """
 from __future__ import annotations
@@ -42,8 +51,42 @@ from .sinks import Message, SensorSink
 
 log = logging.getLogger(__name__)
 
-FRAMES = {"world": "tank", "sonar": "oculus", "sonar_projected": "oculus_projected", "camera": "camera",
-          "camera_optical": "camera_optical", "gt_sonar": "gt_oculus"}
+VEHICLE = "rov1"        # ros.vehicle: one namespace and one frame prefix per vehicle, even with a single ROV
+
+
+def frames(vehicle: str = VEHICLE) -> dict:
+    """REP-105 frame ids for one vehicle (docs/topic_map.md §2). `map` is the tank, shared by every vehicle and by
+    the ground-truth tree; everything attached to a vehicle carries its prefix, which is how multi-ROV separation
+    works in TF — a topic namespace cannot do it, since there is one /tf for the whole graph."""
+    return {"world": "map", "odom": f"{vehicle}/odom", "body": f"{vehicle}/base_link",
+            "sonar": f"{vehicle}/sonar_fls", "sonar_projected": f"{vehicle}/sonar_fls_projected",
+            "camera": f"{vehicle}/camera_front", "camera_optical": f"{vehicle}/camera_front_optical",
+            "gt_sonar": f"gt/{vehicle}/sonar_fls"}
+
+
+FRAMES = frames()
+
+#: docs/topic_map.md §4, the single place in the code that names a topic. "{v}" is the vehicle namespace; /gt and
+#: /sim are not per vehicle, because there is one simulator and one truth whatever the vehicle count.
+TOPIC_TEMPLATES = {
+    "polar": "/{v}/sensors/sonar_fls/image",            # the relay's input: host-local, see §6
+    "meta": "/{v}/sensors/sonar_fls/meta",
+    "image": "/{v}/sensors/camera_front/image_raw",
+    "camera_info": "/{v}/sensors/camera_front/camera_info",
+    "polar_db": "/gt/polar_db",                         # the calibrated level: never crosses the link
+    "fan": "/sim/debug/sonar_fan",                      # derived from polar on this side; off by default
+    "leak": "/gt/leak/pose",
+    "flow": "/gt/leak/flow_lpm",
+    "plume": "/gt/plume/markers",
+    "gt_sonar_pose": "/gt/sonar_pose",
+    "gt_tf": "/gt/tf",
+    "tf_static": "/tf_static",                          # global: one TF tree for the graph
+    "clock": "/clock",                                  # global: use_sim_time reads it there
+}
+
+
+def topics(vehicle: str = VEHICLE) -> dict:
+    return {k: t.format(v=vehicle) for k, t in TOPIC_TEMPLATES.items()}
 # oculus_projected axes (x up, y starboard, z forward) in the oculus frame (x forward, y port, z up): columns
 R_SONAR_PROJECTED = np.array([[0.0, 0.0, 1.0], [0.0, -1.0, 0.0], [1.0, 0.0, 0.0]])
 
@@ -183,7 +226,7 @@ def plume_markers_msg(t: float, pos: np.ndarray, diameter: np.ndarray, max_point
     return MarkerArray(markers=[m])
 
 
-#: the only keys of meta["sonar"] that reach /oculus/meta. Deliberately a fixed list and not a `**s` splat: the
+#: the only keys of meta["sonar"] that reach .../sonar_fls/meta. Deliberately a fixed list and not a `**s` splat: the
 #: per-ping meta also holds the sonar's true pose and plume_pixels.geom, which *is* the in_view target, and one
 #: careless splat would publish the answer (docs/ros_hil.md §2.5 rule 2, asserted in tests/test_ros_messages.py).
 META_KEYS = ("frequency_hz", "sound_speed", "beamwidth_h_deg", "fov_v_deg", "range", "mode", "focus",
@@ -193,15 +236,15 @@ META_FORBIDDEN = ("position", "rotation", "roll_deg", "pitch_deg", "yaw_deg", "p
                   "leak", "pose_source")
 
 
-def sonar_meta(msg: Message) -> dict:
-    """What a consumer needs to place the polar image and undo its gain chain (latched on /oculus/meta).
+def sonar_meta(msg: Message, vehicle: str = VEHICLE) -> dict:
+    """What a consumer needs to place the polar image and undo its gain chain (latched on …/sonar_fls/meta).
 
     Carries no pose: the sonar's true pose goes to /gt/sonar_pose instead, since a real Oculus publishes neither
     position nor attitude and this is the one metadata topic the detector must subscribe to. Carries the whole
     gain chain, because the 8-bit quantization is only invertible with it: display_db [lo, hi], tvg_db_per_decade
     and absorption_db_per_m are our analogue of the real bag's single dynamic_reconfigure/Config."""
-    s = msg.meta["sonar"]
-    return {"frame_id": FRAMES["sonar"], "projected_frame_id": FRAMES["sonar_projected"],
+    s, f = msg.meta["sonar"], frames(vehicle)
+    return {"frame_id": f["sonar"], "projected_frame_id": f["sonar_projected"],
             "layout": "rows = range bins (row 0 = range_m[0]), columns = beams (bearing_deg, + starboard)",
             "range_m": [round(float(v), 6) for v in msg.arrays["range_m"]],
             "bearing_deg": [round(float(v), 5) for v in msg.arrays["bearing_deg"]],
@@ -222,7 +265,8 @@ def pose_stamped_msg(t: float, frame: str, position, rot):
 
 
 class RosSink(SensorSink):
-    def __init__(self, node_name: str = "uw_sim", fan: bool = True, plume_markers: int = 3000):
+    def __init__(self, node_name: str = "sim_bridge", vehicle: str = VEHICLE, fan: bool = False,
+                 plume_markers: int = 3000, domain_id: int | None = None):
         ensure_rclpy_path()
         # the bridge's rosidl_generator_py logs a DEBUG traceback (no 'lark') on import: harmless, kept out of the log
         logging.getLogger("rosidl_generator_py").setLevel(logging.WARNING)
@@ -234,55 +278,65 @@ class RosSink(SensorSink):
         from geometry_msgs.msg import PoseStamped
         from visualization_msgs.msg import MarkerArray
 
+        # the domain explicitly, not only from the environment: an unset ROS_DOMAIN_ID used to leave the sim on
+        # domain 0, which is an f1tenth domain (docs/bridge_setup.md §1)
+        self.domain = int(os.environ.get("ROS_DOMAIN_ID", "73") if domain_id is None else domain_id)
         try:
             from rclpy.signals import SignalHandlerOptions
-            rclpy.init(signal_handler_options=SignalHandlerOptions.NO)      # the sim handles Ctrl-C itself
+            rclpy.init(domain_id=self.domain,                               # the sim handles Ctrl-C itself
+                       signal_handler_options=SignalHandlerOptions.NO)
         except (ImportError, TypeError):
-            rclpy.init()
+            rclpy.init(domain_id=self.domain)
         self.rclpy = rclpy
+        self.vehicle = vehicle
+        self.frames = frames(vehicle)
         self.node = rclpy.create_node(node_name)
-        self.domain = int(os.environ.get("ROS_DOMAIN_ID", "0"))
-        sensor = _qos({"depth": 2})
+        # QoS classes of docs/topic_map.md §3. Images are BEST_EFFORT: Fast DDS's max_blocking_time defaults to
+        # 100 ms, which is the whole ping_budget_ms.static, so one blocked write would eat a ping period.
+        sensor = _qos({"depth": 5, "reliability": "best_effort"})
         latched = _qos({"depth": 1, "durability": "transient_local"})
+        gt = _qos({"depth": 10})            # ground truth is RELIABLE but NEVER latched (§2.5 rule 3)
+        t = topics(vehicle)
         pub = self.node.create_publisher
         self.pub = {
-            "polar": pub(Image, "/oculus/polar", sensor), "polar_db": pub(Image, "/oculus/polar_db", sensor),
-            "fan": pub(Image, "/oculus/fan", sensor), "meta": pub(String, "/oculus/meta", latched),
-            "image": pub(Image, "/camera/image_raw", sensor), "camera_info": pub(CameraInfo, "/camera/camera_info", sensor),
-            "leak": pub(PoseStamped, "/sim/leak", latched), "flow": pub(Float32, "/sim/leak/flow_lpm", latched),
-            "plume": pub(MarkerArray, "/sim/plume", _qos({"depth": 1})),
-            # ground truth: never latched, so a node that never asked for it cannot receive it on join
-            "gt_sonar_pose": pub(PoseStamped, "/gt/sonar_pose", _qos({"depth": 10})),
-            "gt_tf": pub(TFMessage, "/gt/tf", _qos({"depth": 100})),
-            "tf_static": pub(TFMessage, "/tf_static", _qos({"depth": 1, "durability": "transient_local"})),
-            "clock": pub(Clock, "/clock", _qos({"depth": 1, "reliability": "best_effort"})),
+            "polar": pub(Image, t["polar"], sensor), "polar_db": pub(Image, t["polar_db"], sensor),
+            "fan": pub(Image, t["fan"], sensor), "meta": pub(String, t["meta"], latched),
+            "image": pub(Image, t["image"], sensor), "camera_info": pub(CameraInfo, t["camera_info"], sensor),
+            "leak": pub(PoseStamped, t["leak"], gt), "flow": pub(Float32, t["flow"], gt),
+            "plume": pub(MarkerArray, t["plume"], sensor),
+            "gt_sonar_pose": pub(PoseStamped, t["gt_sonar_pose"], gt),
+            "gt_tf": pub(TFMessage, t["gt_tf"], _qos({"depth": 100})),
+            "tf_static": pub(TFMessage, t["tf_static"], latched),
+            "clock": pub(Clock, t["clock"], _qos({"depth": 1, "reliability": "best_effort"})),
         }
+        self.topics = t
         self.msgs = {"Clock": Clock, "String": String, "Float32": Float32, "TFMessage": TFMessage}
         self.fan = fan
         self.plume_max = plume_markers
         self.meta = None
         self.count = {}
-        log.info("ROS 2: node %s on domain %d", node_name, self.domain)
+        log.info("ROS 2: node %s on domain %d, vehicle %s", node_name, self.domain, vehicle)
 
     # ----------------------------------------------------------------------------- SensorSink
     def publish(self, msg: Message) -> None:
         t = msg.stamp
         if msg.sensor == "sonar":
-            frame = FRAMES["sonar"]
+            frame = self.frames["sonar"]
             self.pub["polar"].publish(image_msg(t, frame, msg.images["polar"][::-1], "mono8"))
             self.pub["polar_db"].publish(image_msg(t, frame, msg.arrays["polar_db"].astype(np.float32), "32FC1"))
             if self.fan and "fan" in msg.images:
                 self.pub["fan"].publish(image_msg(t, frame, msg.images["fan"], "mono8"))
-            meta = sonar_meta(msg)
+            meta = sonar_meta(msg, self.vehicle)
             if meta != self.meta:
                 self.pub["meta"].publish(self.msgs["String"](data=json.dumps(meta)))
                 self.meta = meta
-            s = msg.meta["sonar"]                   # the true pose, to /gt only — never /oculus/meta, never /tf
-            self.pub["gt_sonar_pose"].publish(pose_stamped_msg(t, FRAMES["world"], s["position"], s["rotation"]))
+            s = msg.meta["sonar"]                   # the true pose, to /gt only — never into meta, never /tf
+            world, gt_sonar = self.frames["world"], self.frames["gt_sonar"]
+            self.pub["gt_sonar_pose"].publish(pose_stamped_msg(t, world, s["position"], s["rotation"]))
             self.pub["gt_tf"].publish(self.msgs["TFMessage"](transforms=[
-                transform_msg(t, FRAMES["world"], FRAMES["gt_sonar"], s["rotation"], s["position"])]))
+                transform_msg(t, world, gt_sonar, s["rotation"], s["position"])]))
         elif msg.sensor == "camera":
-            frame = FRAMES["camera_optical"]
+            frame = self.frames["camera_optical"]
             rgb = msg.images["rgb"]
             self.pub["image"].publish(image_msg(t, frame, rgb, "rgb8"))
             self.pub["camera_info"].publish(camera_info_msg(t, frame, np.asarray(msg.meta["K"]), rgb.shape[1],
@@ -328,23 +382,26 @@ def pose_from_msg(msg):
 
 
 class RosPose:
-    """SensorPose from a ROS topic (sonar.pose_source ros): the latest geometry_msgs/PoseStamped of the sonar in the
-    tank frame; until one arrives, ``fallback`` (the configured pose). Polled at each ``at``."""
+    """SensorPose from a ROS topic (sonar.pose_source ros): the latest geometry_msgs/PoseStamped of the sonar in
+    the map frame, from /sim/cmd/rov1/pose; until one arrives, ``fallback`` (the configured pose). Polled at each
+    ``at``, so the command is quantized to the ping period. Sim-only: a commanded pose has no real counterpart,
+    which is why it lives under /sim and not /rov1/control (docs/topic_map.md §4.9)."""
     moving = True
 
-    def __init__(self, fallback, topic: str):
+    def __init__(self, fallback, topic: str, domain_id: int | None = None):
         ensure_rclpy_path()
         logging.getLogger("rosidl_generator_py").setLevel(logging.WARNING)
         import rclpy
         from geometry_msgs.msg import PoseStamped
+        domain = int(os.environ.get("ROS_DOMAIN_ID", "73") if domain_id is None else domain_id)
         if not rclpy.ok():
             try:
                 from rclpy.signals import SignalHandlerOptions
-                rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+                rclpy.init(domain_id=domain, signal_handler_options=SignalHandlerOptions.NO)
             except (ImportError, TypeError):
-                rclpy.init()
+                rclpy.init(domain_id=domain)
         self.rclpy, self.fallback, self.latest = rclpy, fallback, None
-        self.node = rclpy.create_node("uw_sonar_pose")
+        self.node = rclpy.create_node("sim_pose_input")
         self.node.create_subscription(PoseStamped, topic, self._on_pose, _qos({"depth": 1}))
         self.count = 0
         log.info("sonar pose from %s (until then the configured pose)", topic)

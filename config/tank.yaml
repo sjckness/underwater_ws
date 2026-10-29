@@ -160,7 +160,7 @@ sonar:
     poses: []                   # preset poses: [{position: [x, y, z], roll_deg, pitch_deg, yaw_deg}, ...], each held
     hold_s: 3.0                 #   for hold_s, then the next (several fixed views of one scene; static_cache on_motion)
   static_cache_motion: {position_m: 0.005, angle_deg: 0.25}   # static_cache on_motion: recompute beyond these
-  ros_pose_topic: /uw/sonar_pose  # pose_source ros: geometry_msgs/PoseStamped of the sonar in the tank frame
+  ros_pose_topic: /sim/cmd/rov1/pose  # pose_source ros: geometry_msgs/PoseStamped of the sonar in the map frame
   modes:                        # VERIFIED (datasheet): frequency, fan (h x v), beams, angular resolution (-3 dB beam
                                 # width), range resolution, min range, max range, max update rate
     lf: {frequency_hz: 750000.0, fov_h_deg: 130.0, fov_v_deg: 20.0, beams: 512, beamwidth_h_deg: 1.0,
@@ -236,12 +236,17 @@ sim:                            # python -m uw sim: the Isaac app
   view: side45                  # GUI viewport camera at start: side45 | top | sonar
   viewport_resolution: [1280, 720]   # GUI viewport render size (not the window's: a maximised window costs GPU time)
 
-ros:                            # SensorSink "ros" (uw/ros_bridge.py); the domain is UW_ROS_DOMAIN_ID (default 73)
+ros:                            # SensorSink "ros" (uw/ros_bridge.py); the domain is UW_ROS_DOMAIN_ID (default 73).
+                                # The topic and frame map is docs/topic_map.md; uw/ros_bridge.py names them once
+  vehicle: rov1                 # namespace and TF prefix: /rov1/sensors/..., frames rov1/base_link etc. One per
+                                #   vehicle even with a single ROV, so multi-ROV is a config change
   clock_hz: 60.0                # /clock (sim time)
-  plume_hz: 2.0                 # /sim/plume
-  plume_markers: 3000           # at most this many bubbles in /sim/plume (evenly decimated)
-  leak_hz: 1.0                  # /sim/leak, /sim/leak/flow_lpm
-  fan_width: 1024               # /oculus/fan (and recorder fan PNG) width [px]
+  plume_hz: 2.0                 # /gt/plume/markers
+  plume_markers: 3000           # at most this many bubbles in /gt/plume/markers (evenly decimated)
+  leak_hz: 1.0                  # /gt/leak/pose, /gt/leak/flow_lpm
+  publish_fan: false            # /sim/debug/sonar_fan: derived from the polar image on this side, so an operator
+                                #   convenience, not data. Off by default (docs/ros_hil.md §2.1)
+  fan_width: 1024               # /sim/debug/sonar_fan (and recorder fan PNG) width [px]
 
 camera:
   enabled: true

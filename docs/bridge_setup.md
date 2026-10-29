@@ -344,11 +344,13 @@ export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/fastdds_hil.xml
 ros2 doctor --report | grep -A3 -E "MIDDLEWARE|NETWORK"     # reads back what §3 claims
 ros2 topic list
 ros2 node list
-ros2 topic info -v /oculus/polar        # QoS of every endpoint, and that there IS a remote endpoint
-ros2 topic hz /oculus/polar /camera/image_raw /clock /tf
-ros2 topic bw /oculus/polar             # payload bytes/s, not wire bytes/s
-ros2 topic echo --once /oculus/meta     # latched: a late joiner must receive it
-ros2 run tf2_ros tf2_echo tank oculus
+S=/rov1/sensors/sonar_fls; C=/rov1/sensors/camera_front
+ros2 topic info -v $S/image             # QoS of every endpoint, and that there IS a remote endpoint
+ros2 topic hz $S/image $S/sonar_image $C/image_raw /clock
+ros2 topic bw $S/image                  # payload bytes/s, not wire bytes/s
+ros2 topic echo --once $S/meta          # latched: a late joiner must receive it
+ros2 run tf2_ros tf2_echo rov1/sonar_fls rov1/sonar_fls_projected
+ros2 run tf2_ros tf2_echo map rov1/sonar_fls    # MUST fail: that edge is ground truth (§2.5 rule 4)
 ```
 
 Expected, from what the sim publishes today (**V**, `docs/ros_hil.md` §1) and the bandwidth arithmetic of its
@@ -356,15 +358,17 @@ Expected, from what the sim publishes today (**V**, `docs/ros_hil.md` §1) and t
 
 | topic | rate | `ros2 topic bw` ≈ | note |
 |---|---|---|---|
-| `/oculus/polar` mono8 | 10 Hz | **4.5 MB/s** (35.9 Mbit/s) | grows with range: 2001 rows in the basin |
-| `/oculus/polar_db` 32FC1 | 10 Hz | **18 MB/s** (143.5 Mbit/s) | §2.1 says this one must **stop crossing** |
-| `/oculus/fan` mono8 | 10 Hz | **5.8 MB/s** (46.4 Mbit/s) | range-independent; §2.1 drops it |
-| `/camera/image_raw` rgb8 1280×720 | 10 Hz | **27.6 MB/s** (221.2 Mbit/s) | the camera profile is not the latency profile |
-| `/oculus/meta` | on change | — | must arrive on a late joiner (TRANSIENT_LOCAL) |
+| `/rov1/sensors/sonar_fls/image` mono8 | 10 Hz | **4.5 MB/s** (35.9 Mbit/s) | grows with range: 2001 rows in the basin |
+| `/rov1/sensors/sonar_fls/sonar_image` | 10 Hz | **4.7 MB/s** (37.5 Mbit/s) | the relay's output; the only sonar topic that crosses |
+| `/rov1/sensors/sonar_fls/meta` | on change | — | must arrive on a late joiner (TRANSIENT_LOCAL) |
+| `/rov1/sensors/camera_front/image_raw` rgb8 1280×720 | 10 Hz | **27.6 MB/s** (221.2 Mbit/s) | the camera profile is not the latency profile |
+| `/gt/polar_db` 32FC1 | 10 Hz | **18 MB/s** (143.5 Mbit/s) | ground truth, 4× the ping: must **never** cross |
+| `/gt/plume/markers` | 2 Hz | ~0.24 MB/s | 3000 markers (**V**) |
+| `/gt/leak/pose`, `/gt/leak/flow_lpm` | 1 Hz | — | not latched any more |
+| `/gt/sonar_pose`, `/gt/tf` | per ping | — | the true pose, out of `meta` and out of `/tf` |
 | `/clock` | 60 Hz | — | `ros.clock_hz: 60.0` (**V**) |
-| `/tf` | per ping, only when the sonar moves | — | fixed pose → `/tf_static` only |
-| `/sim/plume` | 2 Hz | ~0.24 MB/s | 3000 markers (**V**) |
-| `/sim/leak`, `/sim/leak/flow_lpm` | 1 Hz | — | latched today; §2.5 rule 3 removes the latching |
+| `/tf` | — | — | **no publisher on the sim host at all**, by design |
+| `/sim/debug/sonar_fan` | off | — | `ros.publish_fan: false` |
 
 `ros2 topic bw` reports deserialized payload per second, so compare it with the payload column above, **not**
 with §2.2's "+8 % wire" column; the 8 % is framing overhead measured at the NIC, e.g. with
@@ -379,7 +383,7 @@ with §2.2's "+8 % wire" column; the 8 % is framing overhead measured at the NIC
 | 3 | `ros2 topic hz` is within ±5 % of the table, over ≥ 60 s, with **no** sustained drops |
 | 4 | `ros2 topic bw` matches the table within ~10 %, and the NIC counters agree within the framing overhead |
 | 5 | `/oculus/meta` reaches a subscriber started **after** the sim (late-joiner latching) |
-| 6 | `tf2_echo` resolves the sonar frame from the world frame on the subscriber host |
+| 6 | `tf2_echo` resolves the payload chain (`rov1/sonar_fls` → `rov1/sonar_fls_projected`) on the subscriber host, and `map` → `rov1/sonar_fls` does **not** resolve — that edge is ground truth |
 | 7 | the sim's **RTF is recorded next to every number**, with and without the monitors attached (§3.3 of ros_hil: a wall-clock delay appears inside the sim scaled by RTF) |
 | 8 | `QoSMessageLostInfo` drop counters and the `/proc/net/snmp` UDP/IP deltas are captured for the run (ros_hil §3.3) |
 
@@ -409,6 +413,5 @@ with §2.2's "+8 % wire" column; the 8 % is framing overhead measured at the NIC
   what decides whether MAVROS's TIMESYNC converges at all (its §7 item 2).
 - **Thor's and Orin's JetPack version, NIC and PTP capability are unknown** (§7 item 1 of that document); they
   decide arm64 package availability and the wall-clock sync floor.
-- **The topic names used in §6 are the ones that exist today**, and `docs/topic_map.md` proposes replacing all of
-  them. Verify the transport first with the current names, then rename once — a rename and a transport bring-up
-  at the same time is two unknowns in one measurement.
+- **The topic names used in §6 are `docs/topic_map.md`'s**, which the code now publishes; the rename landed
+  before the first transport measurement, so a failure here is one unknown, not two.

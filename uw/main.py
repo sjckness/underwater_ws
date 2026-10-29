@@ -5,7 +5,7 @@ RTX camera, outputs through a SensorSink (ROS 2 by default).
         [--view side45|top|sonar] [--screenshot T]... [--stats-file F] [--profile ...] [--preset ...] [--set a.b=c]
 
 Loop: one tick = one bubble substep (plume.dt, 1/240 s). The bubbles step when something reads them (ping, bubble
-render, /sim/plume), all pending substeps at once as one CUDA graph; every 1/sonar.ping_rate_hz the sonar pings
+render, /gt/plume/markers), all pending substeps at once as one CUDA graph; every 1/sonar.ping_rate_hz the sonar pings
 (the same pings as `sonar-only` for the same config and seed); every 1/camera.rate_hz an RTX render gives the camera
 image; with --gui the viewport also renders every 1/sim.gui_fps. /clock and the other topics at their ros.*
 rates. Sim time = time since the leak started: the plume warm-up (plume.warmup_s) runs before the first tick.
@@ -113,7 +113,8 @@ def static_frames(cfg: dict) -> list:
     camera is expressed relative to the sonar whether the sonar moves or not: both are payload on the same rig,
     and only their relative offset is not ground truth."""
     from .geometry import rot_rpy_deg, sonar_rotation
-    from .ros_bridge import FRAMES, R_SONAR_PROJECTED
+    from .ros_bridge import R_SONAR_PROJECTED, frames
+    FRAMES = frames(get(cfg, "ros.vehicle"))
     out = [(FRAMES["sonar"], FRAMES["sonar_projected"], R_SONAR_PROJECTED, (0.0, 0.0, 0.0))]
     if get(cfg, "camera.enabled"):
         cam_rot, cam_pos = rot_rpy_deg(get(cfg, "camera.rpy_deg")), np.asarray(get(cfg, "camera.position"), float)
@@ -175,7 +176,8 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
             overlay = gui.Overlay(cfg, son)
     live = args.sink == "ros"
     if args.sink == "ros":
-        sink = sinks.make_sink("ros", plume_markers=int(get(cfg, "ros.plume_markers")))
+        sink = sinks.make_sink("ros", vehicle=get(cfg, "ros.vehicle"), fan=bool(get(cfg, "ros.publish_fan")),
+                               plume_markers=int(get(cfg, "ros.plume_markers")))
     elif args.sink == "file":
         sink = sinks.make_sink("file", out_dir=args.out, info={
             "name": args.out, "command": "python -m uw sim " + " ".join(args.argv),
@@ -246,7 +248,8 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                 ping = son.ping(bubbles=sim, extra=boil.update(son.position) if boil is not None else ())
                 t_c = time.perf_counter()
                 sink.publish(recorder.sonar_message(count["pings"], sim.t if sim is not None else t, ping, son, cfg,
-                                                    scene, sim, fan=True if live else None))
+                                                    scene, sim,
+                                                    fan=bool(get(cfg, "ros.publish_fan")) if live else None))
                 if overlay is not None:
                     overlay.update(ping.image, ping.position, ping.rot)
                 t_d = time.perf_counter()

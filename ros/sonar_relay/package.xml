@@ -3,7 +3,7 @@
 <package format="3">
   <name>sonar_relay</name>
   <version>0.1.0</version>
-  <description>Relays the underwater tank sim's sonar images (/oculus/polar + /oculus/meta) as marine_acoustic_msgs/ProjectedSonarImage.</description>
+  <description>Relays the underwater tank sim's sonar images (/rov1/sensors/sonar_fls/image + .../meta) as marine_acoustic_msgs/ProjectedSonarImage.</description>
   <maintainer email="fabio.carapellese@seamorphrobotics.com">underwater_ws</maintainer>
   <license>Proprietary</license>
   <exec_depend>rclpy</exec_depend>

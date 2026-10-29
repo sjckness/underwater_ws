@@ -62,7 +62,7 @@ def sonar_message(seq: int, stamp: float, ping, son, cfg: dict, scene, sim=None,
                       "rotation": [[round(float(v), 7) for v in row] for row in ping.rot],
                       "pose_source": son_cfg["pose_source"], "mode": son_cfg["mode"], "range": son.range, "focus": bool(son.focus),
                       "noise_floor_db": son.nf_db, "display_db": son.display,
-                      # the gain chain, without which the 8-bit polar image is not invertible (/oculus/meta)
+                      # the gain chain, without which the 8-bit polar image is not invertible (.../sonar_fls/meta)
                       "tvg_db_per_decade": son.tvg_k, "absorption_db_per_m": son.alpha_db,
                       "frequency_hz": son.frequency, "sound_speed": son.c, "beamwidth_h_deg": son.beamwidth_deg,
                       "fov_v_deg": son.fov_v_deg},

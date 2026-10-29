@@ -42,24 +42,24 @@ def _sonar_message(n_r=40, n_b=16):
 def test_bridge_messages():
     pytest.importorskip("sensor_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
     msg, polar = _sonar_message()
-    img = ros_bridge.image_msg(msg.stamp, "oculus", msg.images["polar"][::-1], "mono8")
+    img = ros_bridge.image_msg(msg.stamp, "rov1/sonar_fls", msg.images["polar"][::-1], "mono8")
     assert (img.height, img.width, img.step, img.encoding) == (40, 16, 16, "mono8")
     assert np.array_equal(np.frombuffer(bytes(img.data), np.uint8).reshape(40, 16), polar)
     assert (img.header.stamp.sec, img.header.stamp.nanosec) == (12, 300000000)
-    f = ros_bridge.image_msg(0.0, "oculus", msg.arrays["polar_db"].astype(np.float32), "32FC1")
+    f = ros_bridge.image_msg(0.0, "rov1/sonar_fls", msg.arrays["polar_db"].astype(np.float32), "32FC1")
     back = np.frombuffer(bytes(f.data), np.float32).reshape(40, 16)
     assert f.step == 64 and np.isnan(back[:3]).all() and np.allclose(back[3:], msg.arrays["polar_db"][3:])
     meta = ros_bridge.sonar_meta(msg)
-    assert meta["projected_frame_id"] == "oculus_projected" and len(meta["bearing_deg"]) == 16
+    assert meta["projected_frame_id"] == "rov1/sonar_fls_projected" and len(meta["bearing_deg"]) == 16
     json.dumps(meta)
     s = msg.meta["sonar"]
-    gt = ros_bridge.pose_stamped_msg(msg.stamp, "tank", s["position"], s["rotation"])
-    assert gt.header.frame_id == "tank" and (gt.header.stamp.sec, gt.header.stamp.nanosec) == (12, 300000000)
+    gt = ros_bridge.pose_stamped_msg(msg.stamp, "map", s["position"], s["rotation"])
+    assert gt.header.frame_id == "map" and (gt.header.stamp.sec, gt.header.stamp.nanosec) == (12, 300000000)
     assert [gt.pose.position.x, gt.pose.position.y, gt.pose.position.z] == s["position"]
     q = gt.pose.orientation
     assert np.allclose([q.x, q.y, q.z, q.w], ros_bridge.quat_xyzw(np.array(s["rotation"])))
     K = np.array([[600.0, 0, 640], [0, 600.0, 360], [0, 0, 1]])
-    ci = ros_bridge.camera_info_msg(1.0, "camera_optical", K, 1280, 720)
+    ci = ros_bridge.camera_info_msg(1.0, "rov1/camera_front_optical", K, 1280, 720)
     assert list(ci.k) == list(K.ravel()) and ci.p[0] == 600.0 and ci.p[10] == 1.0
     pose = ros_bridge.leak_pose_msg(1.0, [1.7, 1.45, 0.4], [math.sin(0.7), 0.0, math.cos(0.7)])
     q = pose.pose.orientation
@@ -68,14 +68,37 @@ def test_bridge_messages():
     pos = np.random.default_rng(1).uniform(0, 3, (10000, 3)).astype(np.float32)
     ma = ros_bridge.plume_markers_msg(2.0, pos, np.full(10000, 0.003, np.float32), 3000)
     m = ma.markers[0]
-    assert len(m.points) == len(m.colors) == 2500 and m.header.frame_id == "tank" and m.scale.x == pytest.approx(0.003)
-    tf = ros_bridge.transform_msg(0.0, "oculus", "oculus_projected", ros_bridge.R_SONAR_PROJECTED, (0, 0, 0))
+    assert len(m.points) == len(m.colors) == 2500 and m.header.frame_id == "map" and m.scale.x == pytest.approx(0.003)
+    tf = ros_bridge.transform_msg(0.0, "rov1/sonar_fls", "rov1/sonar_fls_projected", ros_bridge.R_SONAR_PROJECTED,
+                                  (0, 0, 0))
     r = tf.transform.rotation
     assert np.allclose([r.x, r.y, r.z, r.w], ros_bridge.quat_xyzw(ros_bridge.R_SONAR_PROJECTED))
 
 
+def test_topic_and_frame_map():
+    """docs/topic_map.md §4 and §2: these names are the contract with the Jetson stack and with the bags, so pin
+    them. ros.vehicle must move the vehicle namespace and the frame prefix together, and nothing else. Needs no
+    ROS: topics() and frames() are pure."""
+    t = ros_bridge.topics("rov1")
+    assert t["polar"] == "/rov1/sensors/sonar_fls/image"
+    assert t["meta"] == "/rov1/sensors/sonar_fls/meta"
+    assert t["image"] == "/rov1/sensors/camera_front/image_raw"
+    assert t["camera_info"] == "/rov1/sensors/camera_front/camera_info"
+    assert t["polar_db"] == "/gt/polar_db" and t["leak"] == "/gt/leak/pose"
+    assert t["plume"] == "/gt/plume/markers" and t["gt_sonar_pose"] == "/gt/sonar_pose"
+    assert t["fan"] == "/sim/debug/sonar_fan"
+    assert t["clock"] == "/clock" and t["tf_static"] == "/tf_static"      # global by necessity
+    # exactly four vehicle topics, and no /gt or /sim name hiding inside one
+    vehicle = {k: v for k, v in t.items() if v.startswith("/rov1/")}
+    assert set(vehicle) == {"polar", "meta", "image", "camera_info"}
+    assert ros_bridge.topics("rov2")["meta"] == "/rov2/sensors/sonar_fls/meta"
+    f = ros_bridge.frames("rov2")
+    assert f["world"] == "map" and f["sonar"] == "rov2/sonar_fls" and f["gt_sonar"] == "gt/rov2/sonar_fls"
+    assert not any(v.startswith("/") for v in f.values())                # tf2 rejects a leading slash
+
+
 def test_sonar_meta_leaks_no_ground_truth():
-    """docs/ros_hil.md §2.5 rule 2. /oculus/meta is the one metadata topic the detector must subscribe to, and the
+    """docs/ros_hil.md §2.5 rule 2. .../sonar_fls/meta is the one metadata topic the detector must subscribe to, and the
     per-ping meta it is built from carries the sonar's true pose, the leak's range and bearing, and
     plume_pixels.geom — which *is* the in_view target. So sonar_meta() is a fixed key list and one `**s` splat
     away from shipping the answer. Needs no ROS: sonar_meta() is pure."""
@@ -83,7 +106,7 @@ def test_sonar_meta_leaks_no_ground_truth():
     assert set(msg.meta["sonar"]) & set(ros_bridge.META_FORBIDDEN)       # the fixture does carry the truth
     meta = ros_bridge.sonar_meta(msg)
     for key in ros_bridge.META_FORBIDDEN:
-        assert key not in meta, f"{key} must not reach /oculus/meta"
+        assert key not in meta, f"{key} must not reach the meta topic"
     text = json.dumps(meta)
     for word in ("plume", "mask", "leak", "in_view", "roll", "pitch", "yaw", "position"):
         assert word not in text, f"{word!r} in the published meta"
@@ -101,7 +124,7 @@ def test_relay_projected_sonar_image():
     img = Image(height=40, width=16, encoding="mono8", step=16, data=polar.tobytes())
     img.header.stamp.sec = 12
     out = projected(img, ros_bridge.sonar_meta(msg), db=False)
-    assert out.header.frame_id == "oculus_projected" and out.header.stamp.sec == 12
+    assert out.header.frame_id == "rov1/sonar_fls_projected" and out.header.stamp.sec == 12
     assert out.image.beam_count == 16 and len(out.ranges) == 40 and out.image.dtype == out.image.DTYPE_UINT8
     assert np.array_equal(np.frombuffer(bytes(out.image.data), np.uint8).reshape(40, 16), polar)
     d = np.array([[v.x, v.y, v.z] for v in out.beam_directions])

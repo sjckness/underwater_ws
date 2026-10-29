@@ -1,15 +1,19 @@
-"""Host-side relay: the sim's /oculus/polar (or /oculus/polar_db) + /oculus/meta -> marine_acoustic_msgs/
-ProjectedSonarImage, the message the Oculus ROS drivers publish.
+"""Host-side relay: the sim's /rov1/sensors/sonar_fls/image + .../meta -> marine_acoustic_msgs/
+ProjectedSonarImage on .../sonar_fls/sonar_image, the topic and type the Oculus ROS drivers publish. Topic names
+follow docs/topic_map.md §4.2; it runs on the sim host, so the bag and the Jetson see the same bytes.
 
 Runs with the host's ROS 2 Jazzy (ros-jazzy-marine-acoustic-msgs), on the tank sim's own domain:
 
-    ros/sonar_relay/run.sh [--db] [--topic /oculus/sonar_image]
+    ros/sonar_relay/run.sh [--vehicle rov1] [--db] [--topic .../sonar_image]
 
 or, sourced: python3 ros/sonar_relay/sonar_relay/relay.py, or as a colcon package (ros2 run sonar_relay relay).
 The domain is UW_ROS_DOMAIN_ID (default 73), as in the container; a ROS_DOMAIN_ID exported for another stack is
 ignored on purpose.
 
-ProjectedSonarImage: frame oculus_projected (x up, y starboard, z forward; the sim publishes it on /tf_static),
+--db relays /gt/polar_db instead, the calibrated level: that is ground truth, so its output defaults to
+/gt/sonar_image_db and must never be the detector's topic (docs/ros_hil.md §2.1, §2.5).
+
+ProjectedSonarImage: frame rov1/sonar_fls_projected (x up, y starboard, z forward; on /tf_static),
 beam_directions (0, sin b, cos b) for bearing b (+ starboard), ranges = range bin centres, data row-major with one row
 per range bin (beams within a row), uint8 (display image) or float32 (--db: raw level dB re 1 uPa).
 """
@@ -30,7 +34,9 @@ from std_msgs.msg import String
 
 LATCHED = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1, reliability=ReliabilityPolicy.RELIABLE,
                      durability=DurabilityPolicy.TRANSIENT_LOCAL)
-SENSOR = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=2, reliability=ReliabilityPolicy.RELIABLE,
+# BEST_EFFORT, matching the sim's image publishers: a RELIABLE reader against a BEST_EFFORT writer never
+# matches, and the symptom is total silence on that one topic (docs/bridge_setup.md §7)
+SENSOR = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=5, reliability=ReliabilityPolicy.BEST_EFFORT,
                     durability=DurabilityPolicy.VOLATILE)
 
 
@@ -57,13 +63,14 @@ def projected(img: Image, meta: dict, db: bool) -> ProjectedSonarImage:
 
 
 class Relay(Node):
-    def __init__(self, db: bool, topic: str):
-        super().__init__("uw_sonar_relay")
+    def __init__(self, db: bool, topic: str, vehicle: str = "rov1"):
+        super().__init__("sonar_image_relay")
         self.db, self.meta, self.count = db, None, 0
+        src = "/gt/polar_db" if db else f"/{vehicle}/sensors/sonar_fls/image"
         self.pub = self.create_publisher(ProjectedSonarImage, topic, SENSOR)
-        self.create_subscription(String, "/oculus/meta", self.on_meta, LATCHED)
-        self.create_subscription(Image, "/oculus/polar_db" if db else "/oculus/polar", self.on_image, SENSOR)
-        self.get_logger().info(f"relaying {'/oculus/polar_db' if db else '/oculus/polar'} -> {topic} "
+        self.create_subscription(String, f"/{vehicle}/sensors/sonar_fls/meta", self.on_meta, LATCHED)
+        self.create_subscription(Image, src, self.on_image, SENSOR)
+        self.get_logger().info(f"relaying {src} -> {topic} "
                                f"(ProjectedSonarImage, {'float32 dB' if db else 'uint8'})")
 
     def on_meta(self, msg: String) -> None:
@@ -71,7 +78,7 @@ class Relay(Node):
 
     def on_image(self, img: Image) -> None:
         if self.meta is None:
-            self.get_logger().warning("no /oculus/meta yet: ping dropped", throttle_duration_sec=5.0)
+            self.get_logger().warning("no sonar_fls/meta yet: ping dropped", throttle_duration_sec=5.0)
             return
         self.pub.publish(projected(img, self.meta, self.db))
         self.count += 1
@@ -79,11 +86,15 @@ class Relay(Node):
 
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--db", action="store_true", help="relay /oculus/polar_db as float32 (default: the uint8 image)")
-    ap.add_argument("--topic", default="/oculus/sonar_image")
+    ap.add_argument("--vehicle", default="rov1", help="namespace: /<vehicle>/sensors/sonar_fls/... (ros.vehicle)")
+    ap.add_argument("--db", action="store_true",
+                    help="relay /gt/polar_db as float32 instead of the uint8 ping: ground truth, evaluator only")
+    ap.add_argument("--topic", default="", help="output topic (default: the vehicle's sonar_image, or "
+                                               "/gt/sonar_image_db with --db)")
     args, ros_args = ap.parse_known_args(argv)
+    topic = args.topic or ("/gt/sonar_image_db" if args.db else f"/{args.vehicle}/sensors/sonar_fls/sonar_image")
     rclpy.init(args=ros_args, domain_id=int(os.environ.get("UW_ROS_DOMAIN_ID", "73")))
-    node = Relay(args.db, args.topic)
+    node = Relay(args.db, topic, args.vehicle)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

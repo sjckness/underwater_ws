@@ -45,7 +45,7 @@ def test_zenoh_sink_is_a_later_milestone():
 def test_file_sink_ignores_time_and_frames(tmp_path):
     with sinks.make_sink("file", out_dir=tmp_path) as sink:
         sink.clock(1.0)
-        sink.static_transforms(0.0, [("tank", "oculus", np.eye(3), (0.0, 0.0, 1.0))])
+        sink.static_transforms(0.0, [("rov1/sonar_fls", "rov1/camera_front", np.eye(3), (0.0, 0.0, 1.0))])
     assert not (tmp_path / "clock").exists()
 
 

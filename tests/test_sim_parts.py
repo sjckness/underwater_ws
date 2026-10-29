@@ -81,8 +81,9 @@ def test_quaternions_and_static_frames():
     assert np.allclose(main.R_BODY_OPTICAL @ [1, 0, 0], [0, -1, 0])
     cfg = config.load()
     frames = main.static_frames(cfg)
-    assert [(p, c) for p, c, *_ in frames] == [("oculus", "oculus_projected"), ("oculus", "camera"),
-                                               ("camera", "camera_optical")]
+    assert [(p, c) for p, c, *_ in frames] == [("rov1/sonar_fls", "rov1/sonar_fls_projected"),
+                                               ("rov1/sonar_fls", "rov1/camera_front"),
+                                               ("rov1/camera_front", "rov1/camera_front_optical")]
 
 
 def test_static_frames_carry_no_world_anchored_edge():
@@ -90,8 +91,9 @@ def test_static_frames_carry_no_world_anchored_edge():
     (docs/ros_hil.md §2.5 rule 4). The camera therefore always rides the sonar."""
     cfg = config.load()
     son = _sonar(cfg)
+    f = ros_bridge.frames(config.get(cfg, "ros.vehicle"))
     frames = {(p, c): (r, x) for p, c, r, x in main.static_frames(cfg)}
-    assert not [c for p, c in frames if p == "tank"]
-    r, x = frames[("oculus", "camera")]
+    assert not [c for p, c in frames if p == f["world"]]
+    r, x = frames[(f["sonar"], f["camera"])]
     assert np.allclose(son.rot @ r, geometry.rot_rpy_deg(config.get(cfg, "camera.rpy_deg")))
     assert np.allclose(son.position + son.rot @ np.asarray(x), config.get(cfg, "camera.position"))

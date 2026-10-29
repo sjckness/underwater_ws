@@ -17,7 +17,7 @@ import numpy as np
 import warp as wp
 
 from . import bubbles, config, geometry, pose, recorder, sinks, sonar, surface
-from .ros_bridge import R_SONAR_PROJECTED
+from .ros_bridge import R_SONAR_PROJECTED, frames
 
 
 def main(argv: list[str]) -> int:
@@ -34,9 +34,12 @@ def main(argv: list[str]) -> int:
     cfg = config.from_args(args)
     info = {"name": args.out, "command": "python -m uw sonar-only " + " ".join(argv)}
     kw = ({"out_dir": args.out, "info": info, "compress": bool(config.get(cfg, "recorder.compress")),
-           "png_level": int(config.get(cfg, "recorder.png_level"))} if args.sink == "file" else {})
+           "png_level": int(config.get(cfg, "recorder.png_level"))} if args.sink == "file"
+          else {"vehicle": config.get(cfg, "ros.vehicle"), "fan": bool(config.get(cfg, "ros.publish_fan"))}
+          if args.sink == "ros" else {})
     with sinks.make_sink(args.sink, **kw) as sink:
-        st = run(cfg, args.pings, sink, plume=not args.no_plume, fan=True if args.sink == "ros" else None, info=info)
+        fan = bool(config.get(cfg, "ros.publish_fan")) if args.sink == "ros" else None
+        st = run(cfg, args.pings, sink, plume=not args.no_plume, fan=fan, info=info)
     print(f"sonar-only: {args.pings} pings -> {args.out or args.sink}; setup {st['setup_s']:.1f} s; per ping: "
           f"bubbles {st['bubbles_ms']:.1f} ms, sonar {st['ping_ms']:.1f} ms (max {st['ping_ms_max']:.1f}), "
           f"write {st['write_ms']:.1f} ms", file=sys.stderr)
@@ -69,7 +72,8 @@ def run(cfg: dict, pings: int, sink, plume: bool = True, fan: bool | None = None
                      "labels": {"threshold": son.mask_threshold, **recorder.LABELS}, "config": cfg})
     t_start = sim.t if sim is not None else 0.0
     # mount offsets only: tank -> oculus is the true pose and goes to /gt (docs/ros_hil.md §2.5 rule 4)
-    sink.static_transforms(t_start, [("oculus", "oculus_projected", R_SONAR_PROJECTED, (0, 0, 0))])
+    f = frames(config.get(cfg, "ros.vehicle"))
+    sink.static_transforms(t_start, [(f["sonar"], f["sonar_projected"], R_SONAR_PROJECTED, (0, 0, 0))])
     step_ms, ping_ms, write_ms, static_ms = [], [], [], []
     for i in range(pings):
         t = time.perf_counter()

@@ -1,5 +1,11 @@
 # ROS 2 HIL over Ethernet (M7 step 1) and the vehicle design (M8a)
 
+> **Topic names (2026-10-29):** this document was written against the names the sim published then
+> (`/oculus/*`, `/sim/*`). `docs/topic_map.md` is the approved map and the code now publishes it —
+> `/rov1/sensors/sonar_fls/{image,meta,sonar_image}`, `/rov1/sensors/camera_front/*`, `/gt/*`, `/sim/*` — so read
+> the names below as the analysis that produced it, not as what is on the wire. The decisions, bandwidth
+> arithmetic and QoS classes are unchanged.
+>
 > **Status (2026-10-28):** design only, nothing implemented. M7 step 1 and the M8a vehicle design, as
 > `docs/PLAN.md` M7/M8a ask for. Numbers tagged **V** are traceable to a file, a datasheet or upstream source and
 > **U** are assumed or inferred, as in `docs/validation.md`. Repo citations are this working tree; ArduPilot and
