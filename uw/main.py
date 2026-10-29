@@ -198,6 +198,7 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
     rates = {"ping": float(get(cfg, "sonar.ping_rate_hz")), "camera": float(get(cfg, "camera.rate_hz")),
              "gui": float(get(cfg, "sim.gui_fps")), "clock": float(get(cfg, "ros.clock_hz")),
              "plume": float(get(cfg, "ros.plume_hz")), "leak": float(get(cfg, "ros.leak_hz")), "idle": 10.0,
+             "diag": float(get(cfg, "ros.diagnostics_hz")),
              "bubbles": float(get(cfg, "sim.bubble_render_hz"))}
     timers = {k: RateTimer(r) for k, r in rates.items()}
     shots = sorted(args.screenshot)
@@ -211,6 +212,7 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
     batch = max(1, int(round(1.0 / (rates["ping"] * dt))))      # substeps per ping
     wall0 = time.perf_counter()
     last_rtf = (wall0, 0.0)
+    last_diag = (wall0, 0.0)
     last_warn = -1e9
     log.info("running: tick %.2f ms, sonar %.0f Hz, camera %s, gui %s, sink %s, realtime %s", dt * 1e3, rates["ping"],
              f"{rates['camera']:.0f} Hz" if camera is not None else "off",
@@ -325,6 +327,19 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                 if realtime and now - last_warn > 5.0:
                     log.warning("watchdog: sim time %.2f s behind the wall clock", -ahead)
                     last_warn = now
+            if live and timers["diag"].due(t_loop):
+                rtf = (t_loop - last_diag[1]) / max(now - last_diag[0], 1e-9)
+                ping = stats.summary().get("ping", {})
+                sink.diagnostics(t, {
+                    "rtf": rtf, "rtf_cumulative": t_loop / max(now - wall0, 1e-9),
+                    "sim_time_s": t_loop, "wall_time_s": now - wall0,
+                    "pings": count["pings"], "pings_over_budget": count["over_budget"],
+                    "ping_ms_mean": ping.get("mean_ms", 0.0), "ping_ms_max": ping.get("max_ms", 0.0),
+                    "ping_budget_ms": budget, "camera_frames": count["camera"], "lag_max_s": worst["lag_s"],
+                    "realtime": realtime, "moving_sonar": motion.moving},
+                    level=1 if (count["over_budget"] or worst["lag_s"] > max_lag) else 0,
+                    message=f"RTF {rtf:.3f}" + (" (over budget)" if count["over_budget"] else ""))
+                last_diag = (now, t_loop)
             if now - last_rtf[0] >= 10.0:
                 log.info("t %.1f s, RTF %.2f, %d pings (%d over budget), %d camera frames", t_loop,
                          (t_loop - last_rtf[1]) / (now - last_rtf[0]), count["pings"], count["over_budget"],

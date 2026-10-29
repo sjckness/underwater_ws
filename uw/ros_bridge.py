@@ -80,6 +80,7 @@ TOPIC_TEMPLATES = {
     "plume": "/gt/plume/markers",
     "gt_sonar_pose": "/gt/sonar_pose",
     "gt_tf": "/gt/tf",
+    "diagnostics": "/sim/diagnostics",                  # RTF and loop health: see RosSink.diagnostics
     "tf_static": "/tf_static",                          # global: one TF tree for the graph
     "clock": "/clock",                                  # global: use_sim_time reads it there
 }
@@ -271,6 +272,7 @@ class RosSink(SensorSink):
         # the bridge's rosidl_generator_py logs a DEBUG traceback (no 'lark') on import: harmless, kept out of the log
         logging.getLogger("rosidl_generator_py").setLevel(logging.WARNING)
         import rclpy
+        from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
         from rosgraph_msgs.msg import Clock
         from sensor_msgs.msg import CameraInfo, Image
         from std_msgs.msg import Float32, String
@@ -306,11 +308,13 @@ class RosSink(SensorSink):
             "plume": pub(MarkerArray, t["plume"], sensor),
             "gt_sonar_pose": pub(PoseStamped, t["gt_sonar_pose"], gt),
             "gt_tf": pub(TFMessage, t["gt_tf"], _qos({"depth": 100})),
+            "diagnostics": pub(DiagnosticArray, t["diagnostics"], _qos({"depth": 10})),
             "tf_static": pub(TFMessage, t["tf_static"], latched),
             "clock": pub(Clock, t["clock"], _qos({"depth": 1, "reliability": "best_effort"})),
         }
         self.topics = t
-        self.msgs = {"Clock": Clock, "String": String, "Float32": Float32, "TFMessage": TFMessage}
+        self.msgs = {"Clock": Clock, "String": String, "Float32": Float32, "TFMessage": TFMessage,
+                     "DiagnosticArray": DiagnosticArray, "DiagnosticStatus": DiagnosticStatus, "KeyValue": KeyValue}
         self.fan = fan
         self.plume_max = plume_markers
         self.meta = None
@@ -353,6 +357,22 @@ class RosSink(SensorSink):
 
     def clock(self, t: float) -> None:
         self.pub["clock"].publish(self.msgs["Clock"](clock=_stamp(t)))
+
+    def diagnostics(self, t: float, values: dict, *, name: str = "sim loop", level: int = 0,
+                    message: str = "") -> None:
+        """One DiagnosticStatus of ``values`` on /sim/diagnostics, every value as a KeyValue.
+
+        The RTF goes here rather than only into a log line, because it is what makes every latency measurement in
+        this project readable: sim time advances at RTF x wall time, so a wall-clock delay on the Jetson appears
+        inside the sim scaled by RTF — at 0.694 a real 60 ms loop looks like 42 ms (docs/ros_hil.md §3.3). A HIL
+        monitor may subscribe to this one /sim topic for exactly that reason; no perception or control node may
+        (docs/topic_map.md §4.9)."""
+        st = self.msgs["DiagnosticStatus"](level=int(level), name=name, message=message, hardware_id="sim")
+        st.values = [self.msgs["KeyValue"](key=str(k), value=f"{v:.4g}" if isinstance(v, float) else str(v))
+                     for k, v in values.items()]
+        m = self.msgs["DiagnosticArray"](status=[st])
+        m.header.stamp = _stamp(t)
+        self.pub["diagnostics"].publish(m)
 
     def static_transforms(self, t: float, transforms: list) -> None:
         """[(parent, child, rotation 3x3, translation)] on /tf_static: mount offsets only. All of them must go in

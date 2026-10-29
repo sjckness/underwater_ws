@@ -235,7 +235,7 @@ is **mirrored relative to the sonar image** — publish from the unflipped `ping
 
 | topic | msg | pub | sub | QoS | frame_id | rate | sim-only |
 |---|---|---|---|---|---|---|---|
-| `/sim/cmd/rov1/pose` | `geometry_msgs/PoseStamped` | `teleop` / `traj_player` (sim host) | `sim_bridge` (`RosPose`) | R | `map` | ≤ 10 Hz, polled once per ping (**V**) | yes |
+| `/sim/cmd/rov1/pose` | `geometry_msgs/PoseStamped` | `pose_cmd` (sim host) | `sim_bridge` (`RosPose`) | R | `map` | ≤ 10 Hz, polled once per ping (**V**) | yes |
 | `/sim/env/params` | `std_msgs/String` (JSON: preset, tank size, water level, temperature, salinity, sound speed, seed, config hash) | `sim_bridge` | rosbag2, evaluator | L | — | once, latched | yes |
 | `/sim/diagnostics` | `diagnostic_msgs/DiagnosticArray` (RTF, ping ms, budget overruns, bubble count) | `sim_bridge` | operator, rosbag2, link monitor | R | — | 1 Hz | yes* |
 | `/sim/debug/sonar_fan` | `sensor_msgs/Image` mono8 | `sim_bridge` | operator only | S | `rov1/sonar_fls` | 10 Hz, **off by default** | yes |
@@ -260,7 +260,7 @@ data already sent, and M10 has not chosen between a polar and a Cartesian model.
 |---|---|---|---|---|
 | `sim_bridge` (today `uw_sim`) | sim host | `/rov1/sensors/**`, `/gt/**`, `/sim/**`, `/clock`, `/tf_static` | `/sim/cmd/rov1/pose` | **V** `uw/ros_bridge.py` |
 | `sonar_image_relay` (today `uw_sonar_relay`) | **sim host** | `/rov1/sensors/sonar_fls/sonar_image` | `…/image`, `…/meta` | **V** `ros/sonar_relay` |
-| `teleop` / `traj_player` | sim host | `/sim/cmd/rov1/pose` | — | **no producer exists** (**V**) — M7 step 2 |
+| `pose_cmd` | sim host | `/sim/cmd/rov1/pose` | — | **V** `ros/pose_cmd`: hold / trajectory / keys |
 | `rov1_dynamics` | sim host | body state → JSON/UDP to SITL (loopback, not ROS) | `/tf` of nothing | no — M8a |
 | `mavros` | thor | `/rov1/mavros/**`, `/tf` | `/rov1/mavros/{manual_control/send,setpoint_raw/global}` | no — M8b |
 | `mavlink_adapter` | thor | MAVROS command topics | `/rov1/control/**` | no — M8b |
@@ -317,14 +317,17 @@ rule (exclude `/gt`, or remap it into a dead namespace) is part of the profile, 
 
 ## 8. Open decisions (these block implementation, in this order)
 
-1. **`uw_msgs`, or `String`/`Vector3Stamped` forever?** A typed `SonarMeta`, `LeakGeometry` and `FlowEstimate`
-   would remove three JSON blobs and one abused message. The cost is a message package that must build for
-   Isaac's bundled Jazzy `rclpy` (Python 3.11, no `/opt/ros`), host Jazzy (3.12) **and** arm64 on thor and orin
-   (**V**, ros_hil §7 item 4). Until that is proven on all four, this map uses standard messages only. **This is
-   the one decision that changes the most rows.**
-2. **Does the relay stay a separate node?** If `marine_acoustic_msgs` can be imported by Isaac's bundled
-   `rclpy`, `sim_bridge` publishes `ProjectedSonarImage` directly, `…/sonar_fls/image` disappears, and one hop
-   and one process leave the latency budget. Same check as item 1.
+1. **`uw_msgs`, or `String`/`Vector3Stamped` forever?** **Decided 2026-10-29: standard messages only, for
+   now.** A typed `SonarMeta`, `LeakGeometry` and `FlowEstimate` would remove three JSON blobs and one abused
+   message, but the package must build for Isaac's bundled Jazzy `rclpy` (Python 3.11, no `/opt/ros`), host
+   Jazzy (3.12) **and** arm64 on thor and orin (**V**, ros_hil §7 item 4). Reopen it when all four are proven.
+2. **Does the relay stay a separate node? Settled: yes.** The bundled `rclpy` in the image ships
+   `diagnostic_msgs`, `geometry_msgs`, `nav_msgs`, `rosgraph_msgs`, `sensor_msgs`, `std_msgs`, `tf2_msgs`,
+   `tf2_ros`, `vision_msgs` and `visualization_msgs` — and **no `marine_acoustic_msgs`** (**V**, listed in
+   `isaac_ws_devcontainer-isaac-sim:latest` on 2026-10-29). So `sim_bridge` cannot publish
+   `ProjectedSonarImage` itself, `…/sonar_fls/image` stays, and the relay keeps its hop. The same listing
+   confirms `/sim/diagnostics` (`diagnostic_msgs`) and the detector's `vision_msgs` are available in the sim;
+   the arm64 half of item 8 is still open.
 3. **`rov1` as a literal, or `vehicle_ns` from config?** This map hard-codes `rov1` in strings. One config key
    (`ros.vehicle: rov1`) plus a frame prefix makes multi-ROV a launch argument; it also means no topic name in
    the code is a constant any more, which is a readability cost. Recommend the config key, since the whole point

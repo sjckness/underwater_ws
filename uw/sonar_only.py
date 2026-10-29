@@ -75,6 +75,9 @@ def run(cfg: dict, pings: int, sink, plume: bool = True, fan: bool | None = None
     f = frames(config.get(cfg, "ros.vehicle"))
     sink.static_transforms(t_start, [(f["sonar"], f["sonar_projected"], R_SONAR_PROJECTED, (0, 0, 0))])
     step_ms, ping_ms, write_ms, static_ms = [], [], [], []
+    wall0 = time.perf_counter()
+    diag_every = max(1, int(round(float(config.get(cfg, "sonar.ping_rate_hz"))
+                                  / max(float(config.get(cfg, "ros.diagnostics_hz")), 1e-6))))
     for i in range(pings):
         t = time.perf_counter()
         if sim is not None:
@@ -94,6 +97,14 @@ def run(cfg: dict, pings: int, sink, plume: bool = True, fan: bool | None = None
         ping_ms.append((t2 - t1) * 1e3)
         write_ms.append((t3 - t2) * 1e3)
         static_ms.append(ping.timing_ms.get("static_recompute", 0.0))
+        if (i + 1) % diag_every == 0:
+            wall = time.perf_counter() - wall0
+            # no realtime pacing here, so the RTF says what rate the sonar can actually hold
+            sink.diagnostics(stamp, {"rtf": (i + 1) * dt / max(wall, 1e-9), "sim_time_s": (i + 1) * dt,
+                                     "wall_time_s": wall, "pings": i + 1,
+                                     "ping_ms_mean": float(np.mean(ping_ms)), "ping_ms_max": float(np.max(ping_ms)),
+                                     "static_recomputes": int(np.count_nonzero(static_ms)),
+                                     "moving_sonar": motion.moving}, name="sonar-only loop")
         if progress is not None:
             progress(i)
     return {"setup_s": setup_s, "pings": pings, "bubbles_ms": float(np.mean(step_ms)), "ping_ms": float(np.mean(ping_ms)),

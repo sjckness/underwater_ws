@@ -244,6 +244,9 @@ ros:                            # SensorSink "ros" (uw/ros_bridge.py); the domai
   plume_hz: 2.0                 # /gt/plume/markers
   plume_markers: 3000           # at most this many bubbles in /gt/plume/markers (evenly decimated)
   leak_hz: 1.0                  # /gt/leak/pose, /gt/leak/flow_lpm
+  diagnostics_hz: 1.0           # /sim/diagnostics: RTF and loop health. Every latency number in this project is
+                                #   quoted with the RTF it was measured at (docs/ros_hil.md §3.3), so the RTF is
+                                #   a published quantity, not a log line
   publish_fan: false            # /sim/debug/sonar_fan: derived from the polar image on this side, so an operator
                                 #   convenience, not data. Off by default (docs/ros_hil.md §2.1)
   fan_width: 1024               # /sim/debug/sonar_fan (and recorder fan PNG) width [px]

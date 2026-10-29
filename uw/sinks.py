@@ -32,6 +32,9 @@ class SensorSink:
     def clock(self, t: float) -> None:
         """Sim time; only live sinks use it."""
 
+    def diagnostics(self, t: float, values: dict, **kw) -> None:
+        """Loop health (RTF first of all); only live sinks use it."""
+
     def static_transforms(self, t: float, transforms: list) -> None:
         """Mount offsets [(parent, child, rotation 3x3, translation)]; only live sinks use them. There is no
         moving-frame counterpart: the sim does not publish /tf (docs/ros_hil.md §2.5 rule 4), and the true sonar
