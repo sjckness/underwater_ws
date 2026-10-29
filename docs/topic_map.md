@@ -18,7 +18,7 @@ estimate) and **the plumbing** (what only a simulator needs at all). They want d
 | prefix | contains | rule |
 |---|---|---|
 | `/rov1/…` | everything a real BlueROV2 with a real Oculus would publish, with the real driver's names and types | the Jetson stack subscribes **only** here, plus `/clock` and `/tf*` |
-| `/gt/…` | ground truth: leak pose and flow, plume geometry, labels, the true vehicle and sonar pose | **no Jetson node ever subscribes.** Never latched. Excluded from the detector bag |
+| `/gt/…` | ground truth: leak pose and flow, plume geometry, labels, the true vehicle and sonar pose | **its own ROS domain** (`ros.gt_domain_id: 74`) on its own participant, so a Jetson node on the HIL domain cannot subscribe to it at all. Never latched. Excluded from the detector bag |
 | `/sim/…` | simulator plumbing with no real counterpart: the kinematic pose command, scene parameters, RTF and loop health | no Jetson *perception or control* node subscribes; a monitor may read `/sim/diagnostics` |
 
 Unprefixed: **`/clock`, `/tf`, `/tf_static`** only. They cannot be namespaced — `use_sim_time` reads `/clock` from
@@ -118,6 +118,7 @@ legitimately consumed by the Jetson stack).
 | `/rov1/sensors/sonar_fls/meta` | `std_msgs/String` (JSON) | `sim_bridge` | relay, detector, rosbag2 | L | `rov1/sonar_fls` | on change | no — the real analogue is one `dynamic_reconfigure/Config` per stream (**V**) |
 | `/rov1/sensors/sonar_fls/image` | `sensor_msgs/Image` mono8 | `sim_bridge` | `sonar_image_relay` **same host only** | S | `rov1/sonar_fls` | 10 Hz | no — host-local; see §6 |
 | `/rov1/sensors/camera_front/image_raw` | `sensor_msgs/Image` rgb8 1280×720 | `sim_bridge` | detector (optional), rosbag2 | S | `rov1/camera_front_optical` | 10 Hz (`camera.rate_hz`, **V**) | no |
+| `/rov1/sensors/camera_front/image_raw/compressed` | `sensor_msgs/CompressedImage` png | `sim_bridge` | same | S | `rov1/camera_front_optical` | `ros.camera_hz`, else the render rate | no — `image_transport`'s own name |
 | `/rov1/sensors/camera_front/camera_info` | `sensor_msgs/CameraInfo` | `sim_bridge` | same | S (at image rate, as a real driver) | `rov1/camera_front_optical` | 10 Hz | no |
 
 `meta` replaces the draft's `sonar_fls/info`: `ProjectedSonarImage` already self-describes beam geometry
@@ -339,9 +340,11 @@ rule (exclude `/gt`, or remap it into a dead namespace) is part of the profile, 
 5. **Is `/sim/diagnostics` really allowed on the Jetson?** It is the exception that makes the rule arguable.
    Alternative: the sim publishes RTF *into* `/rov1/diagnostics` as one more `DiagnosticStatus`, which keeps the
    blacklist absolute at the cost of putting a sim quantity in a vehicle topic.
-6. **The GT enforcement mechanism.** Namespace + a test + the bag rule is what this map assumes. The only
-   *middleware-enforced* option is a second `ROS_DOMAIN_ID` for `/gt`, costing the evaluator a bridge and the
-   Jetson a second participant — hold it in reserve until a leak is actually observed (**V**, ros_hil §2.5).
+6. **The GT enforcement mechanism. Decided 2026-10-29: the second domain.** `/gt` is published by a second
+   participant on `ros.gt_domain_id` (74) with localhost-only discovery, so the rule is enforced by the
+   middleware and not by anyone's discipline; the evaluator and the bag recorder move to that domain, and
+   `/clock` is published on both with the same stamps. Verified in `docs/bridge_setup.md` §6.2. What remains
+   open is the *discovery-range* half, which needs a second host to confirm.
 7. **Sonar rate**: 10 Hz is in every table, but a moving sonar costs 36 + 133–154 ms per ping in the tank, i.e.
    **~5.9 Hz** (**V**, ros_hil §5). Either every rate in §4.2 becomes 5 Hz for mobile runs, or the static-cache
    partial-update fix lands first. The map should not claim 10 Hz where the sim cannot deliver it.

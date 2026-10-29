@@ -102,17 +102,48 @@ def test_topic_and_frame_map():
     assert t["meta"] == "/rov1/sensors/sonar_fls/meta"
     assert t["image"] == "/rov1/sensors/camera_front/image_raw"
     assert t["camera_info"] == "/rov1/sensors/camera_front/camera_info"
+    assert t["image_compressed"] == "/rov1/sensors/camera_front/image_raw/compressed"   # image_transport's name
     assert t["polar_db"] == "/gt/polar_db" and t["leak"] == "/gt/leak/pose"
     assert t["plume"] == "/gt/plume/markers" and t["gt_sonar_pose"] == "/gt/sonar_pose"
     assert t["fan"] == "/sim/debug/sonar_fan"
     assert t["clock"] == "/clock" and t["tf_static"] == "/tf_static"      # global by necessity
     # exactly four vehicle topics, and no /gt or /sim name hiding inside one
     vehicle = {k: v for k, v in t.items() if v.startswith("/rov1/")}
-    assert set(vehicle) == {"polar", "meta", "image", "camera_info"}
+    assert set(vehicle) == {"polar", "meta", "image", "image_compressed", "camera_info"}
+    # and every ground-truth publisher of RosSink names a /gt topic, since those move to the /gt domain
+    assert all(t[k].startswith("/gt/") for k in ros_bridge.RosSink.GT_PUB)
     assert ros_bridge.topics("rov2")["meta"] == "/rov2/sensors/sonar_fls/meta"
     f = ros_bridge.frames("rov2")
     assert f["world"] == "map" and f["sonar"] == "rov2/sonar_fls" and f["gt_sonar"] == "gt/rov2/sonar_fls"
     assert not any(v.startswith("/") for v in f.values())                # tf2 rejects a leading slash
+
+
+def test_compressed_camera_image():
+    """ros.camera_transport compressed: a PNG CompressedImage of the frame, decodable and much smaller."""
+    pytest.importorskip("sensor_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
+    import zlib
+    rng = np.random.default_rng(3)
+    # a dark, smooth frame, as the underwater renders are: random noise would not compress and would not be
+    # representative of the 3.76x measured on a real frame
+    y = np.linspace(0, 1, 180)[:, None] * np.ones(320)
+    rgb = np.clip((y * 60 + rng.normal(0, 2, (180, 320)))[..., None] * [0.4, 0.8, 1.0], 0, 255).astype(np.uint8)
+    m = ros_bridge.compressed_image_msg(12.3, "rov1/camera_front_optical", rgb, level=1)
+    assert m.format == "png" and m.header.frame_id == "rov1/camera_front_optical"
+    assert (m.header.stamp.sec, m.header.stamp.nanosec) == (12, 300000000)
+    raw = bytes(m.data)
+    assert raw[:8] == b"\x89PNG\r\n\x1a\n" and raw[-8:-4] == b"IEND"
+    assert len(raw) < rgb.nbytes / 2                       # it has to actually be smaller to be worth the CPU
+    # the IDAT payload decompresses to the rows it was built from (filter byte 0 + the pixels)
+    idat = b""
+    pos = 8
+    import struct
+    while pos < len(raw):
+        ln = struct.unpack(">I", raw[pos:pos + 4])[0]
+        if raw[pos + 4:pos + 8] == b"IDAT":
+            idat += raw[pos + 8:pos + 8 + ln]
+        pos += 12 + ln
+    rows = np.frombuffer(zlib.decompress(idat), np.uint8).reshape(180, 1 + 320 * 3)
+    assert (rows[:, 0] == 0).all() and np.array_equal(rows[:, 1:].reshape(180, 320, 3), rgb)
 
 
 def test_sonar_meta_leaks_no_ground_truth():

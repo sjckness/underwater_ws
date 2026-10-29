@@ -244,6 +244,13 @@ ros:                            # SensorSink "ros" (uw/ros_bridge.py); the domai
   plume_hz: 2.0                 # /gt/plume/markers
   plume_markers: 3000           # at most this many bubbles in /gt/plume/markers (evenly decimated)
   leak_hz: 1.0                  # /gt/leak/pose, /gt/leak/flow_lpm
+  gt_domain_id: 74              # /gt on its own ROS domain and its own participant: a node on the HIL domain
+                                #   cannot subscribe to ground truth at all (docs/ros_hil.md 2.5). null: same domain
+  gt_localhost_only: true       # that participant discovers only on this host, so it is silent on the HIL NIC
+  camera_transport: raw         # raw | compressed | both -> .../image_raw and/or .../image_raw/compressed
+  camera_png_level: 1           # zlib level for CompressedImage (measured 3.76x at 19.4 ms, 4.33x at 29.7 ms)
+  camera_hz: null               # cap the ROS publish rate of the camera (null: every rendered frame). The render
+                                #   rate is camera.rate_hz; this only takes bytes off the link, not GPU time
   diagnostics_hz: 1.0           # /sim/diagnostics: RTF and loop health. Every latency number in this project is
                                 #   quoted with the RTF it was measured at (docs/ros_hil.md §3.3), so the RTF is
                                 #   a published quantity, not a log line

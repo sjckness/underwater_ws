@@ -177,7 +177,11 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
     live = args.sink == "ros"
     if args.sink == "ros":
         sink = sinks.make_sink("ros", vehicle=get(cfg, "ros.vehicle"), fan=bool(get(cfg, "ros.publish_fan")),
-                               plume_markers=int(get(cfg, "ros.plume_markers")))
+                               plume_markers=int(get(cfg, "ros.plume_markers")),
+                               gt_domain_id=get(cfg, "ros.gt_domain_id"),
+                               gt_localhost_only=bool(get(cfg, "ros.gt_localhost_only")),
+                               camera_transport=get(cfg, "ros.camera_transport"),
+                               camera_png_level=int(get(cfg, "ros.camera_png_level")))
     elif args.sink == "file":
         sink = sinks.make_sink("file", out_dir=args.out, info={
             "name": args.out, "command": "python -m uw sim " + " ".join(args.argv),
@@ -199,6 +203,8 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
              "gui": float(get(cfg, "sim.gui_fps")), "clock": float(get(cfg, "ros.clock_hz")),
              "plume": float(get(cfg, "ros.plume_hz")), "leak": float(get(cfg, "ros.leak_hz")), "idle": 10.0,
              "diag": float(get(cfg, "ros.diagnostics_hz")),
+             # the ROS publish rate of the camera, capped below the render rate when ros.camera_hz says so
+             "camera_pub": float(get(cfg, "ros.camera_hz") or get(cfg, "camera.rate_hz")),
              "bubbles": float(get(cfg, "sim.bubble_render_hz"))}
     timers = {k: RateTimer(r) for k, r in rates.items()}
     shots = sorted(args.screenshot)
@@ -206,7 +212,8 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
     pending_shot = None
     K = info.camera_K
     stats = Stats()
-    count = {"ticks": 0, "pings": 0, "renders": 0, "camera": 0, "camera_empty": 0, "over_budget": 0}
+    count = {"ticks": 0, "pings": 0, "renders": 0, "camera": 0, "camera_pub": 0, "camera_empty": 0,
+             "over_budget": 0}
     worst = {"ping_ms": 0.0, "lag_s": 0.0}
     k = pending = 0
     batch = max(1, int(round(1.0 / (rates["ping"] * dt))))      # substeps per ping
@@ -290,8 +297,10 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                 rgb = camera.get_data()
                 if getattr(rgb, "size", 0):
                     rgb = np.ascontiguousarray(rgb[..., :3])
-                    sink.publish(sinks.Message("camera", count["camera"], t, images={"rgb": rgb},
-                                               meta={"K": K.tolist()}))
+                    if not live or timers["camera_pub"].due(t_loop):     # ros.camera_hz caps the publish rate
+                        sink.publish(sinks.Message("camera", count["camera_pub"], t, images={"rgb": rgb},
+                                                   meta={"K": K.tolist()}))
+                        count["camera_pub"] += 1
                     count["camera"] += 1
                     stats.add("camera_read_publish", (time.perf_counter() - t_e) * 1e3)
                 else:
@@ -335,7 +344,8 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                     "sim_time_s": t_loop, "wall_time_s": now - wall0,
                     "pings": count["pings"], "pings_over_budget": count["over_budget"],
                     "ping_ms_mean": ping.get("mean_ms", 0.0), "ping_ms_max": ping.get("max_ms", 0.0),
-                    "ping_budget_ms": budget, "camera_frames": count["camera"], "lag_max_s": worst["lag_s"],
+                    "ping_budget_ms": budget, "camera_frames": count["camera"],
+                    "camera_published": count["camera_pub"], "lag_max_s": worst["lag_s"],
                     "realtime": realtime, "moving_sonar": motion.moving},
                     level=1 if (count["over_budget"] or worst["lag_s"] > max_lag) else 0,
                     message=f"RTF {rtf:.3f}" + (" (over budget)" if count["over_budget"] else ""))

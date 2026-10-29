@@ -72,6 +72,8 @@ TOPIC_TEMPLATES = {
     "polar": "/{v}/sensors/sonar_fls/image",            # the relay's input: host-local, see §6
     "meta": "/{v}/sensors/sonar_fls/meta",
     "image": "/{v}/sensors/camera_front/image_raw",
+    # image_transport's own convention for a compressed stream of the same camera
+    "image_compressed": "/{v}/sensors/camera_front/image_raw/compressed",
     "camera_info": "/{v}/sensors/camera_front/camera_info",
     "polar_db": "/gt/polar_db",                         # the calibrated level: never crosses the link
     "fan": "/sim/debug/sonar_fan",                      # derived from polar on this side; off by default
@@ -272,6 +274,21 @@ def diagnostic_array(t: float, values: dict, *, name: str = "sim loop", level: i
     return m
 
 
+def compressed_image_msg(t: float, frame: str, img: np.ndarray, level: int = 1):
+    """sensor_msgs/CompressedImage, format "png". 221.2 Mbit/s of rgb8 becomes 51-59 Mbit/s (docs/bridge_setup.md
+    §6.2), which is the difference between a camera that fits the HIL link and one that does not."""
+    from sensor_msgs.msg import CompressedImage
+
+    from .sinks import png_bytes
+
+    m = CompressedImage()
+    m.header.stamp = _stamp(t)
+    m.header.frame_id = frame
+    m.format = "png"
+    m.data = _u8(np.frombuffer(png_bytes(img, level), np.uint8))
+    return m
+
+
 def pose_stamped_msg(t: float, frame: str, position, rot):
     """geometry_msgs/PoseStamped from a position and a body-to-world rotation matrix."""
     from geometry_msgs.msg import PoseStamped
@@ -285,16 +302,54 @@ def pose_stamped_msg(t: float, frame: str, position, rot):
     return m
 
 
+def _gt_participant(rclpy, name: str, domain: int, localhost_only: bool):
+    """A second participant for /gt: its own domain, and by default its own discovery range.
+
+    Two separate mechanisms, because one of them is a convention and the other is not. **The domain** is the hard
+    part: a Jetson node on the HIL domain cannot see a topic published on another one, whatever it subscribes to,
+    so the five rules of docs/ros_hil.md §2.5 stop depending on anyone's discipline. **The discovery range** keeps
+    the ground-truth participant from announcing itself on the HIL interface at all: rcl reads
+    ROS_AUTOMATIC_DISCOVERY_RANGE when a context is initialised, so setting it around this one init gives this
+    participant LOCALHOST while the HIL participant keeps SUBNET. That is the one subtle thing in here; it is
+    asserted in tests/test_ros_messages.py and must be re-checked from a second host, which does not exist yet.
+
+    Note what this does *not* rely on: no user data crosses the wire for a topic with no remote reader anyway, so
+    /gt/polar_db's 143.5 Mbit/s was never going to reach the Jetson. What the domain buys is that it cannot be
+    subscribed to by mistake, and what the discovery range buys is silence on the HIL NIC."""
+    ctx = rclpy.Context()
+    saved = os.environ.get("ROS_AUTOMATIC_DISCOVERY_RANGE")
+    if localhost_only:
+        os.environ["ROS_AUTOMATIC_DISCOVERY_RANGE"] = "LOCALHOST"
+    try:
+        rclpy.init(context=ctx, domain_id=domain)
+        return ctx, rclpy.create_node(name, context=ctx)
+    finally:
+        if localhost_only:
+            if saved is None:
+                os.environ.pop("ROS_AUTOMATIC_DISCOVERY_RANGE", None)
+            else:
+                os.environ["ROS_AUTOMATIC_DISCOVERY_RANGE"] = saved
+
+
 class RosSink(SensorSink):
+    """Live topics. Ground truth goes to a **second participant on its own domain** when ``gt_domain_id`` is set,
+    so that the HIL domain carries nothing a Jetson node must not see (docs/topic_map.md §1, the enforcement that
+    docs/ros_hil.md §2.5 held in reserve). /clock is published on both, with the same stamp, or a bag recorded on
+    the ground-truth domain has no sim time."""
+
+    #: published on the ground-truth participant when there is one
+    GT_PUB = ("polar_db", "leak", "flow", "plume", "gt_sonar_pose", "gt_tf")
+
     def __init__(self, node_name: str = "sim_bridge", vehicle: str = VEHICLE, fan: bool = False,
-                 plume_markers: int = 3000, domain_id: int | None = None):
+                 plume_markers: int = 3000, domain_id: int | None = None, gt_domain_id: int | None = None,
+                 gt_localhost_only: bool = True, camera_transport: str = "raw", camera_png_level: int = 1):
         ensure_rclpy_path()
         # the bridge's rosidl_generator_py logs a DEBUG traceback (no 'lark') on import: harmless, kept out of the log
         logging.getLogger("rosidl_generator_py").setLevel(logging.WARNING)
         import rclpy
         from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
         from rosgraph_msgs.msg import Clock
-        from sensor_msgs.msg import CameraInfo, Image
+        from sensor_msgs.msg import CameraInfo, CompressedImage, Image
         from std_msgs.msg import Float32, String
         from tf2_msgs.msg import TFMessage
         from geometry_msgs.msg import PoseStamped
@@ -313,17 +368,28 @@ class RosSink(SensorSink):
         self.vehicle = vehicle
         self.frames = frames(vehicle)
         self.node = rclpy.create_node(node_name)
+        self.gt_domain = None if gt_domain_id is None else int(gt_domain_id)
+        self.gt_ctx = self.gt_node = None
+        if self.gt_domain is not None and self.gt_domain != self.domain:
+            self.gt_ctx, self.gt_node = _gt_participant(rclpy, f"{node_name}_gt", self.gt_domain, gt_localhost_only)
         # QoS classes of docs/topic_map.md §3. Images are BEST_EFFORT: Fast DDS's max_blocking_time defaults to
         # 100 ms, which is the whole ping_budget_ms.static, so one blocked write would eat a ping period.
         sensor = _qos({"depth": 5, "reliability": "best_effort"})
         latched = _qos({"depth": 1, "durability": "transient_local"})
         gt = _qos({"depth": 10})            # ground truth is RELIABLE but NEVER latched (§2.5 rule 3)
         t = topics(vehicle)
-        pub = self.node.create_publisher
+
+        def pub(msg, topic, qos):
+            """Ground truth on the ground-truth participant, everything else on the HIL one."""
+            key = next((k for k, v in t.items() if v == topic), "")
+            node = self.gt_node if (self.gt_node is not None and key in self.GT_PUB) else self.node
+            return node.create_publisher(msg, topic, qos)
+
         self.pub = {
             "polar": pub(Image, t["polar"], sensor), "polar_db": pub(Image, t["polar_db"], sensor),
             "fan": pub(Image, t["fan"], sensor), "meta": pub(String, t["meta"], latched),
             "image": pub(Image, t["image"], sensor), "camera_info": pub(CameraInfo, t["camera_info"], sensor),
+            "image_compressed": pub(CompressedImage, t["image_compressed"], sensor),
             "leak": pub(PoseStamped, t["leak"], gt), "flow": pub(Float32, t["flow"], gt),
             "plume": pub(MarkerArray, t["plume"], sensor),
             "gt_sonar_pose": pub(PoseStamped, t["gt_sonar_pose"], gt),
@@ -332,14 +398,25 @@ class RosSink(SensorSink):
             "tf_static": pub(TFMessage, t["tf_static"], latched),
             "clock": pub(Clock, t["clock"], _qos({"depth": 1, "reliability": "best_effort"})),
         }
+        if self.gt_node is not None:        # the same /clock on the ground-truth domain: a bag needs sim time
+            self.pub["clock_gt"] = self.gt_node.create_publisher(
+                Clock, t["clock"], _qos({"depth": 1, "reliability": "best_effort"}))
         self.topics = t
         self.msgs = {"Clock": Clock, "String": String, "Float32": Float32, "TFMessage": TFMessage,
                      "DiagnosticArray": DiagnosticArray, "DiagnosticStatus": DiagnosticStatus, "KeyValue": KeyValue}
         self.fan = fan
+        if camera_transport not in ("raw", "compressed", "both"):
+            raise ValueError(f"ros.camera_transport must be raw | compressed | both, got {camera_transport!r}")
+        self.camera_raw = camera_transport in ("raw", "both")
+        self.camera_compressed = camera_transport in ("compressed", "both")
+        self.camera_png_level = int(camera_png_level)
         self.plume_max = plume_markers
         self.meta = None
         self.count = {}
-        log.info("ROS 2: node %s on domain %d, vehicle %s", node_name, self.domain, vehicle)
+        log.info("ROS 2: node %s on domain %d, vehicle %s%s", node_name, self.domain, vehicle,
+                 "" if self.gt_node is None else
+                 f"; ground truth on domain {self.gt_domain}"
+                 f"{' (localhost discovery only)' if gt_localhost_only else ''}")
 
     # ----------------------------------------------------------------------------- SensorSink
     def publish(self, msg: Message) -> None:
@@ -362,7 +439,10 @@ class RosSink(SensorSink):
         elif msg.sensor == "camera":
             frame = self.frames["camera_optical"]
             rgb = msg.images["rgb"]
-            self.pub["image"].publish(image_msg(t, frame, rgb, "rgb8"))
+            if self.camera_raw:
+                self.pub["image"].publish(image_msg(t, frame, rgb, "rgb8"))
+            if self.camera_compressed:
+                self.pub["image_compressed"].publish(compressed_image_msg(t, frame, rgb, self.camera_png_level))
             self.pub["camera_info"].publish(camera_info_msg(t, frame, np.asarray(msg.meta["K"]), rgb.shape[1],
                                                             rgb.shape[0]))
         elif msg.sensor == "leak":
@@ -376,7 +456,10 @@ class RosSink(SensorSink):
         self.count[msg.sensor] = self.count.get(msg.sensor, 0) + 1
 
     def clock(self, t: float) -> None:
-        self.pub["clock"].publish(self.msgs["Clock"](clock=_stamp(t)))
+        m = self.msgs["Clock"](clock=_stamp(t))
+        self.pub["clock"].publish(m)
+        if "clock_gt" in self.pub:
+            self.pub["clock_gt"].publish(m)
 
     def diagnostics(self, t: float, values: dict, *, name: str = "sim loop", level: int = 0,
                     message: str = "") -> None:
@@ -397,11 +480,14 @@ class RosSink(SensorSink):
             transforms=[transform_msg(t, p, c, r, x) for p, c, r, x in transforms]))
 
     def close(self) -> None:
-        try:
-            self.node.destroy_node()
-            self.rclpy.try_shutdown()
-        except Exception as exc:  # noqa: BLE001 - shutting down anyway
-            log.warning("ROS shutdown: %s", exc)
+        for node, ctx in ((self.gt_node, self.gt_ctx), (self.node, None)):
+            if node is None:
+                continue
+            try:
+                node.destroy_node()
+                self.rclpy.try_shutdown(context=ctx) if ctx is not None else self.rclpy.try_shutdown()
+            except Exception as exc:  # noqa: BLE001 - shutting down anyway
+                log.warning("ROS shutdown: %s", exc)
 
 
 def pose_from_msg(msg):

@@ -1,6 +1,6 @@
 """Rate, bandwidth, message age and drops per topic, with the reader's QoS taken from each publisher's.
 
-    ros/link_monitor/run.sh [--duration 30] [--age] [--json FILE] [TOPIC ...]
+    ros/link_monitor/run.sh [--duration 30] [--domain 73|74] [--age] [--json FILE] [TOPIC ...]
 
 Why this exists rather than `ros2 topic hz` and `ros2 topic bw`: the sensor topics are published BEST_EFFORT
 (docs/topic_map.md §3), those two commands have no QoS option in Jazzy — `--qos-reliability` is rejected with a
@@ -129,10 +129,14 @@ def main(argv=None) -> int:
     ap.add_argument("--wait", type=float, default=15.0, help="wait up to this long for the publishers to appear")
     ap.add_argument("--age", action="store_true", help="also read header.stamp (sim time) off the raw bytes")
     ap.add_argument("--json", default="", help="write the report here as well")
+    ap.add_argument("--domain", type=int, default=None,
+                    help="ROS domain (default: UW_ROS_DOMAIN_ID, else 73). 74 is the ground-truth domain, which "
+                         "ROS_DOMAIN_ID deliberately does not select — see ros/sonar_relay")
     args, ros_args = ap.parse_known_args(argv)
     names = args.topics or DEFAULT_TOPICS
 
-    rclpy.init(args=ros_args, domain_id=int(os.environ.get("UW_ROS_DOMAIN_ID", "73")))
+    domain = int(os.environ.get("UW_ROS_DOMAIN_ID", "73")) if args.domain is None else args.domain
+    rclpy.init(args=ros_args, domain_id=domain)
     node = rclpy.create_node("link_monitor")
     topics = [Topic(n) for n in names]
     deadline = time.perf_counter() + args.wait
@@ -157,7 +161,7 @@ def main(argv=None) -> int:
         print(f"{r['topic'].ljust(width)}  {r['qos']:>22}  {r['n']:>6}  {r['rate_hz']:>7.3f}  "
               f"{r['mbit_s']:>8.2f}  {r['mean_bytes']:>9}  {r['lost']:>5}"
               + (f"  INCOMPATIBLE_QOS {r['incompatible_qos']}" if "incompatible_qos" in r else ""))
-    report = {"wall_s": round(wall, 3), "domain": int(os.environ.get("UW_ROS_DOMAIN_ID", "73")), "topics": rows}
+    report = {"wall_s": round(wall, 3), "domain": domain, "topics": rows}
     if args.json:
         with open(args.json, "w") as fh:
             json.dump(report, fh, indent=1)

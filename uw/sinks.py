@@ -121,6 +121,14 @@ def make_sink(kind: str, **kwargs) -> SensorSink:
 
 def write_png(path, img: np.ndarray, level: int = 3) -> None:
     """8-bit grey (H, W), RGB (H, W, 3) or RGBA (H, W, 4) PNG, standard library only."""
+    Path(path).write_bytes(png_bytes(img, level))
+
+
+def png_bytes(img: np.ndarray, level: int = 3) -> bytes:
+    """The same PNG as a byte string, for sensor_msgs/CompressedImage. PNG and not JPEG because the container's
+    Python has no JPEG encoder at all — no PIL, cv2, simplejpeg or torchvision (checked 2026-10-29) — while zlib
+    is in the standard library. On a rendered tank frame that is 3.76x at level 1 and 4.33x at level 3
+    (docs/bridge_setup.md §6.2)."""
     img = np.ascontiguousarray(img, dtype=np.uint8)
     h, w = img.shape[:2]
     colour = 0 if img.ndim == 2 else {3: 2, 4: 6}[img.shape[2]]          # PNG colour type: grey, RGB, RGBA
@@ -128,8 +136,8 @@ def write_png(path, img: np.ndarray, level: int = 3) -> None:
 
     def chunk(tag, data):
         return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
-    Path(path).write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, colour, 0, 0, 0))
-                           + chunk(b"IDAT", zlib.compress(rows.tobytes(), level)) + chunk(b"IEND", b""))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, colour, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(rows.tobytes(), level)) + chunk(b"IEND", b""))
 
 
 def read_png(path) -> np.ndarray:

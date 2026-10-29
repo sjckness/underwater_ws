@@ -35,7 +35,9 @@ def main(argv: list[str]) -> int:
     info = {"name": args.out, "command": "python -m uw sonar-only " + " ".join(argv)}
     kw = ({"out_dir": args.out, "info": info, "compress": bool(config.get(cfg, "recorder.compress")),
            "png_level": int(config.get(cfg, "recorder.png_level"))} if args.sink == "file"
-          else {"vehicle": config.get(cfg, "ros.vehicle"), "fan": bool(config.get(cfg, "ros.publish_fan"))}
+          else {"vehicle": config.get(cfg, "ros.vehicle"), "fan": bool(config.get(cfg, "ros.publish_fan")),
+                "gt_domain_id": config.get(cfg, "ros.gt_domain_id"),
+                "gt_localhost_only": bool(config.get(cfg, "ros.gt_localhost_only"))}
           if args.sink == "ros" else {})
     with sinks.make_sink(args.sink, **kw) as sink:
         fan = bool(config.get(cfg, "ros.publish_fan")) if args.sink == "ros" else None

@@ -477,6 +477,79 @@ and this session has no sudo. The live values on linus are still the unpinned `r
 which is what the measurements above ran against, so installing the file raises the ceiling rather than changing
 any number reported here.
 
+### 6.2 The ground-truth domain (approved 2026-10-29)
+
+`/gt` has its own ROS domain and its own participant. `ros.gt_domain_id: 74` makes `RosSink` create a second
+rclpy `Context`, and `ros.gt_localhost_only: true` sets `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` around **that
+init only** — rcl reads the variable when a context is initialised, so the ground-truth participant gets
+LOCALHOST while the HIL participant keeps SUBNET.
+
+Two mechanisms, and only one of them is a guarantee. **The domain** is the guarantee: a node on the HIL domain
+cannot subscribe to a topic published on another one, whatever it asks for, so the five rules of
+`docs/ros_hil.md` §2.5 stop depending on anyone's discipline. **The discovery range** keeps that participant from
+announcing itself on the HIL NIC at all, and is the part that still has to be verified from a second host.
+Neither was ever what kept `/gt/polar_db`'s 143.5 Mbit/s off the wire — DDS sends nothing for a topic with no
+matched remote reader — but *"nobody subscribed"* is not a property you can design a HIL link around.
+
+Verified on linus, one sim, both domains listed at once:
+
+| domain 73 (HIL) | domain 74 (ground truth) |
+|---|---|
+| `/clock`, `/tf_static` | `/clock` (the same stamps: a bag without sim time is useless) |
+| `/rov1/sensors/sonar_fls/{image,meta}` | `/gt/{polar_db,sonar_pose,tf}` |
+| `/rov1/sensors/camera_front/{image_raw,image_raw/compressed,camera_info}` | `/gt/leak/{pose,flow_lpm}`, `/gt/plume/markers` |
+| `/sim/diagnostics`, `/sim/debug/sonar_fan` | — |
+| **no `/gt` topic of any kind** | measured flowing: `polar_db` 56.34 Mbit/s, `sonar_pose` and `tf` 8.25 Hz, `plume/markers` 1.65 Hz |
+
+Record the ground truth on the workstation from that domain (the `--domain` flag of `link_monitor` exists for the
+same reason — `ROS_DOMAIN_ID` deliberately does not select it, as in `ros/sonar_relay`):
+
+```bash
+ROS_DOMAIN_ID=74 ros2 bag record -o gt_$(date +%F_%H%M) \
+  /clock /gt/sonar_pose /gt/tf /gt/leak/pose /gt/leak/flow_lpm /gt/plume/markers /gt/polar_db
+ros/link_monitor/run.sh --domain 74 --duration 30        # what that bag is about to receive
+```
+
+Use the §4 profile for the recorder too: `/gt/polar_db` is a 1.79 MB sample and dropped 64 of ~250 on the
+ground-truth domain with default socket buffers, exactly as it did on the HIL domain (§6.1 finding 3).
+
+### 6.3 Camera: raw, compressed, and which knob is which
+
+The container's Python has **no JPEG encoder at all** — no PIL, cv2, simplejpeg, turbojpeg, imageio or
+torchvision (**V**, checked in the image on 2026-10-29) — so `CompressedImage` is PNG, through the stdlib zlib
+writer the datasets already use (`sinks.png_bytes`). Four runs, same scene, 25 s windows, `--duration 110`:
+
+| run | render | publish | camera topic | Hz | payload | bytes/msg | lost | RTF | `camera_read_publish` |
+|---|---|---|---|---|---|---|---|---|---|
+| `raw` | 10 Hz | 10 Hz | `image_raw` | 5.036 | 109.46 Mbit/s | 2 764 872 | **86** | 0.8340 | 7.5 ms |
+| `compressed` | 10 Hz | 10 Hz | `image_raw/compressed` | 8.338 | **18.13** | **272 675** | **0** | 0.8378 | 15.7 ms |
+| `compressed`, `ros.camera_hz: 2` | 10 Hz | 2 Hz | `image_raw/compressed` | 1.664 | 3.64 | 272 025 | 0 | 0.8321 | 7.8 ms |
+| `compressed`, `camera.rate_hz: 2` | 2 Hz | 2 Hz | `image_raw/compressed` | 2.001 | 4.18 | 261 663 | 0 | **0.9989** | 15.8 ms |
+
+Four things worth stating plainly.
+
+1. **PNG is 10.1× on these frames** (272 675 B against 2 764 872 B), which takes the camera from 221.2 Mbit/s at
+   nominal 10 Hz to **21.7**. The scene is dark and smooth, which is why; on a brighter saved frame from an
+   earlier run the same encoder gave only 3.76× at level 1 and 4.33× at level 3, so **the ratio is a property of
+   the scene, not of the setting** — re-measure it per scenario rather than quoting 10× as a constant.
+2. **It costs 8.2 ms per published frame and nothing in RTF** (7.5 → 15.7 ms of `camera_read_publish`, RTF 0.834
+   → 0.838, which is inside the run-to-run spread). The encode replaces the serialization and transport of
+   2.76 MB, so the loop comes out even.
+3. **It removes the drops, by making the sample small.** Raw lost 86 of ~210 frames; at 273 kB the sample is
+   below the ~1 MB threshold where BEST_EFFORT loss starts (§6.1 finding 3), and three runs lost nothing.
+4. **The two rate knobs are not interchangeable.** `ros.camera_hz` caps the *publish* rate: it takes bytes off
+   the link and leaves RTF alone (0.832). `camera.rate_hz` caps the *render*: it is where the whole cost is, and
+   at 2 Hz it gives **RTF 0.9989 with the sonar at 10.028 Hz and `/clock` at 60.081 Hz** — a camera in the
+   latency profile, which `docs/ros_hil.md` §0 assumed impossible on this machine.
+
+> **The HIL camera configuration this measurement recommends:** `ros.camera_transport: compressed` with
+> `camera.rate_hz: 2`. 4.18 Mbit/s, no drops, RTF 1.00, full sonar rate. `ros.camera_hz` stays for the case where
+> the render rate must stay high for the dataset while the link stays thin.
+
+One cosmetic consequence of publishing a topic conditionally: the publisher for the *other* transport is still
+created, so `ros2 topic list` shows `image_raw` (or `image_raw/compressed`) with no data behind it, as it already
+does for `/sim/debug/sonar_fan`. A monitor reports `n = 0` for it rather than an error.
+
 ## 7. Troubleshooting: symptom → cause → check
 
 | symptom | most likely cause | check |
