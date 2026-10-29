@@ -256,14 +256,13 @@ Three notes that save an afternoon:
 
 Also pin the socket buffers on both Linux hosts, since nothing on disk sets them today (**V**):
 
+The file is in the repo as `config/sysctl/60-ros2-hil.conf`, with the reasoning for each value and for the one
+value it deliberately leaves alone (`rmem_default`, since the DDS profile sets its own socket sizes and this host
+is shared with the f1tenth stacks):
+
 ```bash
-sudo tee /etc/sysctl.d/60-ros2-hil.conf <<'EOF'
-net.core.rmem_max = 16777216
-net.core.rmem_default = 8388608
-net.core.wmem_max = 16777216
-net.ipv4.ipfrag_high_thresh = 16777216
-EOF
-sudo sysctl --system
+sudo install -m 644 config/sysctl/60-ros2-hil.conf /etc/sysctl.d/60-ros2-hil.conf && sudo sysctl --system
+sysctl net.core.rmem_max net.core.wmem_max net.ipv4.ipfrag_high_thresh    # read them back
 ```
 
 ## 5. Per-host procedure
@@ -346,9 +345,10 @@ ros2 topic list
 ros2 node list
 S=/rov1/sensors/sonar_fls; C=/rov1/sensors/camera_front
 ros2 topic info -v $S/image             # QoS of every endpoint, and that there IS a remote endpoint
-ros2 topic hz $S/image $S/sonar_image $C/image_raw /clock
-ros2 topic bw $S/image                  # payload bytes/s, not wire bytes/s
-ros2 topic echo --once $S/meta          # latched: a late joiner must receive it
+# rate, payload, age and drops, with the reader's QoS taken from each publisher's. NOT ros2 topic hz/bw:
+# they have no QoS option in Jazzy and their RELIABLE reader cannot match a BEST_EFFORT writer (§6.1)
+ros/link_monitor/run.sh --duration 40 --age --json link.json
+ros2 topic echo --once --qos-durability transient_local $S/meta   # latched: a late joiner must receive it
 ros2 run tf2_ros tf2_echo rov1/sonar_fls rov1/sonar_fls_projected
 ros2 run tf2_ros tf2_echo map rov1/sonar_fls    # MUST fail: that edge is ground truth (§2.5 rule 4)
 ```
@@ -378,14 +378,104 @@ with §2.2's "+8 % wire" column; the 8 % is framing overhead measured at the NIC
 
 | # | pass condition |
 |---|---|
-| 1 | on thor, `ros2 topic list` shows the sonar, camera, `/clock`, `/tf`, `/tf_static` topics published by the sim host |
+| 1 | on thor, `ros2 topic list` shows the sonar, camera, `/clock`, `/tf_static` topics published by the sim host |
 | 2 | `ros2 topic info -v` shows a **remote** publisher endpoint for each, with the QoS the map specifies |
-| 3 | `ros2 topic hz` is within ±5 % of the table, over ≥ 60 s, with **no** sustained drops |
-| 4 | `ros2 topic bw` matches the table within ~10 %, and the NIC counters agree within the framing overhead |
-| 5 | `/oculus/meta` reaches a subscriber started **after** the sim (late-joiner latching) |
+| 3 | the rate is **nominal × RTF** over ≥ 30 s, and the mean `header.stamp` interval is the nominal period — see §6.1, this is not the same as "within ±5 % of 10 Hz" |
+| 4 | `mbit_s` matches `docs/ros_hil.md` §2.2 within ~10 %, and the NIC counters agree within the framing overhead |
+| 5 | `…/sonar_fls/meta` reaches a subscriber started **after** the sim (late-joiner latching) |
 | 6 | `tf2_echo` resolves the payload chain (`rov1/sonar_fls` → `rov1/sonar_fls_projected`) on the subscriber host, and `map` → `rov1/sonar_fls` does **not** resolve — that edge is ground truth |
 | 7 | the sim's **RTF is recorded next to every number**, with and without the monitors attached (§3.3 of ros_hil: a wall-clock delay appears inside the sim scaled by RTF) |
-| 8 | `QoSMessageLostInfo` drop counters and the `/proc/net/snmp` UDP/IP deltas are captured for the run (ros_hil §3.3) |
+| 8 | `lost` (from `QoSMessageLostInfo`) is 0 on every topic that crosses, and the `/proc/net/snmp` UDP/IP deltas are captured for the run |
+
+### 6.1 Measured: loopback on linus, 2026-10-29
+
+**What ran.** `python3 -m uw sim --sink ros` in the Isaac container (`network_mode: host`, `ipc: host`, domain 73,
+`rmw_fastrtps_cpp`, no DDS profile unless stated), `ros/sonar_relay/run.sh` and `ros/link_monitor/run.sh` on the
+host with `/opt/ros/jazzy`. Container ↔ host on one machine, which is M7 step 5's "loopback first". Raw numbers in
+`output/probe/m7/` (untracked).
+
+**Three findings before the tables, because two of them invalidate the obvious way of taking these measurements.**
+
+1. **`ros2 topic hz` and `ros2 topic bw` cannot measure this graph at all.** They have no QoS option in Jazzy —
+   `--qos-reliability` is rejected with a usage error — and their default RELIABLE reader cannot match the
+   BEST_EFFORT image writers the map specifies (§3 of `topic_map.md`). They report silence, and if the usage
+   error is swallowed by a pipe it reads exactly like a dead link. `ros2 topic echo` *does* take the flag.
+   `ros/link_monitor` exists for this: it reads each publisher's offered QoS with
+   `get_publishers_info_by_topic` and subscribes with a matching profile.
+2. **Every rate on the wire is nominal × RTF**, because the sim paces itself in sim time. With the camera at
+   RTF 0.787 the 10 Hz sonar arrived at 7.88 Hz, `/clock` at 47.3 Hz instead of 60, the 2 Hz plume at 1.573 and
+   the 1 Hz leak at 0.786 — all 0.787 of nominal, which is the §3.3 scaling made visible. A rate criterion
+   written as "±5 % of 10 Hz" fails a perfectly healthy link.
+3. **BEST_EFFORT samples above ~1 MB are lost without a DDS profile.** The 448 kB sonar ping lost nothing; the
+   1.79 MB `/gt/polar_db` and the 2.76 MB camera frame did. A/B on the same run, reader side only:
+
+   | reader | `/gt/polar_db` | rate | payload | lost |
+   |---|---|---|---|---|
+   | default socket buffers | 243 msgs | 9.758 Hz | 139.14 Mbit/s | **6** |
+   | `FASTRTPS_DEFAULT_PROFILES_FILE` with `receiveBufferSize` 4 MB (§4) | 250 msgs | **10.000 Hz** | **143.46 Mbit/s** | **0** |
+
+   So the §4 profile is not multi-host hygiene, it is what makes the map's QoS work, and the sysctls behind it
+   are load-bearing. The same run's 448 kB sonar topic was unaffected either way (36.0 Mbit/s, 0 lost).
+
+**No-camera profile** — `--no-camera --duration 170`, whole run **170.0 s sim / 170.1 s wall, RTF 0.9995**,
+1700 pings, 1 over budget. 40 s window, relay and monitor attached:
+
+| topic | QoS seen | n | rate | payload | mean bytes | lost |
+|---|---|---|---|---|---|---|
+| `/rov1/sensors/sonar_fls/image` | best_effort/volatile | 402 | **10.020 Hz** | 36.04 Mbit/s | 448 572 | 0 |
+| `/rov1/sensors/sonar_fls/sonar_image` | best_effort/volatile | 400 | **10.000 Hz** | 37.46 Mbit/s | 468 488 | 0 |
+| `/rov1/sensors/sonar_fls/meta` | reliable/transient_local | 1 | latched | — | 11 664 | 0 |
+| `/clock` | best_effort/volatile | 2402 | **60.059 Hz** | 0.01 | 12 | 0 |
+| `/tf_static` | reliable/transient_local | 1 | latched | — | 356 | 0 |
+| `/sim/diagnostics` | reliable/volatile | 40 | **1.000 Hz** | — | 439 | 0 |
+| `/gt/sonar_pose` | reliable/volatile | 400 | 10.000 Hz | — | 76 | 0 |
+| `/gt/tf` | reliable/volatile | 400 | 10.000 Hz | — | 108 | 0 |
+| `/gt/plume/markers` | best_effort/volatile | 80 | 2.000 Hz | 1.88 | 117 363 | 0 |
+| `/gt/leak/pose` | reliable/volatile | 40 | 1.000 Hz | — | 76 | 0 |
+| `/gt/polar_db` | best_effort/volatile | 338 | 8.467 Hz | 121.21 | 1 794 108 | **61** |
+
+**Camera profile** — same scene with the camera, RTF **0.787** in the window (0.683 over the whole run, which
+includes the startup transient). 40 s window:
+
+| topic | n | rate | payload | mean bytes | lost |
+|---|---|---|---|---|---|
+| `/rov1/sensors/sonar_fls/image` | 316 | 7.880 Hz | 28.34 Mbit/s | 448 572 | 0 |
+| `/rov1/sensors/sonar_fls/sonar_image` | 316 | 7.879 Hz | 29.60 Mbit/s | 468 488 | 0 |
+| `/rov1/sensors/camera_front/image_raw` | 215 | 5.361 Hz | 118.85 Mbit/s | 2 764 872 | **100** |
+| `/rov1/sensors/camera_front/camera_info` | 315 | 7.873 Hz | 0.02 | 384 | 0 |
+| `/gt/polar_db` | 269 | 6.755 Hz | 96.49 Mbit/s | 1 794 108 | **45** |
+| `/clock` | 1890 | 47.311 Hz | — | 12 | 0 |
+
+**The bandwidth arithmetic of `docs/ros_hil.md` §2.2 is confirmed**, which is the point of taking these numbers.
+Per-message size × nominal 10 Hz, measured against predicted:
+
+| topic | measured bytes/msg | → at 10 Hz | §2.2 predicted | error |
+|---|---|---|---|---|
+| polar `image` | 448 572 | 35.89 Mbit/s | 35.9 | 0.0 % |
+| `sonar_image` (`ProjectedSonarImage`) | 468 488 | 37.48 | 37.5 | 0.1 % |
+| `polar_db` | 1 794 108 | 143.53 | 143.5 | 0.0 % |
+| `camera_front/image_raw` | 2 764 872 | 221.19 | 221.2 | 0.0 % |
+
+The relay's constant overhead measures **19 916 B** per ping (468 488 − 448 572) against the 19 888 B §2.2
+computes from `relay.py` — 28 bytes of message header.
+
+**Acceptance verdict.**
+
+| # | verdict |
+|---|---|
+| 1 | **pass** (loopback): `/rov1/sensors/**`, `/gt/**`, `/sim/**`, `/clock`, `/tf_static`, node `sim_bridge`, and **no `/tf` publisher at all** |
+| 2 | **pass**: QoS read back per endpoint is the map's — best_effort/volatile on images, reliable/transient_local on `meta` and `/tf_static` |
+| 3 | **pass**: 10.020 / 10.000 / 60.059 / 2.000 / 1.000 Hz at RTF 0.9995 |
+| 4 | **pass**: 0.0–0.1 % against §2.2 (table above) |
+| 5 | **pass**: `meta` and `/tf_static` both reached a monitor started minutes after the sim |
+| 6 | **pass**: the mount chain resolves (RPY 180°, −90°, 0° = `R_SONAR_PROJECTED`), and `map → rov1/sonar_fls` fails with *Invalid frame ID "map" … frame does not exist* — the world-anchored edge is simply not in the live tree |
+| 7 | **pass**: RTF **1.001** with nothing attached, **0.9963** with the relay and the monitor subscribing — 0.4 %, against the 50 % that twelve `ros2 topic hz` processes once cost (ros_hil §5). `ros/link_monitor` subscribes raw, which is most of the difference |
+| 8 | **pass for everything that crosses the link**; `polar_db` and the camera frame drop without the §4 profile, and `polar_db` is 0 with it (finding 3). The camera case is untested with the profile |
+
+**Not done:** the sysctls are written to `config/sysctl/60-ros2-hil.conf` but **not installed** — that needs root,
+and this session has no sudo. The live values on linus are still the unpinned `rmem_max = wmem_max = 4194304`,
+which is what the measurements above ran against, so installing the file raises the ceiling rather than changing
+any number reported here.
 
 ## 7. Troubleshooting: symptom → cause → check
 
@@ -401,14 +491,21 @@ with §2.2's "+8 % wire" column; the 8 % is framing overhead measured at the NIC
 | Windows: only its own nodes visible | Fast DDS bound to a Hyper-V/WSL virtual adapter | `interfaceWhiteList` with the physical NIC's address; `ipconfig /all` |
 | Windows: traffic one way only | firewall profile is **Public**, or no outbound rule | `Get-NetConnectionProfile`; §5.3 |
 | `/clock` present, Jetson nodes frozen or stamping wall time | `use_sim_time` not set — **nothing in the repo sets it** (**V**) | `ros2 param get <node> use_sim_time` |
-| the sim slows down when you start monitoring | subscriber-side CPU on the publisher host: 12 × `ros2 topic hz` → RTF 0.5 (**V**) | move monitors to thor; log RTF per run |
+| the sim slows down when you start monitoring | subscriber-side CPU on the publisher host: 12 × `ros2 topic hz` → RTF 0.5 (**V**); `ros/link_monitor` costs 0.4 % (**V**, §6.1) | move monitors to thor; log RTF per run |
+| `ros2 topic hz`/`bw` print nothing on a sensor topic | they have **no `--qos-reliability` in Jazzy** and their default RELIABLE reader cannot match a BEST_EFFORT writer (**V**, §6.1). Piped into `grep`, the usage error looks like a dead link | use `ros/link_monitor/run.sh`, or `ros2 topic echo --qos-reliability best_effort` |
+| every rate is low by the same factor | not a fault: rates are **nominal × RTF** (**V**, §6.1) — at RTF 0.787 a 10 Hz sonar is 7.88 Hz on the wire | divide by the RTF on `/sim/diagnostics` |
 | traffic appears on domain 73 that nobody here published | another host on the shared `192.168.177.0/24` LAN | `ros2 node list`; see ros_hil §7 item 14 (f1tenth coexistence) |
 | `rosidl`/`rclpy` import errors on the sim host | `ROS_DISTRO`, the bridge `lib` path or the RMW not exported in the launching shell | re-read §5.1; the bundled `rosidl_generator_py` also logs a harmless DEBUG traceback (**V**, `ros_bridge.py`) |
 
 ## 8. What this does not establish yet
 
-- **Nothing here has been run.** The Windows side does not exist, the Jetson containers do not exist, and
-  `ros2 topic list` on this network returns two topics belonging to the CLI itself (**V**).
+- **The loopback half is done** (§6.1): container ↔ host on linus, all eight acceptance criteria, with the
+  bandwidth arithmetic of ros_hil §2.2 confirmed to 0.1 %. **The Ethernet half is not**: the Windows side does
+  not exist, and the thor and orin containers do not exist.
+- **The §4 profile has been validated on one host only**, as a reader-side fix for large-sample loss. Its
+  interface whitelist and unicast peers — the parts that matter for a real link — are still untested, and the
+  camera frame has not been retested with it.
+- **The sysctls are not installed**: `config/sysctl/60-ros2-hil.conf` needs root.
 - **RTT and jitter linus ↔ thor ↔ orin are unmeasured** — the first missing term of `docs/ros_hil.md` §5, and
   what decides whether MAVROS's TIMESYNC converges at all (its §7 item 2).
 - **Thor's and Orin's JetPack version, NIC and PTP capability are unknown** (§7 item 1 of that document); they

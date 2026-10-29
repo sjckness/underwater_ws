@@ -252,6 +252,26 @@ def sonar_meta(msg: Message, vehicle: str = VEHICLE) -> dict:
             **{k: s[k] for k in META_KEYS}}
 
 
+def diagnostic_array(t: float, values: dict, *, name: str = "sim loop", level: int = 0, message: str = "",
+                     types: dict | None = None):
+    """diagnostic_msgs/DiagnosticArray with one status, every value a KeyValue of str(value).
+
+    ``level`` is written as a one-byte ``bytes``, not an int: rosidl maps a .msg ``byte`` field to Python
+    ``bytes`` (the default value is b"\x00"), the Python setter accepts an int without complaint, and the C
+    converter then aborts the whole process on ``PyBytes_Check(field)`` at *publish* time — which is how this
+    crashed the sim once (tests/test_ros_messages.py serializes the message so it cannot happen again)."""
+    if types is None:
+        from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
+        types = {"DiagnosticArray": DiagnosticArray, "DiagnosticStatus": DiagnosticStatus, "KeyValue": KeyValue}
+    st = types["DiagnosticStatus"](name=name, message=message, hardware_id="sim")
+    st.level = bytes([int(level) & 0xFF])
+    st.values = [types["KeyValue"](key=str(k), value=f"{v:.4g}" if isinstance(v, float) else str(v))
+                 for k, v in values.items()]
+    m = types["DiagnosticArray"](status=[st])
+    m.header.stamp = _stamp(t)
+    return m
+
+
 def pose_stamped_msg(t: float, frame: str, position, rot):
     """geometry_msgs/PoseStamped from a position and a body-to-world rotation matrix."""
     from geometry_msgs.msg import PoseStamped
@@ -367,12 +387,8 @@ class RosSink(SensorSink):
         inside the sim scaled by RTF — at 0.694 a real 60 ms loop looks like 42 ms (docs/ros_hil.md §3.3). A HIL
         monitor may subscribe to this one /sim topic for exactly that reason; no perception or control node may
         (docs/topic_map.md §4.9)."""
-        st = self.msgs["DiagnosticStatus"](level=int(level), name=name, message=message, hardware_id="sim")
-        st.values = [self.msgs["KeyValue"](key=str(k), value=f"{v:.4g}" if isinstance(v, float) else str(v))
-                     for k, v in values.items()]
-        m = self.msgs["DiagnosticArray"](status=[st])
-        m.header.stamp = _stamp(t)
-        self.pub["diagnostics"].publish(m)
+        self.pub["diagnostics"].publish(diagnostic_array(t, values, name=name, level=level, message=message,
+                                                         types=self.msgs))
 
     def static_transforms(self, t: float, transforms: list) -> None:
         """[(parent, child, rotation 3x3, translation)] on /tf_static: mount offsets only. All of them must go in

@@ -75,6 +75,24 @@ def test_bridge_messages():
     assert np.allclose([r.x, r.y, r.z, r.w], ros_bridge.quat_xyzw(ros_bridge.R_SONAR_PROJECTED))
 
 
+def test_diagnostics_message_serializes():
+    """/sim/diagnostics. Serialized, not just constructed: DiagnosticStatus.level is a .msg `byte`, so rosidl
+    represents it as bytes, the Python setter takes an int without complaint, and the C converter then aborts the
+    process on PyBytes_Check at *publish* time. Constructing the message catches none of that — this crashed the
+    sim once (SIGABRT, 20 s into a run), so the test has to go all the way through the converter."""
+    pytest.importorskip("diagnostic_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
+    from diagnostic_msgs.msg import DiagnosticArray
+    from rclpy.serialization import deserialize_message, serialize_message
+
+    m = ros_bridge.diagnostic_array(12.3, {"rtf": 0.9973, "pings": 42, "moving_sonar": False},
+                                    level=1, message="RTF 0.997")
+    back = deserialize_message(serialize_message(m), DiagnosticArray)
+    assert (back.header.stamp.sec, back.header.stamp.nanosec) == (12, 300000000)
+    st = back.status[0]
+    assert st.level == b"\x01" and st.name == "sim loop" and st.hardware_id == "sim"
+    assert {kv.key: kv.value for kv in st.values} == {"rtf": "0.9973", "pings": "42", "moving_sonar": "False"}
+
+
 def test_topic_and_frame_map():
     """docs/topic_map.md §4 and §2: these names are the contract with the Jetson stack and with the bags, so pin
     them. ros.vehicle must move the vehicle namespace and the frame prefix together, and nothing else. Needs no

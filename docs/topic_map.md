@@ -267,7 +267,7 @@ data already sent, and M10 has not chosen between a polar and a Cartesian model.
 | `state_estimator` | thor | `/rov1/nav/odom`, `/tf` (`odom→base_link`) | `/rov1/mavros/**` | no — M9/M10 |
 | `leak_detector` | thor | `/rov1/perception/**` | `/rov1/sensors/sonar_fls/{sonar_image,meta}`, `/clock`, `/tf` | no — M10 |
 | `mission` | thor | `/rov1/control/**` | `/rov1/perception/**`, `/rov1/nav/odom` | no — M8b |
-| `link_monitor` | thor | `/rov1/diagnostics` | every sensor topic (rate/age/drops) | no — M7 step 4 |
+| `link_monitor` | thor (and the sim host, for loopback) | a report; `/rov1/diagnostics` later | every sensor topic, with the QoS read from each publisher | **V** `ros/link_monitor`: rate, payload, age, `QoSMessageLostInfo` |
 | `rosbag2` | sim host (linus) | — | per profile (§6) | no — M7 step 3 |
 
 Every node except `sim_bridge` runs with `use_sim_time:=true`. **Nothing in the repo declares it today** (**V**).
