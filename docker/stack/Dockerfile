@@ -24,7 +24,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-jazzy-vision-msgs \
       ros-jazzy-rosidl-runtime-py \
       iproute2 ethtool iputils-ping \
+      python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+# simplejpeg (libturbojpeg) to DECODE the sim's jpeg CompressedImage. Note which side needs what: the encoder
+# belongs to the publisher, which is the Isaac container (uw/ros_bridge.py installs it into UW_PYDEPS on first
+# use); this image needs the decoder, for the detector and for any republisher. A cp312 aarch64 wheel exists, so
+# the Jetson build compiles nothing (checked 2026-10-29). --break-system-packages: Ubuntu 24.04 is PEP 668.
+RUN python3 -m pip install --no-cache-dir --break-system-packages simplejpeg==1.9.0
 
 # No ros-jazzy-mavros here yet: it belongs to M8b, it pulls GeographicLib's datasets, and the arm64 binary
 # availability is still an open question (docs/ros_hil.md §7 item 1). Add it in that milestone, not before.

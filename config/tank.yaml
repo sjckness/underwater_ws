@@ -248,7 +248,9 @@ ros:                            # SensorSink "ros" (uw/ros_bridge.py); the domai
                                 #   cannot subscribe to ground truth at all (docs/ros_hil.md 2.5). null: same domain
   gt_localhost_only: true       # that participant discovers only on this host, so it is silent on the HIL NIC
   camera_transport: raw         # raw | compressed | both -> .../image_raw and/or .../image_raw/compressed
-  camera_png_level: 1           # zlib level for CompressedImage (measured 3.76x at 19.4 ms, 4.33x at 29.7 ms)
+  camera_compression: png       # png (lossless, stdlib) | jpeg (simplejpeg, installed into UW_PYDEPS on first use)
+  camera_png_level: 1           # zlib level for png CompressedImage (measured 10.1x at 8.2 ms on a tank frame)
+  camera_jpeg_quality: 85       # jpeg quality. Lossy: a transport for the link, never for a dataset
   camera_hz: null               # cap the ROS publish rate of the camera (null: every rendered frame). The render
                                 #   rate is camera.rate_hz; this only takes bytes off the link, not GPU time
   diagnostics_hz: 1.0           # /sim/diagnostics: RTF and loop health. Every latency number in this project is

@@ -146,6 +146,28 @@ def test_compressed_camera_image():
     assert (rows[:, 0] == 0).all() and np.array_equal(rows[:, 1:].reshape(180, 320, 3), rgb)
 
 
+def test_jpeg_camera_image():
+    """ros.camera_compression jpeg. Skipped where simplejpeg is not installed; in the container it is, because
+    RosSink puts it in UW_PYDEPS on first use (python -m uw test runs there)."""
+    pytest.importorskip("sensor_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
+    rng = np.random.default_rng(4)
+    y = np.linspace(0, 1, 120)[:, None] * np.ones(160)
+    rgb = np.clip((y * 60 + rng.normal(0, 2, (120, 160)))[..., None] * [0.4, 0.8, 1.0], 0, 255).astype(np.uint8)
+    from uw import deps
+    try:                            # install=False: a test must not reach the network, and must not write to
+        deps.require("simplejpeg", "simplejpeg", ros_bridge.SIMPLEJPEG_VERSION, install=False, no_deps=True)
+    except ImportError as exc:      # the shared UW_PYDEPS cache either (it is keyed by ABI tag for that reason)
+        pytest.skip(f"simplejpeg not installed here: {exc}")
+    m = ros_bridge.compressed_image_msg(1.0, "rov1/camera_front_optical", rgb, codec="jpeg", quality=85)
+    raw = bytes(m.data)
+    assert m.format == "jpeg" and raw[:2] == b"\xff\xd8" and raw[-2:] == b"\xff\xd9"   # SOI ... EOI
+    assert len(raw) < rgb.nbytes / 4
+    import simplejpeg
+    back = simplejpeg.decode_jpeg(raw, colorspace="RGB")
+    assert back.shape == rgb.shape
+    assert np.abs(back.astype(int) - rgb).mean() < 4.0     # lossy, but close: it is a transport, not a label
+
+
 def test_sonar_meta_leaks_no_ground_truth():
     """docs/ros_hil.md §2.5 rule 2. .../sonar_fls/meta is the one metadata topic the detector must subscribe to, and the
     per-ping meta it is built from carries the sonar's true pose, the leak's range and bearing, and

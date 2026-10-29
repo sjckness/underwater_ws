@@ -274,18 +274,38 @@ def diagnostic_array(t: float, values: dict, *, name: str = "sim loop", level: i
     return m
 
 
-def compressed_image_msg(t: float, frame: str, img: np.ndarray, level: int = 1):
-    """sensor_msgs/CompressedImage, format "png". 221.2 Mbit/s of rgb8 becomes 51-59 Mbit/s (docs/bridge_setup.md
-    §6.2), which is the difference between a camera that fits the HIL link and one that does not."""
+#: pinned, installed into UW_PYDEPS on first use (uw/deps.py). cp311 manylinux and cp312 aarch64 wheels both
+#: exist, so neither the sim's Python 3.11 nor the Jetson's stack container compiles anything (checked 2026-10-29)
+SIMPLEJPEG_VERSION = "1.9.0"
+
+
+def jpeg_bytes(img: np.ndarray, quality: int = 85) -> bytes:
+    """JPEG of an rgb8 frame, through simplejpeg (libturbojpeg). **Lossy**, so it is a transport for the link and
+    for a detector's input, never for a dataset: the recorder keeps the raw frame."""
+    from .deps import require
+
+    # --no-deps: its only dependency is numpy, which every target already has, and a numpy installed into
+    # UW_PYDEPS would shadow Isaac's for the whole sim
+    sj = require("simplejpeg", "simplejpeg", SIMPLEJPEG_VERSION, no_deps=True)
+    return sj.encode_jpeg(np.ascontiguousarray(img), quality=int(quality), colorspace="RGB", fastdct=True)
+
+
+def compressed_image_msg(t: float, frame: str, img: np.ndarray, level: int = 1, codec: str = "png",
+                         quality: int = 85):
+    """sensor_msgs/CompressedImage. 221.2 Mbit/s of rgb8 becomes 21.7 with PNG (measured 10.1x on these frames,
+    docs/bridge_setup.md §6.3), which is the difference between a camera that fits the HIL link and one that does
+    not; JPEG trades exactness for more of the same. ``format`` is "png" or "jpeg", which is what cv_bridge and
+    image_transport look for."""
     from sensor_msgs.msg import CompressedImage
 
     from .sinks import png_bytes
 
+    data = jpeg_bytes(img, quality) if codec == "jpeg" else png_bytes(img, level)
     m = CompressedImage()
     m.header.stamp = _stamp(t)
     m.header.frame_id = frame
-    m.format = "png"
-    m.data = _u8(np.frombuffer(png_bytes(img, level), np.uint8))
+    m.format = "jpeg" if codec == "jpeg" else "png"
+    m.data = _u8(np.frombuffer(data, np.uint8))
     return m
 
 
@@ -342,7 +362,8 @@ class RosSink(SensorSink):
 
     def __init__(self, node_name: str = "sim_bridge", vehicle: str = VEHICLE, fan: bool = False,
                  plume_markers: int = 3000, domain_id: int | None = None, gt_domain_id: int | None = None,
-                 gt_localhost_only: bool = True, camera_transport: str = "raw", camera_png_level: int = 1):
+                 gt_localhost_only: bool = True, camera_transport: str = "raw", camera_compression: str = "png",
+                 camera_png_level: int = 1, camera_jpeg_quality: int = 85):
         ensure_rclpy_path()
         # the bridge's rosidl_generator_py logs a DEBUG traceback (no 'lark') on import: harmless, kept out of the log
         logging.getLogger("rosidl_generator_py").setLevel(logging.WARNING)
@@ -409,7 +430,13 @@ class RosSink(SensorSink):
             raise ValueError(f"ros.camera_transport must be raw | compressed | both, got {camera_transport!r}")
         self.camera_raw = camera_transport in ("raw", "both")
         self.camera_compressed = camera_transport in ("compressed", "both")
+        if camera_compression not in ("png", "jpeg"):
+            raise ValueError(f"ros.camera_compression must be png | jpeg, got {camera_compression!r}")
+        self.camera_codec = camera_compression
         self.camera_png_level = int(camera_png_level)
+        self.camera_jpeg_quality = int(camera_jpeg_quality)
+        if self.camera_compressed and self.camera_codec == "jpeg":
+            jpeg_bytes(np.zeros((8, 8, 3), np.uint8))       # install and import now, not at the first frame
         self.plume_max = plume_markers
         self.meta = None
         self.count = {}
@@ -442,7 +469,8 @@ class RosSink(SensorSink):
             if self.camera_raw:
                 self.pub["image"].publish(image_msg(t, frame, rgb, "rgb8"))
             if self.camera_compressed:
-                self.pub["image_compressed"].publish(compressed_image_msg(t, frame, rgb, self.camera_png_level))
+                self.pub["image_compressed"].publish(compressed_image_msg(
+                    t, frame, rgb, self.camera_png_level, self.camera_codec, self.camera_jpeg_quality))
             self.pub["camera_info"].publish(camera_info_msg(t, frame, np.asarray(msg.meta["K"]), rgb.shape[1],
                                                             rgb.shape[0]))
         elif msg.sensor == "leak":

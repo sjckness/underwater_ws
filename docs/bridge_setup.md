@@ -20,9 +20,9 @@ transport work and proving it with measurements**.
 | host | hardware / OS | role | ROS 2 |
 |---|---|---|---|
 | **workstation** | Windows 10/11, RTX 4090 24 GB (`config/profiles/workstation.yaml`) | Isaac Sim 5.1 **native**: scene, plume, camera, the sonar model | internal bridge libraries — **which distro is check 1** |
-| **thor** | Jetson AGX Thor, JetPack 7 / Ubuntu 24.04 (**U**, to confirm) | **primary** stack container: detector, estimator, mission, link monitor | ROS 2 Jazzy in a container (arm64) |
+| **thor** | Jetson AGX Thor, JetPack 7 / Ubuntu 24.04 (**U**, to confirm) | **primary**, decided 2026-10-29: stack container with the detector, estimator, mission and link monitor. HIL address **192.168.9.2** | ROS 2 Jazzy in a container (arm64), **built on thor** |
 | **orin** | Jetson Orin, JetPack 6 / Ubuntu 22.04 (**U**, to confirm) | second stack container | Jazzy **in the container**, whatever the host's L4T ships |
-| **linus** | Ubuntu, RTX 5050 8 GB, `enp5s0` 1 GbE | `ros/sonar_relay`, rosbag2, and the **fallback sim host** (what the repo does today) | host Jazzy at `/opt/ros/jazzy` (**V**) |
+| **linus** | Ubuntu, RTX 5050 8 GB, `enp5s0` 1 GbE | `ros/sonar_relay`, rosbag2, and the **fallback sim host** (what the repo does today). HIL address **192.168.9.1** | host Jazzy at `/opt/ros/jazzy` (**V**) |
 
 Two structural facts about the containers, because the word "the container" now means two different things:
 
@@ -315,10 +315,10 @@ GeographicLib's datasets, and its arm64 availability is still open (`docs/ros_hi
 Everything machine-specific is an environment variable, including the DDS profile, which is per host and
 generated. `network_mode: host` is literal on all three (Linux), so no port mapping anywhere.
 
-**Cross-building for a Jetson from linus** needs the arm64 binfmt handler, which this box does not have
-(**V**, `/proc/sys/fs/binfmt_misc` has no `qemu-aarch64`): `docker run --privileged --rm tonistiigi/binfmt
---install arm64` installs it, then `docker buildx build --platform linux/arm64 … --load`. Building on the Jetson
-is faster and is the recommended path; the build is itself the test of arm64 package availability.
+**Decided 2026-10-29: the image is built on thor**, natively. Cross-building from linus would need the arm64
+binfmt handler, which this box does not have (**V**, `/proc/sys/fs/binfmt_misc` has no `qemu-aarch64`), and the
+native build is both faster and the actual test of arm64 package availability — including simplejpeg, whose
+aarch64 cp312 wheel exists, so nothing compiles there either.
 
 `--network host` is literal on all three (Linux hosts), so no port mapping is needed anywhere. The container
 decouples the ROS distro from the host L4T, which matters for orin: JetPack 6 is Ubuntu 22.04, whose native ROS 2
@@ -528,6 +528,73 @@ ros/link_monitor/run.sh --domain 74 --duration 30        # what that bag is abou
 Use the §4 profile for the recorder too: `/gt/polar_db` is a 1.79 MB sample and dropped 64 of ~250 on the
 ground-truth domain with default socket buffers, exactly as it did on the HIL domain (§6.1 finding 3).
 
+### 6.2.1 The ground-truth bag: what it costs and the four ways to make it smaller
+
+**The disk first, because it decides the shape of this.** On linus, `/` has **25 G free of 439 G (95 % used)** and
+`/HDD2T` has **1.6 T free of 1.8 T** (**V**, 2026-10-29). The bag goes on `/HDD2T`; `config/runtime.yaml` already
+points `data_root` there, and the datasets occupy 153 G of it. A root-filesystem bag would fill the disk in
+roughly twenty minutes.
+
+**What the ground-truth domain actually carries**, from the measured message sizes and rates (§6.1, §6.2):
+
+| topic | bytes/msg | rate | MB/s | GB/hour |
+|---|---|---|---|---|
+| `/gt/polar_db` | 1 794 108 | 10 Hz | 17.94 | **64.6** |
+| `/gt/plume/markers` | 117 363 | 2 Hz | 0.235 | 0.85 |
+| `/gt/sonar_pose` + `/gt/tf` | 76 + 108 | 10 Hz | 0.002 | 0.007 |
+| `/gt/leak/pose` + `/gt/leak/flow_lpm` | 76 + 8 | 1 Hz | — | — |
+| `/clock` | 12 | 60 Hz | 0.001 | 0.003 |
+| **total** | | | **18.2** | **65.5** |
+
+`polar_db` is **98.6 %** of it, so every option below is an option about that one topic.
+
+**zstd, measured on real `polar_db` frames** (12 frames of `v0.1/s0043`, the `zstd` CLI, one core). The host
+already has `ros-jazzy-rosbag2-compression-zstd` installed (**V**):
+
+| mode | ratio | throughput | GB/hour (polar_db) | CPU at 17.9 MB/s in |
+|---|---|---|---|---|
+| file-level zstd -1 | 2.50× | 192.6 MB/s | 25.8 | 9.3 % of a core |
+| file-level zstd -3 | 2.63× | 140.8 MB/s | 24.6 | 12.7 % |
+| file-level zstd -9 | 2.95× | 31.2 MB/s | 21.9 | **57 %** |
+| **message-level zstd -1** | **2.51×** | 152 MB/s | 25.8 | ~12 % |
+| message-level zstd -3 | 2.64× | 114 MB/s | 24.5 | ~16 % |
+
+**Message-level costs nothing in ratio here** (2.51× against file-level's 2.50×) because each message is 1.79 MB
+— large enough that cross-message history adds nothing — and it avoids file-level's transient disk spike, which
+at this rate is a whole `max_bagfile_size` of extra space. So message-level is the mode to use.
+
+**Why 2.5× and not more:** the topic is `32FC1`, but the array it comes from is **float16** in the recorder
+(`ping.db.astype(np.float32)`, **V**), so half of every mantissa on the wire is zero padding. Raw float16 is
+exactly half the bytes of raw float32 (10.76 against 21.53 MB over 12 frames) and still compresses 1.43× at
+zstd -1. zstd is mostly recovering padding, which is also why -9 buys 11 % more for six times the CPU: not worth
+it.
+
+**The four options, with the cost of each.**
+
+| # | option | GB/hour | hours on 1.6 T | CPU | what it costs |
+|---|---|---|---|---|---|
+| A | record everything raw | 65.5 | **24** | ~0, but 18.2 MB/s sustained to a spinning disk shared with the datasets | nothing in fidelity; the disk |
+| B | **message-level zstd -1** | **26.7** | **61** | ~12 % of a core | nothing in fidelity; decompression on read |
+| C | message-level zstd -3 | 25.4 | 64 | ~16 % | as B, 5 % less disk |
+| D | `polar_db` at 2 Hz + zstd -1 | **6.1** | 262 | ~3 % | the evaluator sees one ping in five with a calibrated level; needs a rate knob that does not exist yet |
+| E | `polar_db` out of the bag, kept in the dataset `npz` | 0.9 | ~1800 | ~0 | it is not a bag any more: no `ros2 bag play`, and the evaluator reads the dataset path instead. The recorder already writes it as float16 + deflate, measured 3.47× on v0.2 |
+
+> **Recommendation: B for routine runs, D for a long session.** B is lossless, costs an eighth of a core and
+> turns a one-day disk into two and a half. D needs one new config key (`ros.gt_polar_db_hz`), which is not
+> implemented — say the word and it is a four-line change. E is already available today and is the right answer
+> if the evaluator never actually wanted a bag.
+
+```bash
+ROS_DOMAIN_ID=74 ros2 bag record --compression-mode message --compression-format zstd \
+  -o /HDD2T/underwater_data/gt_$(date +%F_%H%M) \
+  /clock /gt/sonar_pose /gt/tf /gt/leak/pose /gt/leak/flow_lpm /gt/plume/markers /gt/polar_db
+```
+
+Two cautions. The bag writer and the sim's own dataset writer would be on the same spinning disk, and sustained
+write throughput on that volume is **still unmeasured** (`docs/ros_hil.md` §7 item 13). And the recorder wants
+the §4 DDS profile like every other subscriber: `polar_db` dropped 64 of ~250 samples on the ground-truth domain
+with default socket buffers.
+
 ### 6.3 Camera: raw, compressed, and which knob is which
 
 The container's Python has **no JPEG encoder at all** — no PIL, cv2, simplejpeg, turbojpeg, imageio or
@@ -557,9 +624,42 @@ Four things worth stating plainly.
    at 2 Hz it gives **RTF 0.9989 with the sonar at 10.028 Hz and `/clock` at 60.081 Hz** — a camera in the
    latency profile, which `docs/ros_hil.md` §0 assumed impossible on this machine.
 
-> **The HIL camera configuration this measurement recommends:** `ros.camera_transport: compressed` with
-> `camera.rate_hz: 2`. 4.18 Mbit/s, no drops, RTF 1.00, full sonar rate. `ros.camera_hz` stays for the case where
-> the render rate must stay high for the dataset while the link stays thin.
+**JPEG, measured against PNG on the same frames.** `ros.camera_compression: jpeg` encodes with simplejpeg
+(libturbojpeg), pinned at 1.9.0 and installed into `UW_PYDEPS` on first use; cp311 and aarch64 cp312 wheels both
+exist, so neither the sim's Python 3.11 nor the Jetson's stack container compiles anything. Offline, on one saved
+frame, in the sim's own interpreter:
+
+| codec | size | ratio | encode | at 10 Hz | at 2 Hz |
+|---|---|---|---|---|---|
+| png level 1 | 0.735 MB | 3.76× | 20.7 ms | 58.8 Mbit/s | 11.8 |
+| png level 3 | 0.638 MB | 4.33× | 37.3 ms | 51.0 | 10.2 |
+| **jpeg q75** | 0.057 MB | **48.5×** | **3.1 ms** | 4.6 | 0.9 |
+| **jpeg q85** | 0.073 MB | **38.0×** | **3.1 ms** | 5.8 | 1.2 |
+| jpeg q95 | 0.139 MB | 19.9× | 3.9 ms | 11.1 | 2.2 |
+
+q85 against the original: mean absolute difference **0.74 of 255**, worst pixel 41, **PSNR 44.8 dB**.
+
+In the loop, same scene, 25 s windows:
+
+| run | camera bytes/msg | payload | lost | RTF | `camera_read_publish` |
+|---|---|---|---|---|---|
+| raw | 2 764 872 | 109.46 Mbit/s | 86 | 0.8340 | 7.5 ms |
+| png level 1, render 10 Hz | 272 675 | 18.13 | 0 | 0.8378 | 15.7 ms |
+| **jpeg q85, render 10 Hz** | **43 581** | **2.94** | 0 | 0.8435 | **9.4 ms** |
+| png level 1, render 2 Hz | 263 176 | 4.20 | 0 | 0.9989 | 15.8 ms |
+| **jpeg q85, render 2 Hz** | **43 285** | **0.69** | 0 | **1.0000** | 9.4 ms |
+
+So on live frames JPEG q85 is **63× against raw and 6.3× against PNG**, and it is *cheaper* than PNG rather than
+dearer: 1.9 ms per frame over raw against PNG's 8.2 ms, because libturbojpeg's DCT beats zlib on 2.76 MB by more
+than the entropy coding costs. PNG keeps one advantage and it is the only one that matters here: it is lossless.
+
+> **The HIL camera configuration this measurement recommends:** `ros.camera_transport: compressed`,
+> `ros.camera_compression: jpeg` (q85) and `camera.rate_hz: 2`. **0.69 Mbit/s, no drops, RTF 1.0000**, full sonar
+> rate — the camera stops being a term in the link budget at all. Lossy is acceptable *here* and nowhere else:
+> the datasets keep the raw frame through the recorder, and `ros.camera_hz` stays for the case where the render
+> rate must stay at 10 Hz for a dataset while the link stays thin.
+
+
 
 One cosmetic consequence of publishing a topic conditionally: the publisher for the *other* transport is still
 created, so `ros2 topic list` shows `image_raw` (or `image_raw/compressed`) with no data behind it, as it already
@@ -600,23 +700,23 @@ not connected yet. §7 is the companion: when a step fails, the symptom is almos
 **A — Write these down before plugging anything in.** They are `docs/ros_hil.md` §7 item 1, still open, and
 three of them change decisions rather than numbers.
 
-- [ ] Which Jetson is the primary: **thor** (JetPack 7 / Ubuntu 24.04, so Jazzy natively) or **orin**
-      (JetPack 6 / Ubuntu 22.04, whose native ROS 2 is Humble — the stack container is what makes it Jazzy
-      anyway). `cat /etc/nv_tegra_release; dpkg -l | grep nvidia-l4t-core`
+- [x] **Primary: thor** (decided 2026-10-29). Still to paste in here: `cat /etc/nv_tegra_release`,
+      `ip -br link`, `ethtool <nic>`, `ethtool -T <nic>`. The stack image is **built on thor**, which is also the
+      test of arm64 package availability — no cross-building.
 - [ ] NIC, link speed, MTU and whether it has a PTP hardware clock: `ip -br link; ethtool <nic>;
       ethtool -T <nic>`. The last one sets the floor on any wall-clock latency claim (§3.3); linus's `enp5s0`
       has none.
-- [ ] Topology: **direct cable** or through a switch. A switch in the path is a latency term and an IGMP
-      question; a direct cable removes both and is the recommended first configuration.
+- [x] **Direct cable** (decided 2026-10-29): no switch in the latency path and no IGMP question, so the
+      profile's multicast form is the one to start with.
 - [ ] arm64 availability of everything the stack container installs — the build in `docker/stack/Dockerfile` is
       the test, run it on the Jetson.
 
 **B — Addressing. A dedicated subnet, static, off the lab LAN.**
 
-- [ ] A subnet that is *not* `192.168.177.0/24`: that LAN has 20+ hosts on it (**V**, §1) and the f1tenth
-      stacks live there. For example `192.168.9.1` on the workstation's HIL NIC and `192.168.9.2` on the
-      Jetson's, /24, no gateway, no DHCP.
-- [ ] **Static**, because `initialPeersList` holds addresses: a DHCP lease change breaks discovery silently.
+- [x] **`192.168.9.1` (linus) and `192.168.9.2` (thor), /24, static, no gateway, no DHCP** (decided
+      2026-10-29). Deliberately not on `192.168.177.0/24`, which carries 20+ hosts and the f1tenth stacks
+      (**V**, §1). Static because `initialPeersList` holds addresses and a DHCP lease change breaks discovery
+      silently.
 - [ ] MTU **1500** on both ends: every byte count in `docs/ros_hil.md` §2.2 and in §6.1 is computed against it.
       Jumbo frames would cut the camera's fragment count by 6×, and would have to be set on both ends *and* any
       switch — a separate experiment, not part of the first run.
@@ -629,7 +729,8 @@ three of them change decisions rather than numbers.
 
 **C — The same configuration on both hosts (§3).**
 
-- [ ] `config/sysctl/60-ros2-hil.conf` installed on **both** and read back:
+- [x] Owner agreed 2026-10-29: installed by hand on linus and thor. `config/sysctl/60-ros2-hil.conf` on
+      **both**, read back:
       `sudo install -m 644 config/sysctl/60-ros2-hil.conf /etc/sysctl.d/ && sudo sysctl --system`.
       This is not optional: it is what the DDS profile's 4 MB receive buffer is capped by, and large BEST_EFFORT
       samples are lost without it (§6.1 finding 3).
@@ -672,8 +773,9 @@ three of them change decisions rather than numbers.
 **F — Measure, with the RTF beside every number.**
 
 - [ ] The sim in the recommended HIL configuration: `--set ros.camera_transport=compressed --set
-      camera.rate_hz=2` (§6.3), the relay on the sim host, and the ground-truth bag on domain 74 on the
-      workstation (§6.2).
+      ros.camera_compression=jpeg --set camera.rate_hz=2` (§6.3 — 0.69 Mbit/s of camera), the relay on the sim
+      host, and the ground-truth bag on domain 74 with message-level zstd (§6.2.1). The dataset profile stays
+      raw at 10 Hz and is a separate run, never the same one.
 - [ ] `ros/link_monitor/run.sh --duration 60 --age --json link_eth.json` **on the Jetson**, not on the sim host:
       subscriber CPU on the publisher's host is itself a term (§6.1 finding, and ros_hil §5).
 - [ ] Read the RTF from `/sim/diagnostics` before and during that window. Every rate on the wire is nominal ×

@@ -181,7 +181,9 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                                gt_domain_id=get(cfg, "ros.gt_domain_id"),
                                gt_localhost_only=bool(get(cfg, "ros.gt_localhost_only")),
                                camera_transport=get(cfg, "ros.camera_transport"),
-                               camera_png_level=int(get(cfg, "ros.camera_png_level")))
+                               camera_compression=get(cfg, "ros.camera_compression"),
+                               camera_png_level=int(get(cfg, "ros.camera_png_level")),
+                               camera_jpeg_quality=int(get(cfg, "ros.camera_jpeg_quality")))
     elif args.sink == "file":
         sink = sinks.make_sink("file", out_dir=args.out, info={
             "name": args.out, "command": "python -m uw sim " + " ".join(args.argv),
