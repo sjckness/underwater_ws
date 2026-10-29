@@ -1,0 +1,38 @@
+# The stack container (docker/stack/Dockerfile): the ROS 2 side of the HIL link, on thor, orin or linus.
+# Everything machine-specific comes from the environment, nothing is hard-coded here:
+#
+#   UW_WS              the workspace path, bind-mounted at the same path inside (as the sim container does)
+#   UW_ROS_DOMAIN_ID   73 (the HIL domain); 74 is the ground-truth domain and is not reachable from here
+#   UW_DDS_PROFILE     the Fast DDS profile for THIS host, from tools/dds_profile.py. Per host, so generate it:
+#                        python3 tools/dds_profile.py --iface <nic|ip> --peers <ip,ip> --out config/dds/this.xml
+#   UW_UID / UW_GID    the host user, so anything written to the workspace stays owned by it
+#
+#   export UW_WS=$PWD UW_UID=$(id -u) UW_GID=$(id -g) UW_DDS_PROFILE=$PWD/config/dds/this.xml
+#   docker compose -f docker/compose.stack.yaml run --rm stack -lc 'ros/link_monitor/run.sh --duration 30'
+name: uw_stack
+services:
+  stack:
+    image: uw_stack:jazzy
+    build:
+      context: stack
+      dockerfile: Dockerfile
+    pull_policy: never
+    # literal on every Linux host, which is why the stack containers live on thor, orin and linus and not behind
+    # Docker Desktop's WSL2 NAT (docs/bridge_setup.md §2 check 4)
+    network_mode: host
+    ipc: host
+    init: true
+    user: "${UW_UID:?set UW_UID=$(id -u)}:${UW_GID:?set UW_GID=$(id -g)}"
+    environment:
+      - ROS_DOMAIN_ID=${UW_ROS_DOMAIN_ID:-73}
+      - UW_ROS_DOMAIN_ID=${UW_ROS_DOMAIN_ID:-73}
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/uw_dds/profile.xml
+      - HOME=/tmp
+    volumes:
+      - ${UW_WS:?set UW_WS to the workspace}:${UW_WS}:rw
+      - ${UW_DDS_PROFILE:?generate it with tools/dds_profile.py}:/uw_dds/profile.xml:ro
+    working_dir: ${UW_WS}
+    stdin_open: true
+    tty: true

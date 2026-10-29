@@ -295,15 +295,30 @@ The repo side would run with `UW_RUNTIME=native` and `native.python` pointing at
 
 ### 5.2 The subscribers — thor (primary), orin, linus
 
-The stack container is new work; the shape it needs:
+The stack container exists: `docker/stack/Dockerfile` and `docker/compose.stack.yaml`. `ros:jazzy-ros-base` is
+multi-arch, so the one file builds natively on each machine, and it carries **no project code** — the workspace
+is bind-mounted at the same path as on the host, so `ros/sonar_relay/run.sh`, `ros/link_monitor/run.sh` and
+`ros/pose_cmd/run.sh` run inside it unchanged.
 
+```bash
+docker build -t uw_stack:jazzy -f docker/stack/Dockerfile docker/stack     # natively, on the machine that runs it
+python3 tools/dds_profile.py --iface <nic|ip> [--peers <ip,…>] --out config/dds/this.xml
+export UW_WS=$PWD UW_UID=$(id -u) UW_GID=$(id -g) UW_DDS_PROFILE=$PWD/config/dds/this.xml
+docker compose -f docker/compose.stack.yaml run --rm stack -lc 'ros/link_monitor/run.sh --duration 60 --age'
 ```
-ros:jazzy-ros-base (arm64 on the Jetsons, amd64 on linus)
-+ ros-jazzy-marine-acoustic-msgs      # ros/sonar_relay's dependency (V, package.xml)
-+ ros-jazzy-rosbag2-* , ros-jazzy-mavros (later, M8b)
-run with: --network host --ipc host, ROS_DOMAIN_ID=73, RMW_IMPLEMENTATION=rmw_fastrtps_cpp,
-          FASTRTPS_DEFAULT_PROFILES_FILE=<that host's profile>
-```
+
+It installs `marine_acoustic_msgs` (the one message package the sim's bundled rclpy does *not* have, §6.2),
+rosbag2 with the mcap storage plugin, `tf2_ros`, `vision_msgs`, and `iproute2`/`ethtool` for the link checks of
+§2 check 3 — those have to run where the NIC is. **MAVROS is deliberately absent**: it belongs to M8b, it pulls
+GeographicLib's datasets, and its arm64 availability is still open (`docs/ros_hil.md` §7 item 1).
+
+Everything machine-specific is an environment variable, including the DDS profile, which is per host and
+generated. `network_mode: host` is literal on all three (Linux), so no port mapping anywhere.
+
+**Cross-building for a Jetson from linus** needs the arm64 binfmt handler, which this box does not have
+(**V**, `/proc/sys/fs/binfmt_misc` has no `qemu-aarch64`): `docker run --privileged --rm tonistiigi/binfmt
+--install arm64` installs it, then `docker buildx build --platform linux/arm64 … --load`. Building on the Jetson
+is faster and is the recommended path; the build is itself the test of arm64 package availability.
 
 `--network host` is literal on all three (Linux hosts), so no port mapping is needed anywhere. The container
 decouples the ROS distro from the host L4T, which matters for orin: JetPack 6 is Ubuntu 22.04, whose native ROS 2
@@ -550,7 +565,131 @@ One cosmetic consequence of publishing a topic conditionally: the publisher for 
 created, so `ros2 topic list` shows `image_raw` (or `image_raw/compressed`) with no data behind it, as it already
 does for `/sim/debug/sonar_fan`. A monitor reports `n = 0` for it rather than an error.
 
+### 6.4 The stack container, validated against a live sim
+
+Built on linus (amd64, 1.31 GB) and run against the sim in the recommended HIL configuration
+(`ros.camera_transport=compressed`, `camera.rate_hz=2`), with `link_monitor` **inside** the container and the
+generated loopback DDS profile bind-mounted:
+
+```
+distro jazzy | rmw rmw_fastrtps_cpp | domain 73
+profile /uw_dds/profile.xml -> host interface: 127.0.0.1
+marine_acoustic_msgs: ProjectedSonarImage
+ls: cannot access '/isaac-sim': No such file or directory      <- the point: no Isaac in this image
+```
+
+| topic | QoS | n | rate | payload | bytes/msg | lost |
+|---|---|---|---|---|---|---|
+| `/rov1/sensors/sonar_fls/image` | best_effort/volatile | 252 | 10.026 Hz | 36.12 Mbit/s | 448 572 | 0 |
+| `/rov1/sensors/sonar_fls/sonar_image` | best_effort/volatile | 250 | 10.000 Hz | 37.43 Mbit/s | 468 488 | 0 |
+| `/rov1/sensors/camera_front/image_raw/compressed` | best_effort/volatile | 50 | 2.000 Hz | 4.20 Mbit/s | 263 176 | 0 |
+| `/clock` | best_effort/volatile | 1501 | 60.022 Hz | 0.01 | 12 | 0 |
+| `/sim/diagnostics` | reliable/volatile | 25 | 1.000 Hz | — | 459 | 0 |
+
+**78 Mbit/s of 1 GbE, zero drops, every rate nominal** — that is the whole HIL payload as the Jetson will see
+it, from the container role it will run, with only the architecture left to change. What this does *not* test is
+the architecture (arm64), the Ethernet, and the profile's `interfaceWhiteList` and `initialPeersList`, which
+need the second host.
+
 ## 7. Troubleshooting: symptom → cause → check
+## 8. First run with the Jetson on a dedicated Ethernet: the checklist
+
+In order. Each step has the command and what counts as passing; nothing here has been run, because the Jetson is
+not connected yet. §7 is the companion: when a step fails, the symptom is almost certainly in that table.
+
+**A — Write these down before plugging anything in.** They are `docs/ros_hil.md` §7 item 1, still open, and
+three of them change decisions rather than numbers.
+
+- [ ] Which Jetson is the primary: **thor** (JetPack 7 / Ubuntu 24.04, so Jazzy natively) or **orin**
+      (JetPack 6 / Ubuntu 22.04, whose native ROS 2 is Humble — the stack container is what makes it Jazzy
+      anyway). `cat /etc/nv_tegra_release; dpkg -l | grep nvidia-l4t-core`
+- [ ] NIC, link speed, MTU and whether it has a PTP hardware clock: `ip -br link; ethtool <nic>;
+      ethtool -T <nic>`. The last one sets the floor on any wall-clock latency claim (§3.3); linus's `enp5s0`
+      has none.
+- [ ] Topology: **direct cable** or through a switch. A switch in the path is a latency term and an IGMP
+      question; a direct cable removes both and is the recommended first configuration.
+- [ ] arm64 availability of everything the stack container installs — the build in `docker/stack/Dockerfile` is
+      the test, run it on the Jetson.
+
+**B — Addressing. A dedicated subnet, static, off the lab LAN.**
+
+- [ ] A subnet that is *not* `192.168.177.0/24`: that LAN has 20+ hosts on it (**V**, §1) and the f1tenth
+      stacks live there. For example `192.168.9.1` on the workstation's HIL NIC and `192.168.9.2` on the
+      Jetson's, /24, no gateway, no DHCP.
+- [ ] **Static**, because `initialPeersList` holds addresses: a DHCP lease change breaks discovery silently.
+- [ ] MTU **1500** on both ends: every byte count in `docs/ros_hil.md` §2.2 and in §6.1 is computed against it.
+      Jumbo frames would cut the camera's fragment count by 6×, and would have to be set on both ends *and* any
+      switch — a separate experiment, not part of the first run.
+- [ ] `ip route get <peer>` on both hosts resolves through the HIL NIC and not the lab one.
+
+> **A bonus worth noticing:** a dedicated subnet plus the profile's `interfaceWhiteList` is also the answer to
+> `docs/ros_hil.md` §7 item 14, the f1tenth coexistence problem. With Fast DDS bound to the HIL interface only,
+> domain 73 is not announced on the lab LAN at all, so a harness batch and a HIL session stop being able to see
+> each other — which is what the "who holds the lock" question was about.
+
+**C — The same configuration on both hosts (§3).**
+
+- [ ] `config/sysctl/60-ros2-hil.conf` installed on **both** and read back:
+      `sudo install -m 644 config/sysctl/60-ros2-hil.conf /etc/sysctl.d/ && sudo sysctl --system`.
+      This is not optional: it is what the DDS profile's 4 MB receive buffer is capped by, and large BEST_EFFORT
+      samples are lost without it (§6.1 finding 3).
+- [ ] `ROS_DOMAIN_ID=73`, `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`, `ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET`,
+      `ROS_DISTRO=jazzy` in every terminal and in the compose environment on both sides.
+- [ ] A **per-host** DDS profile, generated — never copied between hosts, since the whitelist is that host's own
+      address:
+      ```bash
+      # on the workstation
+      python3 tools/dds_profile.py --iface <hil-nic> --peers 192.168.9.2 --out config/dds/this.xml
+      # on the Jetson
+      python3 tools/dds_profile.py --iface <hil-nic> --peers 192.168.9.1 --out config/dds/this.xml
+      export FASTRTPS_DEFAULT_PROFILES_FILE=$PWD/config/dds/this.xml
+      ```
+- [ ] Start with the profile's **multicast** form (no `--peers`) on a direct cable; switch to unicast peers only
+      if discovery fails. One variable at a time.
+- [ ] Windows firewall, if the publisher is the Windows box: UDP **25650–25760**, profile **Private** (§5.3).
+
+**D — Link level, before any ROS.**
+
+- [ ] `ping -c 200 -i 0.01 <peer>`: record mean and max RTT and the jitter. This is the first unmeasured term of
+      `docs/ros_hil.md` §5 and it also decides whether MAVROS's TIMESYNC can ever converge (its §7 item 2).
+- [ ] Line rate, if `iperf3` is available on both: ≥ 900 Mbit/s on 1 GbE. Not required, but it separates "DDS is
+      misconfigured" from "the link is bad" in one command.
+- [ ] `/proc/net/snmp` snapshot on both hosts, so the deltas across the run mean something (§3.3). The absolutes
+      are already non-zero on linus from other work.
+
+**E — Discovery, then the data.**
+
+- [ ] On the Jetson: `ros2 node list` shows `sim_bridge`; `ros2 topic list` shows `/rov1/sensors/**`, `/clock`,
+      `/tf_static`, `/sim/diagnostics` — and **no `/gt` topic of any kind**, which is the whole point of the
+      ground-truth domain (§6.2). If `/gt` appears here, stop: `ros.gt_domain_id` is not in effect.
+- [ ] `ros2 topic info -v` on the sonar topic from the Jetson: a **remote** publisher endpoint, QoS
+      best_effort/volatile.
+- [ ] `ros2 topic echo --once --qos-durability transient_local /rov1/sensors/sonar_fls/meta` on a Jetson process
+      started *after* the sim: the late joiner must receive it, or nothing downstream can decode a ping.
+- [ ] `ros2 run tf2_ros tf2_echo rov1/sonar_fls rov1/sonar_fls_projected` resolves, and `map → rov1/sonar_fls`
+      does **not**. The second one failing is a pass (§2.5 rule 4).
+
+**F — Measure, with the RTF beside every number.**
+
+- [ ] The sim in the recommended HIL configuration: `--set ros.camera_transport=compressed --set
+      camera.rate_hz=2` (§6.3), the relay on the sim host, and the ground-truth bag on domain 74 on the
+      workstation (§6.2).
+- [ ] `ros/link_monitor/run.sh --duration 60 --age --json link_eth.json` **on the Jetson**, not on the sim host:
+      subscriber CPU on the publisher's host is itself a term (§6.1 finding, and ros_hil §5).
+- [ ] Read the RTF from `/sim/diagnostics` before and during that window. Every rate on the wire is nominal ×
+      RTF, so without it the table cannot be read at all.
+- [ ] Compare against the loopback numbers of §6.1 topic by topic. The interesting column is `lost`: loopback
+      had 0 on everything that crosses, so anything non-zero here is the Ethernet, the socket buffers or the
+      MTU, not the sim.
+- [ ] `/proc/net/snmp` deltas and `ip -s link` deltas on both hosts: the ~8 % framing overhead between the
+      payload bytes the monitor reports and what the NIC actually moved.
+
+**G — What "pass" means for this first run.** The eight criteria of §6 with `lost = 0` on every topic that
+crosses, the §6.1 bandwidth agreement holding over Ethernet, and the RTT written down. Latency end to end is
+*not* in scope: the detector does not exist (M10), so there is nothing to time yet — M7 step 4's monitor is the
+measurement, and step 5 is where §5's table gets its two missing columns.
+
+
 
 | symptom | most likely cause | check |
 |---|---|---|
@@ -570,7 +709,7 @@ does for `/sim/debug/sonar_fan`. A monitor reports `n = 0` for it rather than an
 | traffic appears on domain 73 that nobody here published | another host on the shared `192.168.177.0/24` LAN | `ros2 node list`; see ros_hil §7 item 14 (f1tenth coexistence) |
 | `rosidl`/`rclpy` import errors on the sim host | `ROS_DISTRO`, the bridge `lib` path or the RMW not exported in the launching shell | re-read §5.1; the bundled `rosidl_generator_py` also logs a harmless DEBUG traceback (**V**, `ros_bridge.py`) |
 
-## 8. What this does not establish yet
+## 9. What this does not establish yet
 
 - **The loopback half is done** (§6.1): container ↔ host on linus, all eight acceptance criteria, with the
   bandwidth arithmetic of ros_hil §2.2 confirmed to 0.1 %. **The Ethernet half is not**: the Windows side does

@@ -11,3 +11,6 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .cache/
+
+# generated DDS profiles: per host, from tools/dds_profile.py
+config/dds/*.xml
