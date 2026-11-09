@@ -1,0 +1,173 @@
+{
+  "duration_wall_s": 10.004892814002233,
+  "subscriber_qos": {
+    "images": "RELIABLE, VOLATILE, KEEP_LAST depth 10",
+    "/clock": "BEST_EFFORT, VOLATILE, KEEP_LAST depth 10"
+  },
+  "topics": {
+    "/oculus/polar": {
+      "n_received": 102,
+      "n_duplicate_stamps": 0,
+      "n_out_of_order": 0,
+      "wall_span_s": 9.979392555000231,
+      "sim_span_s": 10.100000808999994,
+      "rate_wall_hz": 10.120856499366123,
+      "rate_sim_hz": 9.999999199009972,
+      "stamp_period_median_s": 0.10000000800005182,
+      "stamp_period_min_s": 0.10000000799993813,
+      "stamp_period_max_s": 0.10000000900004125,
+      "n_stamp_gaps_gt_1p5_median": 0,
+      "est_missing_frames": 0,
+      "gap_sizes_s": [],
+      "wall_interarrival_p50_s": 0.0995822330005467,
+      "wall_interarrival_p95_s": 0.10857629799647839,
+      "wall_interarrival_max_s": 0.2925334739993559,
+      "serialized_bytes_per_msg": {
+        "min": 448564,
+        "max": 448564
+      },
+      "data_bytes_per_msg": {
+        "min": 448512,
+        "max": 448512
+      },
+      "bandwidth_wall_MBps": 4.584800903244851,
+      "bandwidth_wall_MiBps": 4.372406867260791,
+      "proxy_clock_minus_stamp_sim_s": {
+        "p50": -2.000092536036391e-09,
+        "p95": -1.999978849198669e-09,
+        "min": -3.0000819606357254e-09,
+        "max": -1.999978849198669e-09
+      },
+      "callback_s": {
+        "p50": 0.0005526570021174848,
+        "max": 0.000819942000816809
+      }
+    },
+    "/oculus/polar_db": {
+      "n_received": 101,
+      "n_duplicate_stamps": 0,
+      "n_out_of_order": 0,
+      "wall_span_s": 9.886470657002064,
+      "sim_span_s": 10.000000800999942,
+      "rate_wall_hz": 10.114833034898584,
+      "rate_sim_hz": 9.999999199000122,
+      "stamp_period_median_s": 0.10000000800005182,
+      "stamp_period_min_s": 0.10000000799993813,
+      "stamp_period_max_s": 0.10000000900004125,
+      "n_stamp_gaps_gt_1p5_median": 0,
+      "est_missing_frames": 0,
+      "gap_sizes_s": [],
+      "wall_interarrival_p50_s": 0.09962535500017111,
+      "wall_interarrival_p95_s": 0.10871617700104252,
+      "wall_interarrival_max_s": 0.29156684699773905,
+      "serialized_bytes_per_msg": {
+        "min": 1794100,
+        "max": 1794100
+      },
+      "data_bytes_per_msg": {
+        "min": 1794048,
+        "max": 1794048
+      },
+      "bandwidth_wall_MBps": 18.328492167390667,
+      "bandwidth_wall_MiBps": 17.4794122384936,
+      "proxy_clock_minus_stamp_sim_s": {
+        "p50": -2.000092536036391e-09,
+        "p95": -1.999978849198669e-09,
+        "min": -3.0000819606357254e-09,
+        "max": -1.999978849198669e-09
+      },
+      "callback_s": {
+        "p50": 0.0020204120010021143,
+        "max": 0.0022331990003294777
+      }
+    },
+    "/oculus/fan": {
+      "n_received": 101,
+      "n_duplicate_stamps": 0,
+      "n_out_of_order": 0,
+      "wall_span_s": 9.88669323999784,
+      "sim_span_s": 10.000000800999942,
+      "rate_wall_hz": 10.114605315702285,
+      "rate_sim_hz": 9.999999199000122,
+      "stamp_period_median_s": 0.10000000800005182,
+      "stamp_period_min_s": 0.10000000799993813,
+      "stamp_period_max_s": 0.10000000900004125,
+      "n_stamp_gaps_gt_1p5_median": 0,
+      "est_missing_frames": 0,
+      "gap_sizes_s": [],
+      "wall_interarrival_p50_s": 0.09978625900112092,
+      "wall_interarrival_p95_s": 0.10869196399653447,
+      "wall_interarrival_max_s": 0.2910486350010615,
+      "serialized_bytes_per_msg": {
+        "min": 579636,
+        "max": 579636
+      },
+      "data_bytes_per_msg": {
+        "min": 579584,
+        "max": 579584
+      },
+      "bandwidth_wall_MBps": 5.921417260440134,
+      "bandwidth_wall_MiBps": 5.647103558006415,
+      "proxy_clock_minus_stamp_sim_s": {
+        "p50": -2.000092536036391e-09,
+        "p95": -1.999978849198669e-09,
+        "min": -3.0000819606357254e-09,
+        "max": -1.999978849198669e-09
+      },
+      "callback_s": {
+        "p50": 0.0006809699989389628,
+        "max": 0.0007666279998375103
+      }
+    },
+    "/camera/image_raw": {
+      "n_received": 101,
+      "n_duplicate_stamps": 0,
+      "n_out_of_order": 0,
+      "wall_span_s": 9.887346432999038,
+      "sim_span_s": 10.000000799999953,
+      "rate_wall_hz": 10.11393710917722,
+      "rate_sim_hz": 9.999999200000111,
+      "stamp_period_median_s": 0.10000000800005182,
+      "stamp_period_min_s": 0.10000000799993813,
+      "stamp_period_max_s": 0.10000000800005182,
+      "n_stamp_gaps_gt_1p5_median": 0,
+      "est_missing_frames": 0,
+      "gap_sizes_s": [],
+      "wall_interarrival_p50_s": 0.09980660600194824,
+      "wall_interarrival_p95_s": 0.10620784400089178,
+      "wall_interarrival_max_s": 0.3273499520000769,
+      "serialized_bytes_per_msg": {
+        "min": 2764860,
+        "max": 2764860
+      },
+      "data_bytes_per_msg": {
+        "min": 2764800,
+        "max": 2764800
+      },
+      "bandwidth_wall_MBps": 28.243256357236525,
+      "bandwidth_wall_MiBps": 26.93486819957402,
+      "proxy_clock_minus_stamp_sim_s": {
+        "p50": 0.0,
+        "p95": 0.0,
+        "min": 0.0,
+        "max": 0.10000000800005182
+      },
+      "callback_s": {
+        "p50": 0.0015410069972858764,
+        "max": 0.0018667929980438203
+      }
+    }
+  },
+  "clock": {
+    "n_received": 611,
+    "wall_span_s": 9.9784085579995,
+    "sim_span_s": 10.166667480000001,
+    "rate_wall_hz": 61.13199278766498,
+    "rtf_endpoints": 1.0188666279704068,
+    "rtf_lsq_slope": 0.9996626271649567,
+    "sim_step_median_s": 0.01666666799997074,
+    "n_clock_backwards": 0,
+    "n_clock_repeats": 0
+  },
+  "total_image_bandwidth_wall_MBps": 57.07796668831218
+}
