@@ -165,12 +165,16 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
     timeline.play()
     timeline.commit()
     app.update()
-    camera = None
+    camera = camera_right = None
     if info.camera and not args.no_camera:
         import omni.replicator.core as rep
         rp = rep.create.render_product(info.camera, info.camera_resolution, name="uw_camera")
         camera = rep.AnnotatorRegistry.get_annotator("rgb")
         camera.attach([rp])
+        if info.camera_right:                  # stereo: rendered in the same app.update as the left, same sim time
+            rp_r = rep.create.render_product(info.camera_right, info.camera_resolution, name="uw_camera_right")
+            camera_right = rep.AnnotatorRegistry.get_annotator("rgb")
+            camera_right.attach([rp_r])
     overlay = None
     if args.gui:
         from . import gui
@@ -188,7 +192,8 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                                camera_png_level=int(get(cfg, "ros.camera_png_level")),
                                camera_jpeg_quality=int(get(cfg, "ros.camera_jpeg_quality")))
     elif args.sink == "file":
-        sink = sinks.make_sink("file", out_dir=args.out, info={
+        sink = sinks.make_sink("file", out_dir=args.out, compress=bool(get(cfg, "recorder.compress")),
+                               png_level=int(get(cfg, "recorder.png_level")), info={
             "name": args.out, "command": "python -m uw sim " + " ".join(args.argv),
             "config_hash": recorder.config_hash(cfg), "seed": cfg["seed"],
             "labels": {"threshold": son.mask_threshold, **recorder.LABELS}, "config": cfg})
@@ -218,7 +223,11 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
     K = info.camera_K
     stats = Stats()
     count = {"ticks": 0, "pings": 0, "renders": 0, "camera": 0, "camera_pub": 0, "camera_empty": 0,
-             "over_budget": 0}
+             "camera_right": 0, "over_budget": 0}
+    recorder_extra = None
+    if args.sink == "file" and get(cfg, "record.enabled"):     # tools/record.py: per-frame truth and poses.csv
+        from .record import FrameRecorder
+        recorder_extra = FrameRecorder(cfg, args.out, sink, sim, motion)
     worst = {"ping_ms": 0.0, "lag_s": 0.0}
     k = pending = 0
     batch = max(1, int(round(1.0 / (rates["ping"] * dt))))      # substeps per ping
@@ -305,6 +314,15 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                     if not live or timers["camera_pub"].due(t_loop):     # ros.camera_hz caps the publish rate
                         sink.publish(sinks.Message("camera", count["camera_pub"], t, images={"rgb": rgb},
                                                    meta={"K": K.tolist()}))
+                        if camera_right is not None:
+                            rgb_r = camera_right.get_data()
+                            if getattr(rgb_r, "size", 0):
+                                sink.publish(sinks.Message("camera_right", count["camera_pub"], t,
+                                                           images={"rgb": np.ascontiguousarray(rgb_r[..., :3])},
+                                                           meta={"K": K.tolist()}))
+                                count["camera_right"] += 1
+                        if recorder_extra is not None:
+                            recorder_extra.frame(count["camera_pub"], t, motion.at(t_loop) if motion.moving else None)
                         count["camera_pub"] += 1
                     count["camera"] += 1
                     stats.add("camera_read_publish", (time.perf_counter() - t_e) * 1e3)
@@ -376,6 +394,8 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                    "gpu_used_mib_all_processes": (total - free) / 2 ** 20,
                    "torch_peak_mib": torch.cuda.max_memory_allocated() / 2 ** 20,
                    "render_settings": render_settings_report()}
+        if recorder_extra is not None:
+            summary["record"] = recorder_extra.close()
         if hasattr(motion, "server"):          # ArduSubPose: the physics thread's health
             ps = motion.server
             summary["physics"] = {"packets": ps.packets, "steps": ps.steps, "sim_t_s": ps.state.t,

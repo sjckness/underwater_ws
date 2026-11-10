@@ -214,6 +214,12 @@ sonar:
   scatterer_spacing: 0.002      # surface sampling [m] for the acoustic scatterers (fixed in the world: frozen speckle);
                                 # the base: scatterer_spacing_mode adaptive (profile) coarsens it far from the sonar
 
+record:                         # tools/record.py runs (--sink file): per-frame ground truth and poses.csv (uw/record.py)
+  enabled: false
+  gt_max_range_m: null          # keep only bubbles within this distance of the sonar or the left camera; null: all
+  mb_per_frame: {sonar: 1.5, camera: 2.0, gt: 1.5}   # disk estimate per 10 Hz frame [MB] (record.py refuses to start
+                                #   below 3x the estimate free); calibrated on a 20 s room9 run, see record.py
+
 recorder:                       # python -m uw sonar-only datasets
   fan_png: false                # also write the Cartesian fan image per ping (derivable from the polar one)
   compress: true                # npz: zlib (savez_compressed) | false: savez, bigger but much faster to write.
@@ -277,6 +283,9 @@ vehicle:                        # the ROV (M8a). Graphics only: a box in the RTX
     color: [0.08, 0.30, 0.65]   # BlueROV2 blue (visual only)
   params: config/rov_bluerov2_vectored.yaml   # dynamics (sonar.pose_source ardusub): 6 thrusters, FRAME_CONFIG 1
   home_tank: null               # [x, y] of the SITL home on the free surface (NED origin); null: the start point
+  stereo:                       # a right camera beside camera (rig/camera_right): same intrinsics, same attitude,
+    enabled: false              #   offset by baseline_m along the left camera's -y (to its right). Off by default
+    baseline_m: 0.12            # TO BE VERIFIED: no stereo rig is specified yet (common ROV stereo pairs: 0.06-0.2 m)
 
 camera:
   enabled: true
