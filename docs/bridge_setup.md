@@ -19,10 +19,10 @@ transport work and proving it with measurements**.
 
 | host | hardware / OS | role | ROS 2 |
 |---|---|---|---|
-| **workstation** | Windows 10/11, RTX 4090 24 GB (`config/profiles/workstation.yaml`) | Isaac Sim 5.1 **native**: scene, plume, camera, the sonar model | internal bridge libraries — **which distro is check 1** |
-| **thor** | Jetson AGX Thor, JetPack 7 / Ubuntu 24.04 (**U**, to confirm) | **primary**, decided 2026-10-29: stack container with the detector, estimator, mission and link monitor. HIL address **192.168.9.2** | ROS 2 Jazzy in a container (arm64), **built on thor** |
+| **workstation** | Windows 10/11, RTX 4090 24 GB (`config/profiles/workstation.yaml`) | Isaac Sim 5.1 **native**: scene, plume, camera, the sonar model. HIL address **192.168.200.2** (since 2026-11-09) | internal bridge libraries — **which distro is check 1** |
+| **thor** | Jetson AGX Thor, JetPack 7 / Ubuntu 24.04 (**U**, to confirm) | **primary**, decided 2026-10-29: stack container with the detector, estimator, mission and link monitor. HIL address **192.168.200.10** | ROS 2 Jazzy in a container (arm64), **built on thor** |
 | **orin** | Jetson Orin, JetPack 6 / Ubuntu 22.04 (**U**, to confirm) | second stack container | Jazzy **in the container**, whatever the host's L4T ships |
-| **linus** | Ubuntu, RTX 5050 8 GB, `enp5s0` 1 GbE | `ros/sonar_relay`, rosbag2, and the **fallback sim host** (what the repo does today). HIL address **192.168.9.1** | host Jazzy at `/opt/ros/jazzy` (**V**) |
+| **linus** | Ubuntu, RTX 5050 8 GB, `enp5s0` 1 GbE | `ros/sonar_relay`, rosbag2, and the **fallback sim host** (what the repo does today). HIL address **none** (the HIL host is now the work PC, 192.168.200.2) | host Jazzy at `/opt/ros/jazzy` (**V**) |
 
 Two structural facts about the containers, because the word "the container" now means two different things:
 
@@ -713,7 +713,7 @@ three of them change decisions rather than numbers.
 
 **B — Addressing. A dedicated subnet, static, off the lab LAN.**
 
-- [x] **`192.168.9.1` (linus) and `192.168.9.2` (thor), /24, static, no gateway, no DHCP** (decided
+- [x] **`192.168.200.2` (work, was linus before 2026-11-09) and `192.168.200.10` (thor), /24, static, no gateway, no DHCP** (decided
       2026-10-29). Deliberately not on `192.168.177.0/24`, which carries 20+ hosts and the f1tenth stacks
       (**V**, §1). Static because `initialPeersList` holds addresses and a DHCP lease change breaks discovery
       silently.
@@ -740,9 +740,9 @@ three of them change decisions rather than numbers.
       address:
       ```bash
       # on the workstation
-      python3 tools/dds_profile.py --iface <hil-nic> --peers 192.168.9.2 --out config/dds/this.xml
+      python3 tools/dds_profile.py --iface <hil-nic> --peers 192.168.200.10 --out config/dds/this.xml
       # on the Jetson
-      python3 tools/dds_profile.py --iface <hil-nic> --peers 192.168.9.1 --out config/dds/this.xml
+      python3 tools/dds_profile.py --iface <hil-nic> --peers 192.168.200.2 --out config/dds/this.xml
       export FASTRTPS_DEFAULT_PROFILES_FILE=$PWD/config/dds/this.xml
       ```
 - [ ] Start with the profile's **multicast** form (no `--peers`) on a direct cable; switch to unicast peers only
@@ -820,7 +820,7 @@ measurement, and step 5 is where §5's table gets its two missing columns.
   interface whitelist and unicast peers — the parts that matter for a real link — are still untested, and the
   camera frame has not been retested with it.
 - **The sysctls are not installed**: `config/sysctl/60-ros2-hil.conf` needs root.
-- **RTT and jitter linus ↔ thor ↔ orin are unmeasured** — the first missing term of `docs/ros_hil.md` §5, and
+- **RTT and jitter work ↔ thor ↔ orin are unmeasured** — the first missing term of `docs/ros_hil.md` §5, and
   what decides whether MAVROS's TIMESYNC converges at all (its §7 item 2).
 - **Thor's and Orin's JetPack version, NIC and PTP capability are unknown** (§7 item 1 of that document); they
   decide arm64 package availability and the wall-clock sync floor.

@@ -1,7 +1,7 @@
 """Write a Fast DDS XML profile for the HIL link, with this host's interface and its peers filled in.
 
-    python3 tools/dds_profile.py --iface enp5s0 --peers 192.168.9.2,192.168.9.3 --out config/dds/fastdds_hil.xml
-    UW_HIL_IFACE=enp5s0 UW_HIL_PEERS=192.168.9.2 python3 tools/dds_profile.py --out config/dds/fastdds_hil.xml
+    python3 tools/dds_profile.py --iface 192.168.200.2 --peers 192.168.200.10 --out config/dds/fastdds_hil.xml   # work
+    UW_HIL_IFACE=enP2p1s0 UW_HIL_PEERS=192.168.200.2 python3 tools/dds_profile.py --out config/dds/fastdds_hil.xml   # thor
     python3 tools/dds_profile.py --loopback --out config/dds/fastdds_gt.xml      # the ground-truth participant
 
 Why a generator and not a file in the repo: the profile is **per host** — the interface whitelist carries that
