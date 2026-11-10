@@ -1,0 +1,8 @@
+# Defaults layered on top of ArduPilot's stock Tools/autotest/default_params/sub.parm (loaded first, so these win).
+# Defaults only: they apply when the eeprom is wiped (run.bat wipes at every start). No fork of ArduPilot.
+
+# BlueROV2 = "Vectored": 4 horizontal vectored + 2 vertical thrusters. (BlueROV2 Heavy would be 2, "Vectored 6DOF".)
+FRAME_CONFIG 1
+
+# one vehicle, system id 1 (MAVROS targets 1/1 by default)
+SYSID_THISMAV 1
