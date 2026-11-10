@@ -1,0 +1,37 @@
+# Size preset "room9": a 9 x 9 x 9 m room (--preset room9). The tank scene's pipe and leak, only bigger: the pipe
+# still runs wall to wall along y, now at x = 4.5 in the middle of the room, the leak at its centre. The rig
+# (sonar, camera, lamps) keeps its offsets to the pipe and the leak (1.55 m in front of the pipe, same heights), so
+# it is inside the volume and clear of every wall, and the vehicle body (vehicle.body.offset) no longer pokes
+# through the -x wall. All positions are absolute room coordinates (origin = inner bottom corner).
+# The SITL home (vehicle.home_tank) follows the rig: null = the start point projected on the free surface.
+# Sonar range vs the room: the farthest corner is ~11 m from the sonar and the diagonal 15.6 m, both inside the
+# lf mode's 120 m max_range; range is set to the far wall (6.05 m ahead) plus margin, as basin does.
+scene:
+  name: room_9                        # recorded with the config (run manifest); sweeps/holdouts key on the preset name
+
+tank:
+  size: [9.0, 9.0, 9.0]
+  water_level: 8.9                    # 0.1 m freeboard, as tank.yaml
+
+pipe:
+  x: 4.50
+  flanges_at: [3.60, 5.45]            # tank.yaml's [0.55, 2.40] shifted with the leak (+3.05 m)
+
+leak:
+  position_along: 4.50
+
+plume:
+  warmup_s: 30.0                      # the plume rises 8.6 m instead of 2.6 m before the first frame
+
+lights:
+  lamps:
+    - {position: [2.97, 4.30, 1.15], target: [4.55, 4.40, 0.35], intensity: 800000.0, radius: 0.04, cone_deg: 45.0, color: [1.0, 0.97, 0.9]}
+    - {position: [2.97, 4.70, 1.15], target: [4.55, 4.60, 0.35], intensity: 800000.0, radius: 0.04, cone_deg: 45.0, color: [1.0, 0.97, 0.9]}
+
+sonar:
+  position: [2.95, 4.50, 1.05]
+  range: 7.0                          # to the far wall (6.05 m) with margin; at most the lf mode's 120 m
+  plume_path_floor_db: -20.0          # as basin: paths 20 dB below the noise floor skip the per-ping extinction
+
+camera:
+  position: [2.95, 4.50, 0.95]
