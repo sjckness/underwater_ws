@@ -218,8 +218,9 @@ sonar:
 record:                         # tools/record.py runs (--sink file): per-frame ground truth and poses.csv (uw/record.py)
   enabled: false
   gt_max_range_m: null          # keep only bubbles within this distance of the sonar or the left camera; null: all
-  mb_per_frame: {sonar: 1.5, camera: 2.0, gt: 1.5}   # disk estimate per 10 Hz frame [MB] (record.py refuses to start
-                                #   below 3x the estimate free); calibrated on a 20 s room9 run, see record.py
+  mb_per_frame: {sonar: 1.9, camera: 0.7, gt: 3.2}   # disk estimate per 10 Hz frame [MB] (record.py refuses to start
+                                #   below 3x the estimate free). Measured 2026-11-10, 20 s room9 combined: sonar 1.89,
+                                #   camera 0.67 per eye (PNG level 1), gt 3.11 (all ~150k alive bubbles, the pool cap)
 
 recorder:                       # python -m uw sonar-only datasets
   fan_png: false                # also write the Cartesian fan image per ping (derivable from the polar one)

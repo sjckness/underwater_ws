@@ -322,7 +322,8 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                                                            meta={"K": K.tolist()}))
                                 count["camera_right"] += 1
                         if recorder_extra is not None:
-                            recorder_extra.frame(count["camera_pub"], t, motion.at(t_loop) if motion.moving else None)
+                            recorder_extra.frame(count["camera_pub"], t, t_loop,
+                                                 motion.at(t_loop) if motion.moving else None)
                         count["camera_pub"] += 1
                     count["camera"] += 1
                     stats.add("camera_read_publish", (time.perf_counter() - t_e) * 1e3)
