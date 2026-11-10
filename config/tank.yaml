@@ -260,6 +260,16 @@ ros:                            # SensorSink "ros" (uw/ros_bridge.py); the domai
                                 #   convenience, not data. Off by default (docs/ros_hil.md §2.1)
   fan_width: 1024               # /sim/debug/sonar_fan (and recorder fan PNG) width [px]
 
+vehicle:                        # the ROV (M8a). Graphics only: a box in the RTX scene (camera, GUI), never an acoustic
+                                #   occluder or scatterer, so mask_geom keeps its meaning (docs/ros_hil.md §6)
+  enabled: true
+  body:
+    size: [0.457, 0.338, 0.254] # BlueROV2 frame L x W x H [m]. TO BE VERIFIED (BlueRobotics spec sheet): from memory
+    offset: [-0.26, 0.0, -0.10] # body centre relative to the sonar's acoustic centre [m], in the body frame (FLU, level,
+                                #   the sonar's yaw): behind and below the sonar, camera and lamps, out of the camera's
+                                #   view. With the fixed pose at the -x wall the back half pokes through that wall
+    color: [0.08, 0.30, 0.65]   # BlueROV2 blue (visual only)
+
 camera:
   enabled: true
   position: [0.10, 1.50, 0.95]  # just below the sonar

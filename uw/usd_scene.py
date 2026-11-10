@@ -29,6 +29,7 @@ SONAR = f"{RIG}/oculus"
 CAMERA = f"{RIG}/camera"
 CAMERA_OPTICAL = f"{CAMERA}/optical"
 LAMPS = f"{RIG}/lamps"
+VEHICLE = f"{RIG}/vehicle"               # the ROV body (graphics only, vehicle.enabled)
 BUBBLES = f"{WORLD}/plume/bubbles"
 # USD camera axes (x right, y up, looking along -z) in the body frame (x forward, y left, z up): columns
 R_BODY_USDCAM = np.array([[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
@@ -175,6 +176,8 @@ def build(stage: Usd.Stage, cfg: dict, scene) -> StageInfo:
     hx.AddTranslateOp().Set(Gf.Vec3d(-0.035, 0.0, 0.0))
     hx.AddScaleOp().Set(Gf.Vec3f(0.07, 0.12, 0.09))
     _bind(housing, _material(stage, f"{LOOKS}/sonar_housing", (0.05, 0.05, 0.06), 0.6, 0.2))
+    if get(cfg, "vehicle.enabled"):
+        _vehicle_body(stage, cfg)
     info = StageInfo(meshes=paths, camera=None, camera_K=None, camera_resolution=None)
     if get(cfg, "camera.enabled"):
         _xform(stage, CAMERA, rot_rpy_deg(get(cfg, "camera.rpy_deg")), get(cfg, "camera.position"))
@@ -187,6 +190,25 @@ def build(stage: Usd.Stage, cfg: dict, scene) -> StageInfo:
         cam.CreateClippingRangeAttr(Gf.Vec2f(0.01, 30.0))
         info.camera, info.camera_K, info.camera_resolution = CAMERA_OPTICAL, K, (w, h)
     return info
+
+
+def body_rotation(cfg: dict) -> np.ndarray:
+    """The vehicle body's body-to-world rotation at the configured sonar pose: level, with the sonar's yaw (the sonar's
+    roll and pitch are its mount on the vehicle)."""
+    return rot_rpy_deg([0.0, 0.0, float(get(cfg, "sonar.yaw_deg"))])
+
+
+def _vehicle_body(stage, cfg: dict) -> None:
+    """The ROV body as a box under RIG, so set_rig_pose moves it with the sensors. Graphics only: it is not in the
+    scene's meshes, hence not in the Warp occluders, the scatterers or check_geometry (mask_geom keeps its meaning)."""
+    b = get(cfg, "vehicle.body")
+    rot = body_rotation(cfg)
+    pos = np.asarray(get(cfg, "sonar.position"), float) + rot @ np.asarray(b["offset"], float)
+    _xform(stage, VEHICLE, rot, pos)
+    box = UsdGeom.Cube.Define(stage, f"{VEHICLE}/body")
+    box.CreateSizeAttr(1.0)
+    UsdGeom.Xformable(box).AddScaleOp().Set(Gf.Vec3f(*map(float, b["size"])))
+    _bind(box, _material(stage, f"{LOOKS}/vehicle_body", tuple(map(float, b["color"])), 0.6, 0.0))
 
 
 def _lights(stage, cfg: dict) -> None:
