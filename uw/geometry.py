@@ -468,7 +468,7 @@ def spacing_from_config(cfg: dict, scene: Scene | None = None) -> Spacing:
         raise ConfigError(f"sonar.scatterer_spacing_mode must be fixed or adaptive, got {mode!r}")
     son = sonar_mode(cfg)
     sonar = tuple(float(v) for v in son["position"])
-    if son["pose_source"] == "trajectory":
+    if son["pose_source"] in ("trajectory", "script"):
         from .pose import sensor_pose
         pts = sensor_pose(cfg, scene).positions(0.05)
         sonar = tuple(tuple(round(float(v), 4) for v in q) for q in pts)

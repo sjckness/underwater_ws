@@ -164,6 +164,7 @@ sonar:
     hold_s: 3.0                 #   for hold_s, then the next (several fixed views of one scene; static_cache on_motion)
   static_cache_motion: {position_m: 0.005, angle_deg: 0.25}   # static_cache on_motion: recompute beyond these
   ros_pose_topic: /sim/cmd/rov1/pose  # pose_source ros: geometry_msgs/PoseStamped of the sonar in the map frame
+  script: null                  # pose_source script: a trajectory in config/trajectories (circle | updown | combined)
   modes:                        # VERIFIED (datasheet): frequency, fan (h x v), beams, angular resolution (-3 dB beam
                                 # width), range resolution, min range, max range, max update rate
     lf: {frequency_hz: 750000.0, fov_h_deg: 130.0, fov_v_deg: 20.0, beams: 512, beamwidth_h_deg: 1.0,

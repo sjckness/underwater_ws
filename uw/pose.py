@@ -54,6 +54,39 @@ class SensorPose:
         return self.at(0.0).position[None, :]
 
 
+class ScriptPose(SensorPose):
+    """sonar.pose_source script: the ROV body follows config/trajectories/<sonar.script>.yaml (uw/trajectory.py) at
+    sim time, deterministic and ROS-free; the sonar rides it through the mount (as with pose_source ardusub)."""
+    moving = True
+
+    def __init__(self, cfg: dict, scene=None):
+        from .physics_udp import mount
+        from .trajectory import build
+        if scene is None:
+            from .geometry import build_scene
+            scene = build_scene(cfg)
+        if scene.leak is None:
+            raise ConfigError("sonar.pose_source script circles the leak: leak.enabled must be true")
+        name = get(cfg, "sonar.script")
+        if not name:
+            raise ConfigError("sonar.pose_source script needs sonar.script (a name in config/trajectories)")
+        self.traj = build(cfg, str(name), scene.leak.hole)
+        self.r_mount, self.p_mount = mount(cfg)
+
+    def body_at(self, t: float):
+        """(body position, body FLU -> tank ENU rotation) at sim time t."""
+        return self.traj.body(t)
+
+    def at(self, t: float) -> Pose:
+        from .geometry import rpy_deg_of
+        p, rb = self.traj.body(t)
+        return Pose(p + rb @ self.p_mount, rpy_deg_of(rb @ self.r_mount))
+
+    def positions(self, step: float = 0.05) -> np.ndarray:
+        n = max(2, int(self.traj.duration * 0.3 / step) + 1)          # ~step metres at the scripts' 0.3 m/s
+        return np.array([self.at(t).position for t in np.linspace(0.0, self.traj.duration, n)])
+
+
 class FixedPose(SensorPose):
     moving = False
 
@@ -285,8 +318,10 @@ def sensor_pose(cfg: dict, scene=None) -> SensorPose:
     src = son["pose_source"]
     if src in ("fixed", "ros", "ardusub"):     # ros / ardusub: wrapped or replaced in uw/main.py
         return FixedPose(fixed)
+    if src == "script":
+        return ScriptPose(cfg, scene)
     if src != "trajectory":
-        raise ConfigError(f"sonar.pose_source must be fixed | trajectory | ros | ardusub, got {src!r}")
+        raise ConfigError(f"sonar.pose_source must be fixed | trajectory | ros | ardusub | script, got {src!r}")
     tc = son["trajectory"]
     if tc["preset"] == "poses":
         return Poses([Pose(np.asarray(w["position"], float),

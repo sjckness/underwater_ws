@@ -1,0 +1,4 @@
+# Scripted trajectory "combined": circle, then updown, joined by a straight transit.
+kind: sequence
+segments: [circle, updown]
+transit_speed_mps: 0.3
