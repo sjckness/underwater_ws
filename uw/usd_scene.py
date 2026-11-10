@@ -19,7 +19,7 @@ from pxr import Gf, Sdf, Usd, UsdGeom, UsdLux, UsdShade, Vt
 
 from . import water as wat
 from .config import get
-from .geometry import icosphere, rot_rpy_deg, sonar_rotation, surface_materials
+from .geometry import body_rotation, icosphere, rot_rpy_deg, sonar_rotation, surface_materials
 
 WORLD = "/World"
 TANK = f"{WORLD}/tank"
@@ -190,12 +190,6 @@ def build(stage: Usd.Stage, cfg: dict, scene) -> StageInfo:
         cam.CreateClippingRangeAttr(Gf.Vec2f(0.01, 30.0))
         info.camera, info.camera_K, info.camera_resolution = CAMERA_OPTICAL, K, (w, h)
     return info
-
-
-def body_rotation(cfg: dict) -> np.ndarray:
-    """The vehicle body's body-to-world rotation at the configured sonar pose: level, with the sonar's yaw (the sonar's
-    roll and pitch are its mount on the vehicle)."""
-    return rot_rpy_deg([0.0, 0.0, float(get(cfg, "sonar.yaw_deg"))])
 
 
 def _vehicle_body(stage, cfg: dict) -> None:

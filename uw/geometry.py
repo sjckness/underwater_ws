@@ -296,6 +296,12 @@ def surface_materials(cfg: dict) -> dict:
     return mats
 
 
+def body_rotation(cfg: dict) -> np.ndarray:
+    """The vehicle body's body-to-world rotation (FLU -> tank ENU) at the configured sonar pose: level, with the
+    sonar's yaw; the sonar's roll and pitch are its mount on the vehicle (vehicle.body.offset is in this frame)."""
+    return rot_rpy_deg([0.0, 0.0, float(get(cfg, "sonar.yaw_deg"))])
+
+
 def rot_rpy_deg(rpy_deg) -> np.ndarray:
     """Body-to-world rotation from roll, pitch (positive = nose down, ROS), yaw in degrees."""
     r, p, y = np.radians(rpy_deg)
@@ -456,7 +462,7 @@ def spacing_from_config(cfg: dict, scene: Scene | None = None) -> Spacing:
     advance: fixed spacing) and the active mode's beam width and range resolution."""
     base = float(get(cfg, "sonar.scatterer_spacing"))
     mode = get(cfg, "sonar.scatterer_spacing_mode")
-    if mode == "fixed" or get(cfg, "sonar.pose_source") == "ros":
+    if mode == "fixed" or get(cfg, "sonar.pose_source") in ("ros", "ardusub"):
         return Spacing(base=base, wall_min=WALL_SPACING_FACTOR * base)
     if mode != "adaptive":
         raise ConfigError(f"sonar.scatterer_spacing_mode must be fixed or adaptive, got {mode!r}")

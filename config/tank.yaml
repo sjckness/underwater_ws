@@ -4,6 +4,9 @@
 
 seed: 7                         # one seed for everything procedural (sand, rocks, scatterer phases)
 
+scene:
+  name: tank                    # metadata only, recorded with the config; the size preset sets it (room9: room_9)
+
 tank:
   size: [3.0, 3.0, 3.0]         # inner dimensions [m]
   wall_thickness: 0.05
@@ -235,6 +238,9 @@ sim:                            # python -m uw sim: the Isaac app
   overlay_returns_min: 170      #   pixels (0-255) from this value up are drawn (at most 6000 points)
   view: side45                  # GUI viewport camera at start: side45 | top | sonar
   viewport_resolution: [1280, 720]   # GUI viewport render size (not the window's: a maximised window costs GPU time)
+  physics_port: null            # ArduSub SITL JSON physics (uw/physics_udp.py) on UDP 127.0.0.1:<port>, for
+                                #   sonar.pose_source ardusub; null: off. 9002 is SITL's; stop tools/stub_physics.py
+  physics_rtf: 1.0              # pace the physics timestamps (= SITL's clock, lockstep) to the wall clock; 0: unpaced
 
 ros:                            # SensorSink "ros" (uw/ros_bridge.py); the domain is UW_ROS_DOMAIN_ID (default 73).
                                 # The topic and frame map is docs/topic_map.md; uw/ros_bridge.py names them once
@@ -269,6 +275,8 @@ vehicle:                        # the ROV (M8a). Graphics only: a box in the RTX
                                 #   the sonar's yaw): behind and below the sonar, camera and lamps, out of the camera's
                                 #   view. With the fixed pose at the -x wall the back half pokes through that wall
     color: [0.08, 0.30, 0.65]   # BlueROV2 blue (visual only)
+  params: config/rov_bluerov2_vectored.yaml   # dynamics (sonar.pose_source ardusub): 6 thrusters, FRAME_CONFIG 1
+  home_tank: null               # [x, y] of the SITL home on the free surface (NED origin); null: the start point
 
 camera:
   enabled: true

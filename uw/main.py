@@ -147,6 +147,9 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
     if get(cfg, "sonar.pose_source") == "ros":
         from .ros_bridge import RosPose
         motion = RosPose(motion, get(cfg, "sonar.ros_pose_topic"))
+    elif get(cfg, "sonar.pose_source") == "ardusub":
+        from .physics_udp import ArduSubPose
+        motion = ArduSubPose(cfg)              # binds sim.physics_port now: a busy port fails the setup, loudly
     stage = omni.usd.get_context().get_stage()
     info = usd_scene.build(stage, cfg, scene)
     n_vert = usd_scene.check_geometry(stage, scene, son.mesh.points.numpy(), son.mesh.indices.numpy())
@@ -373,6 +376,12 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                    "gpu_used_mib_all_processes": (total - free) / 2 ** 20,
                    "torch_peak_mib": torch.cuda.max_memory_allocated() / 2 ** 20,
                    "render_settings": render_settings_report()}
+        if hasattr(motion, "server"):          # ArduSubPose: the physics thread's health
+            ps = motion.server
+            summary["physics"] = {"packets": ps.packets, "steps": ps.steps, "sim_t_s": ps.state.t,
+                                  "frame_rate_hz": ps.rate_hz, "peer": str(ps.peer), "error": repr(ps.error),
+                                  "bound_activations": ps.vehicle.bound_activations}
+            motion.close()
         log.info("stopped (%s): sim %.1f s, wall %.1f s, RTF %.2f, %d pings (%d over budget), %d camera frames",
                  exit_reason, k * dt, wall, summary["rtf"], count["pings"], count["over_budget"], count["camera"])
         if args.stats_file:

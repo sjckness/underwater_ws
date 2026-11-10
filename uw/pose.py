@@ -283,10 +283,10 @@ def sensor_pose(cfg: dict, scene=None) -> SensorPose:
     fixed = Pose(np.asarray(son["position"], float), np.array([son["roll_deg"], son["pitch_deg"], son["yaw_deg"]],
                                                                 float))
     src = son["pose_source"]
-    if src in ("fixed", "ros"):
+    if src in ("fixed", "ros", "ardusub"):     # ros / ardusub: wrapped or replaced in uw/main.py
         return FixedPose(fixed)
     if src != "trajectory":
-        raise ConfigError(f"sonar.pose_source must be fixed | trajectory | ros, got {src!r}")
+        raise ConfigError(f"sonar.pose_source must be fixed | trajectory | ros | ardusub, got {src!r}")
     tc = son["trajectory"]
     if tc["preset"] == "poses":
         return Poses([Pose(np.asarray(w["position"], float),
