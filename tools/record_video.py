@@ -94,6 +94,12 @@ def make_videos(run: Path, fps: float = 10.0, fan_width: int = 720, right_video:
         pass
     a = _A()
     a.fps, a.fan_width, a.no_right = fps, fan_width, not right_video
+    if not run.is_dir():
+        print(f"[video] {run}: no such run directory (the batch creates it when that run starts)")
+        return 2
+    if not (run / "manifest.json").is_file():
+        print(f"[video] {run}: not finished yet (no manifest.json): videos are made after the run ends")
+        return 3
     out = run / "video"
     out.mkdir(exist_ok=True)
     left, right, son = stamps(run, "camera"), stamps(run, "camera_right"), stamps(run, "sonar")
