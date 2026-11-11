@@ -83,7 +83,17 @@ def main() -> int:
     ap.add_argument("--fan-width", type=int, default=720)
     ap.add_argument("--no-right", action="store_true", help="skip camera_right.mp4")
     a = ap.parse_args()
-    run = Path(a.run)
+    return make_videos(Path(a.run), a.fps, a.fan_width, not a.no_right)
+
+
+def make_videos(run: Path, fps: float = 10.0, fan_width: int = 720, right_video: bool = True) -> int:
+    """The videos of one run into <run>/video/ (also called by tools/record_report.py at the end of a batch)."""
+    run = Path(run)
+
+    class _A:                                  # the CLI's names, so the body below is unchanged
+        pass
+    a = _A()
+    a.fps, a.fan_width, a.no_right = fps, fan_width, not right_video
     out = run / "video"
     out.mkdir(exist_ok=True)
     left, right, son = stamps(run, "camera"), stamps(run, "camera_right"), stamps(run, "sonar")

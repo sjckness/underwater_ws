@@ -103,9 +103,20 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--root", default=str(WS / "output" / "records"))
     ap.add_argument("--runs", nargs="*", default=None, help="run ids (default: every directory with a run.json)")
+    ap.add_argument("--no-videos", action="store_true", help="skip <run>/video/*.mp4 (made once, then kept)")
     args = ap.parse_args()
     root = Path(args.root)
     runs = [root / r for r in args.runs] if args.runs else sorted(p.parent for p in root.glob("*/run.json"))
+    if not args.no_videos:                     # tools/record_video.py: camera, sonar fan, combined (10 fps)
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from record_video import make_videos
+        for r in runs:
+            if r.is_dir() and (r / "manifest.json").is_file() and not (r / "video" / "combined.mp4").is_file():
+                try:
+                    make_videos(r)
+                except Exception as exc:  # noqa: BLE001 - a failed video must not lose the report
+                    print(f"[report] {r.name}: videos failed: {exc!r}")
     rows = [summarize(r) for r in runs if r.is_dir()]
     lines = ["# Recording runs", "", f"Root: `{root}`", "",
              "| run | exit | reason | sim s | wall s | RTF | GPU MiB | sonar | left | right | gt | L-R max ms | cam-sonar mean / max ms | GB (est.) |",
@@ -121,6 +132,10 @@ def main() -> int:
         if r["gt_bubbles_mean"] is not None:
             lines.append(f"- ground truth: {r['gt_bubbles_mean']:.0f} bubbles per frame on average")
         lines += [f"- trajectory note: {n}" for n in r["notes"]]
+        vids = sorted((root / r["run"] / "video").glob("*.mp4")) + sorted((root / r["run"] / "video").glob("*.avi"))
+        if vids:
+            lines.append("- videos (10 fps = sim real time): " + ", ".join(f"[{v.name}]({r['run']}/video/{v.name})"
+                                                                        for v in vids))
         if r["sheet"] is not None:
             lines += ["", f"![contact sheet]({r['run']}/contact_sheet.png)"]
     (root / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
