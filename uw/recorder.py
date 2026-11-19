@@ -11,8 +11,12 @@ Per ping (SensorSink "sonar"), compressed:
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
+import os
+import subprocess
+from pathlib import Path
 
 import numpy as np
 
@@ -44,6 +48,46 @@ def sonar_frame(pts, position, rot) -> np.ndarray:
 
 def config_hash(cfg: dict) -> str:
     return hashlib.sha256(json.dumps(cfg, sort_keys=True, default=str).encode()).hexdigest()[:16]
+
+
+@functools.lru_cache(maxsize=1)
+def git_version() -> str:
+    """Short HEAD, plus ``+dirty`` when tracked files differ from it. Cached: it costs two subprocesses and it
+    cannot change while a dataset is being written, whereas it would otherwise be paid per ping.
+
+    ``UW_GIT_VERSION`` wins when set, because pings are generated **inside the Isaac container, which has no
+    git binary** -- `.git` is mounted but unreadable without one, so asking here returns "unknown" and every
+    containerised dataset would record no provenance at all. `uw/launcher.py` reads it on the host, where the
+    repository is, and passes it in. Measured: without this, a `sonar-only` run stamps
+    `m750d-1/unknown/<hash>`.
+    """
+    env = os.environ.get("UW_GIT_VERSION", "").strip()
+    if env:
+        return env
+    ws = Path(__file__).resolve().parents[1]
+    try:
+        h = subprocess.run(["git", "-C", str(ws), "rev-parse", "--short", "HEAD"], capture_output=True,
+                           text=True).stdout.strip()
+        dirty = subprocess.run(["git", "-C", str(ws), "status", "--porcelain", "--untracked-files=no"],
+                               capture_output=True, text=True).stdout.strip()
+        return (h + ("+dirty" if dirty else "")) or "unknown"
+    except OSError:
+        return "unknown"
+
+
+def generator_version(model_version: str, cfg: dict) -> str:
+    """What generated a ping, in one string: ``<sonar model>/<git>/<config hash>``.
+
+    Joined with ``/`` rather than ``+`` because `git_version` appends ``+dirty``, which would make a
+    ``+``-joined string impossible to split back into its three parts. None of the parts can contain a slash.
+
+    Each part answers a question the other two cannot. The model version says whether the acoustic model
+    changed; the git hash pins the whole tree, including the parts of the pipeline outside `uw/sonar.py`; the
+    config hash distinguishes two datasets from identical code with different parameters. A dataset is
+    traceable to its generator only if all three are recorded, which is why this goes into every ping rather
+    than into the sweep manifest alone -- a ping that gets copied, converted or recompressed keeps it.
+    """
+    return f"{model_version}/{git_version()}/{config_hash(cfg)}"
 
 
 def leak_position(scene) -> np.ndarray | None:
@@ -85,6 +129,7 @@ def sonar_message(seq: int, stamp: float, ping, son, cfg: dict, scene, sim=None,
                       "frequency_hz": son.frequency, "sound_speed": son.c, "beamwidth_h_deg": son.beamwidth_deg,
                       "fov_v_deg": son.fov_v_deg},
             "config_hash": config_hash(cfg), "seed": cfg["seed"],
+            "generator_version": generator_version(son.model_version, cfg),
             "plume_mask_threshold": son.mask_threshold,
             "plume_pixels": {"all": int(np.count_nonzero(ping.plume_mask_all)),
                              "direct": int(np.count_nonzero(ping.plume_mask_direct)),

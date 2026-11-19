@@ -53,12 +53,24 @@ def warp_path(rt: dict, isaac_root: str | None, key: str = "warp_path") -> str:
     return rt[key].format(isaac_root=isaac_root) if isaac_root else ""
 
 
+def git_version() -> str:
+    """The repository's version, resolved here on the host and passed to the target as ``UW_GIT_VERSION``.
+
+    The Isaac container mounts `.git` but ships no git binary, so a ping generated inside it cannot work this
+    out for itself and would record its provenance as "unknown". `uw.recorder.git_version` prefers the
+    variable this sets.
+    """
+    from .recorder import git_version as resolve
+    return resolve()
+
+
 def docker_argv(rt: dict, cmd: str, args: list[str], *, tty: bool, workdir: Path, name: str,
                 extra: list[str] = ()) -> list[str]:
     d = rt["docker"]
     root = d["isaac_root"]
     env = {"UW_PYDEPS": d["pydeps"], "UW_WARP_PATH": warp_path(rt, root), "UW_USD_PATH": warp_path(rt, root, "usd_path"),
-           "UW_PYTEST_VERSION": str(rt["pytest_version"]), "UW_ISAAC_ROOT": root}
+           "UW_PYTEST_VERSION": str(rt["pytest_version"]), "UW_ISAAC_ROOT": root,
+           "UW_GIT_VERSION": git_version()}
     return ["docker", "compose", "-f", str(WS / d["compose_file"]), "run", "--rm", *([] if tty else ["-T"]),
             "--name", name, "-w", str(workdir), *[x for k, v in env.items() for x in ("-e", f"{k}={v}")], *extra,
             d["service"], "-c", BOOT, root, cmd, *args]
@@ -129,7 +141,7 @@ def run_docker(rt: dict, cmd: str, args: list[str]) -> int:
 
 def run_native(rt: dict, cmd: str, args: list[str]) -> int:
     n = rt["native"]
-    env = {**os.environ, "UW_WS": str(WS), "UW_PYDEPS": str(Path(n["pydeps"]).expanduser()),
+    env = {**os.environ, "UW_WS": str(WS), "UW_GIT_VERSION": git_version(), "UW_PYDEPS": str(Path(n["pydeps"]).expanduser()),
            "UW_WARP_PATH": warp_path(rt, n.get("isaac_root")), "UW_PYTEST_VERSION": str(rt["pytest_version"]),
            "UW_USD_PATH": warp_path(rt, n.get("isaac_root"), "usd_path"), "UW_ISAAC_ROOT": n.get("isaac_root") or "",
            "UW_DATA": os.path.expanduser(str(rt.get("data_root") or "")),

@@ -37,7 +37,7 @@ import yaml
 
 WS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WS))
-from uw import config, geometry, pose  # noqa: E402
+from uw import config, geometry, pose, recorder  # noqa: E402
 
 F1TENTH = re.compile(r"sim_isaac\.sh|phase5_bringup|jazzy_parity|isaac_ws/launch\.sh|f1t_isaac")
 CHUNK = 20                       # scenarios per worker process (then a fresh one: no memory creep)
@@ -371,15 +371,10 @@ def worker(root: Path, max_scenarios: int) -> int:
 
 # ------------------------------------------------------------------------------------------- orchestrator
 
-def git_version() -> str:
-    try:
-        h = subprocess.run(["git", "-C", str(WS), "rev-parse", "--short", "HEAD"], capture_output=True,
-                           text=True).stdout.strip()
-        dirty = subprocess.run(["git", "-C", str(WS), "status", "--porcelain", "--untracked-files=no"],
-                               capture_output=True, text=True).stdout.strip()
-        return h + ("+dirty" if dirty else "")
-    except OSError:
-        return "unknown"
+# git_version lives in uw/recorder.py, which is also what stamps it into every ping's generator_version:
+# two implementations could disagree about whether a tree is dirty, and then a dataset's manifest and its
+# pings would claim different provenance.
+git_version = recorder.git_version
 
 
 def f1tenth_active() -> str:

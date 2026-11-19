@@ -867,8 +867,9 @@ Re-encoding the masks as 1-bit PNG on top of that saves under 1 % (100.19 agains
 worth the format change.
 
 **The pass as run** (`tools/recompress.py`, started 2026-10-28 10:20, single-threaded under `nice -n 10 ionice -c3`;
-log `/HDD2T/underwater_data/datasets/v0.2_recompress.log`). The *size* projection holds: the first 18 scenarios came
-out at **3.69x**, a little better than the 3.47x projected, with 0 failures. The *time* projection was wrong by about
+log `/HDD2T/underwater_data/datasets/v0.2_recompress.log`). It finished at 22:54 the same day: **400/400 scenarios,
+0 failures, 216.5 → 58.4 GB (201.7 → 54.4 GiB), 3.71x, 6.02 → 1.62 MB per ping, 158 GB freed** (`/HDD2T` went from
+281 to 136 GB used). The *size* projection held and was slightly beaten; the *time* projection was wrong by about
 8x, and the reason is worth recording.
 
 | scenario size | encode only (measured 2026-10-27) | the pass as run | factor |
@@ -887,9 +888,20 @@ that is the whole factor. The verification is the right trade for rewriting 216 
 nobody measured *it*, only the encoding it protects.
 
 Parallelising would need a `--shard i/n` option, since `--limit` takes the head of the todo list and two instances
-would pick the same scenarios and collide on the same `.recompress/<id>` directory. Not done: one core for 13 h is
-cheaper than changing the tool while it rewrites the dataset, and `/HDD2T` has 1.5 TB free, so the 154 GB is not
-urgent. Final size and ratio go here when the pass finishes.
+would pick the same scenarios and collide on the same `.recompress/<id>` directory. Not done: one core for 12.5 h is
+cheaper than changing the tool while it rewrites the dataset, and `/HDD2T` had 1.5 TB free, so the 158 GB was not
+urgent.
+
+It beat the 3.47x projection because the npz side gains more than the PNG side loses: PNGs go through
+`uw.sinks.write_png` (single IDAT, filter 0, so `read_png` keeps the fast path the loader uses in training) rather
+than Pillow, which would compress them 5.66x instead of 4.85x but cost that path.
+
+**After the pass**, checked independently of the per-scenario verification: the loader still sees all 36 000 pings
+through the manifest, `polar_db` is still float16 at its original shapes (876 or 2001 range bins x 512 beams), the
+masks still carry their labels, every PNG still has exactly one IDAT chunk (five random pings across tank and basin,
+fixed and mobile), and `tests/test_dataset.py` passes. `recompress.json` in the dataset root records the final
+numbers; the sweep's `manifest.json` is untouched, so its per-scenario `bytes` are the pre-recompression sizes by
+design — `recompress.json` and the per-scenario `RECOMPRESSED` markers are where the current sizes live.
 
 Conclusion for the recorder: keep `compress=false` / `png_level=0` while a sweep is running, since the measurement
 that motivated them stands (zlib was 63 of ~100 ms per write), and recompress afterwards as a separate pass
@@ -1129,3 +1141,257 @@ near range; the weaker stripe in basin-2's near half fits that, though it does n
 level, and on an M1200d, not on our M750d. Requests 1–2 above (the two 16-bit lab-tank bags) settle it: raw polar
 beams, where the stripe at a fixed beam index can be set against the noise in water-only rows and the share read off
 directly. Until then, v0.2 randomises the share (docs/PLAN.md).
+
+## M3.7: the calibration harness, a leak-free hold-out, and basin-2 settled (2026-11-04)
+
+Groundwork before any sonar parameter is allowed to move, so that a later "it matches now" is evidence rather
+than a tautology. Nothing in the model changed in this step; one default-preserving field was added
+(`generator_version`), and one earlier conclusion was overturned.
+
+### The real corpora, extracted in full
+
+Only a fraction had been unpacked, and the native-polar half is the only part of the corpus whose near-range,
+ring-down and level-vs-range survive at all (the fan round-trip control above). Now extracted, 7 GB on
+`/HDD2T`, 76 s:
+
+| corpus | frames before | frames now | format |
+|---|---|---|---|
+| UATD `UATD_Test_1` | 80 | **800** | native polar BMP, 1024 beams × 1026–2047 bins |
+| UATD `UATD_Test_2` | 0 | **800** | the same |
+| DeeperSense basin-1 | 60 | **1427** | fan JPEG 2896 × 1448 |
+| DeeperSense basin-2 | 60 | **3847** | fan PNG 512 × 512, inferno |
+| `deepersense_divertrack` | 1193 | 1193 | fan JPEG, M1200d (never used before) |
+
+`~/underwater_data/real` is now `chmod -R a-w`: a write is refused rather than merely discouraged, and
+`holdout.json` carries a sha256 per frame so a corpus that moves anyway is detectable.
+
+### The publishers' split cannot be used as a hold-out
+
+`UATD_Test_1` and `UATD_Test_2` look like two recordings and are not. Measured over all 1600 frames, on the
+cosine similarity of 32 × 32 mean-removed thumbnails:
+
+| | |
+|---|---|
+| Test_1 frames with a Test_2 twin at cos > 0.99 | **273 / 800 (34 %)** |
+| at cos > 0.95 | **639 / 800 (80 %)** |
+| at cos > 0.90 | 743 / 800 (93 %) |
+| bit-identical pairs across the two sets | 1 (`Test_1/00070.bmp` = `Test_2/00277.bmp`) |
+| distinct `soundspeed` values | 171, **every one split ~50/50** between the two sets |
+
+Range settings and class counts match to within a few per cent as well (balls 197 vs 194, 10 m frames 340 vs
+332). It is one pool drawn in two halves, so calibrating on one and verifying on the other would be verifying
+on the training data. The XML carries no timestamp or sequence id, so sessions have to be derived.
+
+**What the split is instead** (`tools/real_holdout.py`, written once to `output/compare_real/holdout.json`).
+Frames are grouped by single-linkage on the same similarity, and whole groups are assigned, stratified by
+range setting and frequency — the by-scenario rule `tools/sweep.py` already applies to the simulated sweep,
+for the same reason. The guarantee is structural: at threshold *T* no pair in two different groups can exceed
+*T*, so assigning whole groups bounds cross-half similarity by *T*.
+
+| corpus | groups (largest) | calibrate | hold-out | max cross-half similarity |
+|---|---|---|---|---|
+| uatd | 345 (429) | 980 | 620 | **0.950** |
+| basin1 | 8 (547) | 852 | 575 | 0.942 |
+| basin2 | 1 (3847) | 3847 | — | — |
+| divertrack | 1 (1193) | 1193 | — | — |
+
+Against 80 % of frames having a near-twin across the publishers' halves, that is the whole difference between
+a hold-out and a second look at the same data.
+
+**Two corpora refused to be split, and that is a result.** basin-2 and divertrack chain into a single group:
+each is one continuous near-identical recording, so no subset of it is independent of the rest. They can
+calibrate and they can be diagnosed; they cannot verify. The tool records the refusal explicitly rather than
+returning an empty half, because an empty half that looked like a configuration slip would eventually be
+"fixed" by splitting per frame, which is the leak the tool exists to prevent. `compare_real.py --split` fails
+loudly on such a corpus for the same reason.
+
+The split is lumpy where a group is large: the dominant stratum (10 m, 1200 kHz, 588 frames) splits 359/229,
+but 8 m and 9 m went wholly to the hold-out and 13 m is 12 % of it. Unavoidable with whole-group assignment,
+and preferable to the alternative.
+
+### basin-2's contrast 0.33: the colour map was not the cause
+
+The standing suspicion was that the 0.33 came from reading an inferno-mapped image as luminance (`read_gray`
+only inverts the map when `--fan-colormap` is given, and the run that produced 0.33 did not give it), through
+a ±25° window that straddles the broadside stripe. **That is wrong.** 200 frames, the same statistics:
+
+| run | colour map undone | window | pixel law | contrast | K shape | KS vs Rayleigh |
+|---|---|---|---|---|---|---|
+| A, as originally measured | no | ±25° | p = 1 | 0.459 | ∞ | 0.257 |
+| B, **the run never done** | **yes** | +8…+35° | p = 1 | **0.348** | ∞ | 0.327 |
+| C, the fitted law | yes | +8…+35° | p = 0.325 fitted | 1.013 | 72.7 | 0.019 |
+
+Undoing the colour map and moving off broadside does not recover the speckle — it reads *lower*, not higher.
+And our own loader is exonerated by the round-trip control above: a genuine nearest-neighbour fan render at
+512 px, read back through this same loader, keeps contrast at 0.934. So the speckle was destroyed by
+**basin-2's own rendering**, upstream of us, and no choice of pixel law recovers it: run C reaches contrast 1
+only because `--fit-pixel-law` forces it there, and the exponent it needs implies a 164 dB/decade TVG and a
+−28.8 dB sidelobe, both nonsense.
+
+**Verdict:** basin-2 is not a reference for speckle, ring-down or level-vs-range at any pixel law. It keeps
+one job, the broadside stripe, which is a within-frame ratio and survives. Recorded in
+`output/compare_real/targets.json` under `admissibility`.
+
+### UATD does contain compact targets
+
+"Nothing in the corpus has a calibration sphere, so none of it fixes an absolute level or an array sidelobe"
+(above) is half wrong. The 800 `UATD_Test_1` annotations hold **197 `ball` objects** (plus 172 cubes, 150
+ROVs, 76 human bodies); `UATD_Test_2` holds 194 more. For an *absolute level* the original statement stands —
+no target of known target strength, so no absolute calibration. For the **array sidelobe** it does not: a
+sphere is compact and isolated.
+
+But a ball is not a point target either. Measured over the 22 balls in the frames that were already
+extracted, the annotated boxes span **5.4–15.0° in bearing** (median 6.3°) and 0.39–0.62 m in range, at 3.5–11
+m, against a ~1° beam. So the skirt around a ball carries the target's own angular extent as well as the
+array's sidelobes, and what can be read off it is an **upper bound**. That is what the new
+`sonar_stats.far_sidelobe_floor` measures, and it is labelled a bound in `targets.json`; `array_taper_sll_db`
+stays at −28 dB and stays UNVERIFIED.
+
+### The level-vs-range row was comparing two different quantities
+
+`display_kernel` applies `k log10 R + 2αR − nf_db` and the `display_db` window to the **8-bit image**, while
+the stored `polar_db` stays absolute dB re 1 µPa. A published recording is always the first kind, with the
+maker's equivalent chain already applied and not recoverable. The sim-vs-real table's −158.9 dB/decade
+against UATD's +23.7 was therefore a physical level set against a displayed one, not a disagreement about a
+TVG. `compare_real.py` grew `--uw-channel`:
+
+- `db` — `polar_db` as before, absolute dB: the physics, and **not comparable with a real recording on level**;
+- `tvg` — our own gain chain reapplied, relative to the beam noise floor: the shape to compare, and the safe
+  default for anything level-related;
+- `img` — that, encoded into 8 bits **the way a real head does it**, see below.
+
+`sonar_stats.tvg_profile` and `near_range` also gained `normalise="median"`, which quotes a profile against
+its own median over a stated window so a sim in physical dB and a real recording in sensor units can share an
+axis.
+
+### Our 8-bit display is linear in dB; a real head's is linear in amplitude
+
+Found while building the `img` channel, and it matters beyond this comparison. Our display maps
+`sonar.display_db` = 0–80 dB linearly onto 0–255, so a pixel *is* a dB value. An Oculus or Gemini 8-bit
+sample is linear in **amplitude** — that is what the pixel-law fit measured on two real Geminis, p = 1.0–1.1.
+The two encodings are not interchangeable:
+
+| | sand at 25 dB | 30 dB | 35 dB | 40 dB |
+|---|---|---|---|---|
+| our encoding, linear in dB, window 0–80 | pixel 80 | 96 | 112 | 128 |
+| a real head, linear in amplitude, saturating at 80 dB | pixel 0 | 1 | 1 | 3 |
+| the same, saturating at 45 dB | pixel 26 | 45 | 81 | 143 |
+
+Reading our image back through `pixels_to_db`, which assumes amplitude, is then a double conversion: it
+compresses those 15 dB of sand into 4 dB and took the measured background contrast from 2.13 to **0.43**.
+That is an artifact of the conversion, not a property of the sonar, and it is the same mechanism that
+destroyed basin-2. So `img` now goes to amplitude, quantises, and reads back through the law a real image is
+read with. An amplitude display has **one** knob, the gain that sets which level saturates
+(`--uw-amp-top-db`), and it has to be set so the seabed sits mid-scale, exactly as a real head's gain is.
+
+Two consequences worth keeping. The quantisation is coarse in the dark: 40 dB below saturation a 0.5 dB
+difference lands on the *same* pixel, so speckle there is destroyed by the encoding rather than measured
+through it. And v0.2's training images are the log-scaled kind, which is not what a real head produces —
+relevant to any sim-to-real transfer, and not something this pass changes.
+
+### Contrast off a display image is gain-dependent, so it needs an admissibility gate
+
+The `img` channel does **not** make the tank's contrast agree with reality, and an early reading that it did
+was wrong. Sweeping the one knob, same 60 pings, same window:
+
+| gain saturates at | 35 dB | 40 | **45** | 50 | 55 | 60 | 70 | 80 |
+|---|---|---|---|---|---|---|---|---|
+| background contrast | 0.497 | 0.715 | **1.010** | 1.402 | 1.787 | 1.959 | 2.091 | 2.110 |
+| K shape | ∞ | ∞ | 97.4 | 2.1 | 0.9 | 0.7 | 0.6 | 0.6 |
+| KS vs Rayleigh | 0.321 | 0.175 | 0.132 | 0.221 | 0.267 | 0.284 | 0.301 | 0.297 |
+
+Contrast spans 0.50 to 2.11 as the gain moves, and passes through 1.0 at 45 dB. So "sim 1.01 against UATD
+1.10" was produced by choosing a gain, not by the model improving. **Contrast measured on a display image is
+not a property of the sonar or the scene alone.**
+
+What makes the comparison honest is asking whether a given display is clipping, and K shape and KS answer
+that: a clipped image loses its bright tail, so K goes to ∞ and KS rises. At a gain of 70–80 dB the sim is
+unclipped and its displayed contrast equals its physical one (2.09–2.11 against 2.13) — the display is
+transparent. And the real data is unclipped too, measured directly on the raw pixels of 60 calibrate frames:
+
+| | share of pixels at 255 | at 0 | 99.9th percentile pixel |
+|---|---|---|---|
+| UATD_Test_1 | **0.000 %** (max 0.002 %) | 5.5 % | 62.8 of 255 |
+| basin-1 | 0.000 % | 52 % (the fan corners are outside the sector) | — |
+
+UATD uses only the bottom quarter of its 8-bit range and saturates nothing, so its contrast of 1.095, with
+K = 9.3 and KS = 0.088, is a genuine measurement of its scene.
+
+**So the comparison that stands is unclipped against unclipped: sim 2.11, UATD 1.095, basin-1 1.101** — and
+the gap is a real difference between the scenes, which is what the 2026-10-28 ablation already concluded
+(sand relief and wall image paths in a small cluttered tank, against a flat basin bottom). The display work
+does not close that gap and was never going to; what it buys is the ability to tell a display artifact from a
+scene property before quoting either. That gate is now in `targets.json`: no statistic is read off a display
+image whose K shape is ∞ or whose KS exceeds 0.15.
+
+### The TVG fit constants cannot carry a comparison
+
+`log10(R)` and `R` are collinear over any window a sonar actually covers — correlation 0.997 over 1.8–3.4 m,
+0.992 over 3.0–8.0 m, condition number around 400 — so `k` and `b` trade off against each other almost
+freely while the fitted curve barely moves. Measured over 60 UATD pings at one range setting, the slope comes
+out **59.7 dB/decade with a per-frame spread of ±106**: the number is noise. The two fits of our own tank
+scene, k = −158.9 before this pass and k = +82.9 after, describe curves that each span about 5 dB over the
+window and differ in shape by 2.7 dB rms — 242 dB/decade of apparent disagreement for 2.7 dB of real one.
+
+So the old table's "−158.9 against +23.7 dB/decade" row was comparing two unstable numbers, and that row is
+not a finding. `sonar_stats.profile_distance` replaces it: rms and max difference in dB between two
+median-normalised curves, insensitive to level and to sampling, which is what `targets.json` now sets a
+tolerance on (rms ≤ 3 dB, max ≤ 6 dB).
+
+One more method requirement fell out of this. UATD's range setting changes from ping to ping — 7 to 25 m
+among 60 consecutive frames — so a fixed absolute range window samples a different part of the image in each,
+and a near-range or level-vs-range statistic pooled over the corpus averages over incomparable things.
+`compare_real.py --uatd-range` stratifies by range setting, and for those two metrics it is not optional.
+
+### Smaller fixes in the same pass
+
+- **Profiles are averaged over frames, on a common range grid.** UATD's range setting changes from ping to
+  ping, so the frames share no range axis and the old code quoted frame 0 alone — one noisy profile standing
+  in for fifty.
+- **Every loader argument is recorded** in `compare.json`. The run that produced contrast 0.33 could not be
+  explained from its own artifact, because the colour map it did not undo was never written down.
+- **The loaders have tests** (`tests/test_compare_real.py`, 22 of them): the pixel law and its zero floor, the
+  colour-map inverse, sector fitting and fan→polar resampling against drawn sectors with known geometry, UATD
+  axes from the XML, the pixel-law fit recovering a planted exponent, the gain chain against
+  `display_kernel`'s own formula, the blind zone surviving it, and the split gate's refusals. They were
+  entirely untested before, and every number in the sim-vs-real table went through them.
+- **One test pins the trap**: after `--fit-pixel-law` the contrast is 1 by construction, so contrast is then
+  no evidence at all and only the KS distance and the other statistics are.
+
+### `generator_version`
+
+`config_hash` hashes the resolved config, so a change to the maths in `uw/sonar.py` is invisible to it and
+only the repository-wide git hash moves — too coarse to tell a dataset made by a different sonar model from
+one made by the same model with a tidier docstring. So `uw/sonar.py` now declares `SONAR_MODEL_VERSION`
+(`m750d-1`, bumped when a change alters what a ping contains, not for refactors), and
+`recorder.generator_version` composes `<model>/<git>/<config hash>` into every ping's JSON and every
+scenario manifest. Joined with `/`, because `git_version` appends `+dirty` and a `+`-joined string could not
+be split back into three fields. `tools/sweep.py` now reuses `uw.recorder.git_version` instead of its own
+copy: two implementations could disagree about whether the tree is dirty, and then a dataset's manifest and
+its own pings would claim different provenance. `uw.dataset` warns — does not refuse — when one split's
+scenarios carry more than one version, reading one ping per scenario.
+
+A guard test (`tests/test_module_boundaries.py`) pins the separation the sonar work depends on: `uw/sonar.py`
+and `uw/scattering.py` import no `bubbles` and no `plume`, in either direction, checked by reading the import
+statements rather than by importing the modules — `uw/sonar.py` needs warp and torch and cannot be imported
+on the host at all, and a static check also catches an import added inside a function, which is where an
+accidental dependency shows up first.
+
+### Disclosed: the hold-out was read once, to test the gate
+
+While checking that `compare_real.py --split holdout` works at all, 20 UATD hold-out frames at 10 m were
+measured: contrast 1.030, K shape 71.4, KS 0.082, beam width 0.93°. Recorded here rather than left silent,
+because a hold-out whose contents have been seen is only still a hold-out if the seeing is on the record.
+Nothing was tuned against it -- no sonar parameter has moved at all in this pass -- and the values agree with
+the calibrate half (1.095, K 9.3, width 1.12°), which is itself mild evidence that the split is sound. The
+gate's three refusals were also checked: a corpus absent from the manifest, a corpus whose hold-out half is
+empty because it refused to split, and a second attempt to write `holdout.json`.
+
+### Pass/fail fixed before tuning
+
+`output/compare_real/targets.json`, written in the same pass: which corpus may settle which metric
+(`admissibility`), and the criterion per metric. Two are blocking — the flat-sand speckle contrast must stay
+at 1.00 ± 0.05, and the stock config must keep reproducing a reference ping bit-identically, so that v0.2 and
+the detector trained on it stay comparable. The rest are written as relations against the hold-out's own
+measured spread rather than as constants, because for ring-down and level-vs-range we do not know the real
+numbers for an M750d at all — only the shape of a Gemini's, which is a different sonar.

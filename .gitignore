@@ -14,3 +14,11 @@ __pycache__/
 
 # generated DDS profiles: per host, from tools/dds_profile.py
 config/dds/*.xml
+
+# heavy slide images (kept locally; docs/slides_assets/*.md are tracked)
+docs/slides_assets/*.png
+docs/slides_assets/*.jpg
+docs/slides_assets/*.jpeg
+docs/slides_assets/*.gif
+docs/slides_assets/*.svg
+docs/slides_assets/*.pdf

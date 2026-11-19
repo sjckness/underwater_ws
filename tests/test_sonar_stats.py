@@ -56,3 +56,46 @@ def test_speckle_correlation_ignores_the_envelope():
     assert ss.speckle_correlation(a, 3 * a, mask) == pytest.approx(1.0)
     box = ss.local_mean(np.arange(20.0).reshape(4, 5), (1, 3))
     assert box[1, 2] == pytest.approx(7.0) and box.shape == (4, 5)
+
+
+def test_profile_distance_ignores_level_and_sampling():
+    """Two recordings of the same shape, at different absolute levels and on different range axes, must read
+    as identical: that is the whole point of comparing a sim in physical dB against a display image."""
+    r = np.linspace(1.0, 8.0, 300)
+    a = 100 - 30 * np.log10(r)
+    r2 = np.linspace(0.5, 9.0, 117)
+    d = ss.profile_distance(r, a, r2, 40 - 30 * np.log10(r2), (2.0, 7.0))
+    assert d["rms_db"] == pytest.approx(0.0, abs=0.02)
+    assert d["covered"] > 100
+
+
+def test_profile_distance_sees_a_different_shape():
+    r = np.linspace(1.0, 8.0, 300)
+    d = ss.profile_distance(r, 100 - 30 * np.log10(r), r, 40 - 50 * np.log10(r), (2.0, 7.0))
+    assert d["rms_db"] > 2.0
+
+
+def test_profile_distance_is_nan_without_overlap():
+    """Better than a confident 0: no overlap means no evidence, not agreement."""
+    r = np.linspace(1.0, 8.0, 50)
+    d = ss.profile_distance(r, 100 - 30 * np.log10(r), np.array([1.0, 2.0]), np.array([np.nan, np.nan]), (2.0, 7.0))
+    assert math.isnan(d["rms_db"]) and d["covered"] == 0
+
+
+def test_tvg_fit_constants_are_collinear_and_so_not_comparable():
+    """Pins the reason profile_distance exists. Two very different (k, b) pairs describe almost the same curve
+    over a realistic window, so the constants cannot carry a sim-vs-real comparison."""
+    r = np.arange(450, 850) * 0.004                      # 1.8-3.4 m, the tank's comparison window
+    design = np.stack([np.ones_like(r), np.log10(r), r], 1)
+    assert np.corrcoef(np.log10(r), r)[0, 1] > 0.99
+    assert np.linalg.cond(design) > 100
+    # The two fits measured on the same tank scene, before and after this pass: k = -158.9 and k = +82.9.
+    curve_a = 10.0 - 158.9 * np.log10(r) + 28.74 * r
+    curve_b = 10.0 + 82.9 * np.log10(r) - 17.25 * r
+    shape = (curve_a - curve_a.mean()) - (curve_b - curve_b.mean())
+    rms = float(np.sqrt(np.mean(shape ** 2)))
+    span = float(max(curve_a.max() - curve_a.min(), curve_b.max() - curve_b.min()))
+    assert span < 6.0                                    # each curve only spans ~5 dB over this window
+    assert rms < 3.0                                     # and they differ in shape by less than that span
+    # 241.8 dB/decade of apparent disagreement for 2.7 dB of real one: the constant amplifies by ~90x.
+    assert (158.9 + 82.9) / rms > 50.0

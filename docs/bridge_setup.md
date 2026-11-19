@@ -258,10 +258,12 @@ Also pin the socket buffers on both Linux hosts, since nothing on disk sets them
 
 The file is in the repo as `config/sysctl/60-ros2-hil.conf`, with the reasoning for each value and for the one
 value it deliberately leaves alone (`rmem_default`, since the DDS profile sets its own socket sizes and this host
-is shared with the f1tenth stacks):
+is shared with the f1tenth stacks). **Install it as `70-ros2-hil.conf`**: `/etc/sysctl.d` is applied in lexical
+filename order and the last assignment wins, so a `60-ros2-hil.conf` sorts before thor's `60-zed-buffers.conf`
+(`'r' < 'z'`) and that file's `net.core.rmem_max=1048576` silently wins instead (**V**, thor 2026-11-03):
 
 ```bash
-sudo install -m 644 config/sysctl/60-ros2-hil.conf /etc/sysctl.d/60-ros2-hil.conf && sudo sysctl --system
+sudo install -m 644 config/sysctl/60-ros2-hil.conf /etc/sysctl.d/70-ros2-hil.conf && sudo sysctl --system
 sysctl net.core.rmem_max net.core.wmem_max net.ipv4.ipfrag_high_thresh    # read them back
 ```
 
@@ -730,10 +732,13 @@ three of them change decisions rather than numbers.
 **C — The same configuration on both hosts (§3).**
 
 - [x] Owner agreed 2026-10-29: installed by hand on linus and thor. `config/sysctl/60-ros2-hil.conf` on
-      **both**, read back:
-      `sudo install -m 644 config/sysctl/60-ros2-hil.conf /etc/sysctl.d/ && sudo sysctl --system`.
+      **both**, installed as `70-ros2-hil.conf` and read back:
+      `sudo install -m 644 config/sysctl/60-ros2-hil.conf /etc/sysctl.d/70-ros2-hil.conf && sudo sysctl --system`
+      then `sysctl net.core.rmem_max net.core.wmem_max net.ipv4.ipfrag_high_thresh`.
       This is not optional: it is what the DDS profile's 4 MB receive buffer is capped by, and large BEST_EFFORT
-      samples are lost without it (§6.1 finding 3).
+      samples are lost without it (§6.1 finding 3). Do **not** install it with a `60-` prefix: on thor it then
+      sorts before `60-zed-buffers.conf`, whose `rmem_max=1048576` wins and caps the profile at 1 MB with no
+      error anywhere (**V**, 2026-11-03). Reading the installed file is not a check; read the live `sysctl`.
 - [ ] `ROS_DOMAIN_ID=73`, `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`, `ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET`,
       `ROS_DISTRO=jazzy` in every terminal and in the compose environment on both sides.
 - [ ] A **per-host** DDS profile, generated — never copied between hosts, since the whitelist is that host's own
