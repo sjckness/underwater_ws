@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- Fast DDS sul Thor (copiato come ~/hil_fastdds.xml): solo UDP unicast sul link diretto verso la work.
+     Thor: 192.168.200.10   Win: 192.168.200.2   Dominio: 73 (da hil_env.sh) -->
+<dds xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <profiles>
+    <transport_descriptors>
+      <transport_descriptor>
+        <transport_id>udp_hil</transport_id>
+        <type>UDPv4</type>
+        <interfaceWhiteList>
+          <address>192.168.200.10</address>
+        </interfaceWhiteList>
+      </transport_descriptor>
+    </transport_descriptors>
+    <participant profile_name="hil" is_default_profile="true">
+      <rtps>
+        <useBuiltinTransports>false</useBuiltinTransports>
+        <userTransports>
+          <transport_id>udp_hil</transport_id>
+        </userTransports>
+        <builtin>
+          <initialPeersList>
+            <locator>
+              <udpv4>
+                <address>192.168.200.2</address>
+              </udpv4>
+            </locator>
+          </initialPeersList>
+        </builtin>
+      </rtps>
+    </participant>
+  </profiles>
+</dds>
