@@ -121,6 +121,17 @@ class PhysicsServer:
         with self.lock:
             return self._pose
 
+    def body_twist(self):
+        """(body FRD linear velocity [m/s], body FRD angular velocity [rad/s], sim time [s]) of the latest
+        step: the twist a DVL or an IMU on this vehicle measures, in the frame the dynamics carries.
+
+        ``State`` is frozen and the thread replaces it whole under the lock, so one read gives one
+        consistent step - the same guarantee ``body_pose`` relies on.
+        """
+        with self.lock:
+            state = self.state
+        return state.velocity_frd.copy(), state.rate_frd.copy(), float(state.t)
+
     # ---- the thread
     def _frame(self, state, cmd) -> bytes:
         fr = self.frames
@@ -230,6 +241,22 @@ class ArduSubPose:
 
     def positions(self, step: float = 0.05):
         return self.at(0.0).position[None, :]
+
+    def body_at(self, t: float):
+        """(position in the tank [m], body FLU -> tank ENU rotation) of the vehicle body, not the sonar.
+
+        The same shape as ``uw.pose.ScriptPose.body_at``, so a sensor mounted on the body (the DVL) can
+        ask any pose source the same question.
+        """
+        if self.server.error is not None:
+            raise RuntimeError(f"physics thread died: {self.server.error!r}") from self.server.error
+        return self.server.body_pose()
+
+    def body_twist(self):
+        """The body twist in ArduPilot FRD, read from the integrator rather than differenced."""
+        if self.server.error is not None:
+            raise RuntimeError(f"physics thread died: {self.server.error!r}") from self.server.error
+        return self.server.body_twist()
 
     def close(self) -> None:
         self.server.close()

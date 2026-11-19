@@ -54,6 +54,24 @@ def leak_position(scene) -> np.ndarray | None:
     return leak.vents.mean(0) if leak.buried else leak.hole
 
 
+def dvl_message(report, seq: int, cfg: dict, instrument: dict | None = None) -> Message:
+    """One DVL velocity-and-transducer report as a sink Message. Pure: no ROS, no Isaac, no scene.
+
+    ``meta["dvl"]`` is the device's own JSON report, which is exactly what ``/sim/dvl/report`` carries and
+    what ``ros/dvl_relay`` consumes, so the recorded stream and the live one are the same bytes. Nothing
+    here is ground truth: the report has already been through the noise, the bottom-lock gate and the
+    quantisation, which is what makes it a measurement rather than the answer (docs/ros_hil.md 2.5).
+    """
+    return Message("dvl", seq, report.stamp,
+                   arrays={"beam_unit_vec": report.beam_unit_vec.astype(np.float32),
+                           "beam_range": report.beam_range.astype(np.float32),
+                           "beam_velocity": report.beam_velocity.astype(np.float32),
+                           "rssi_dbm": report.rssi_dbm.astype(np.float32)},
+                   meta={"dvl": report.as_json(), "instrument": instrument or {},
+                         "num_good_beams": report.num_good_beams,
+                         "config_hash": config_hash(cfg), "seed": cfg["seed"]})
+
+
 def sonar_message(seq: int, stamp: float, ping, son, cfg: dict, scene, sim=None, fan: bool | None = None) -> Message:
     son_cfg = get(cfg, "sonar")
     rpy = rpy_deg_of(ping.rot)

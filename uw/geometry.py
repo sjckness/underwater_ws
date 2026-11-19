@@ -315,6 +315,156 @@ def rpy_deg_of(rot) -> np.ndarray:
                        math.atan2(m[1, 0], m[0, 0])])
 
 
+# ------------------------------------------------------------------------------------ bottom raycast
+
+def _bottom_parts(scene: "Scene") -> dict:
+    """Triangles, per-triangle AABBs and per-mesh AABBs of the occluders other than the sand, cached.
+
+    The sand is handled analytically by ``ray_bottom`` (exact normals, no faceting), so only the rocks,
+    the pipe, its flanges and the supports are tested as triangles. Walls are not occluders, which is
+    what makes a beam that leaves the tank footprint return no hit at all.
+
+    The AABBs are what keeps this affordable inside the sim loop: the pipe alone is 7680 triangles, and
+    a near-vertical beam is within reach of a handful of them. One slab test per mesh picks the meshes
+    worth looking at, a second one per triangle picks the triangles, and Moller-Trumbore then runs on
+    what is left - usually nothing.
+    """
+    parts = scene.extras.get("_bottom_parts")
+    if parts is None:
+        tris, tlo, thi, mlo, mhi, roles = [], [], [], [], [], []
+        for m in scene.meshes:
+            if m.role in scene.occluder_roles and m.role != "sand" and len(m.faces):
+                tri = m.points[m.faces].astype(float)              # (M, 3, 3)
+                tris.append(tri)
+                tlo.append(tri.min(1))
+                thi.append(tri.max(1))
+                mlo.append(tri.reshape(-1, 3).min(0))
+                mhi.append(tri.reshape(-1, 3).max(0))
+                roles.append(m.role)
+        parts = {"tri": tris, "tri_lo": tlo, "tri_hi": thi, "role": roles,
+                 "mesh_lo": np.asarray(mlo).reshape(-1, 3), "mesh_hi": np.asarray(mhi).reshape(-1, 3)}
+        scene.extras["_bottom_parts"] = parts
+    return parts
+
+
+def _slabs(o, d, lo, hi, t_max: float):
+    """Ray/AABB slab test against (K, 3) box bounds. Returns a (K,) bool of the boxes the ray reaches."""
+    inv = 1.0 / np.where(np.abs(d) < 1e-12, 1e-12, d)
+    t1 = (lo - o) * inv
+    t2 = (hi - o) * inv
+    t_near = np.max(np.minimum(t1, t2), axis=-1)
+    t_far = np.min(np.maximum(t1, t2), axis=-1)
+    return (t_far >= np.maximum(t_near, 0.0)) & (t_near <= t_max)
+
+
+def _ray_triangles(o, d, tri, t_max: float, eps: float = 1e-9):
+    """Moller-Trumbore over (M, 3, 3) triangles. Returns (t, normal) of the nearest hit, or (inf, None)."""
+    e1 = tri[:, 1] - tri[:, 0]
+    e2 = tri[:, 2] - tri[:, 0]
+    pv = np.cross(d, e2)
+    det = np.einsum("ij,ij->i", e1, pv)
+    ok = np.abs(det) > eps
+    inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+    tv = o - tri[:, 0]
+    u = np.einsum("ij,ij->i", tv, pv) * inv
+    qv = np.cross(tv, e1)
+    v = (qv @ d) * inv
+    t = np.einsum("ij,ij->i", e2, qv) * inv
+    hit = ok & (u >= -eps) & (v >= -eps) & (u + v <= 1.0 + eps) & (t > eps) & (t < t_max)
+    if not hit.any():
+        return float("inf"), None
+    idx = int(np.flatnonzero(hit)[np.argmin(t[hit])])
+    n = np.cross(e1[idx], e2[idx])
+    n = n / (np.linalg.norm(n) + 1e-30)
+    if n @ d > 0:                       # face the ray, so the incidence cosine is always positive
+        n = -n
+    return float(t[idx]), n
+
+
+def _rays_sand(sand: "SandField", o, dirs, t_max: float, iters: int = 5, tol: float = 1e-10):
+    """Range of each ray to the sand, by Newton on ``f(t) = z(t) - h(x(t), y(t))``, all rays at once.
+
+    ``f`` is strictly decreasing for a downward ray - ``dz/dt = d_z`` while ``dh/dt = grad(h) . d_xy`` is
+    bounded by the sand's slope (centimetre relief over decimetre scales) - so the root is unique and
+    Newton from the flat-sand solution converges quadratically: the start is off by the relief amplitude,
+    a couple of centimetres, so four steps reach machine precision. ``SandField.height_grad`` gives the
+    derivative analytically, which is what keeps this cheap enough for the sim loop: one vectorised call
+    per iteration instead of one per ray per bisection step.
+    """
+    d = np.asarray(dirs, float)
+    t = np.full(len(d), np.inf)
+    down = d[:, 2] < -1e-6
+    if not down.any():
+        return t
+    if o[2] - float(sand.height(o[0], o[1])) <= 0.0:       # at or under the sand already
+        return t
+    dz = d[down, 2]
+    dxy = d[down, :2]
+    tk = np.clip((o[2] - sand.base) / -dz, 0.0, t_max)     # flat-sand start
+    for _ in range(iters):
+        x, y = o[0] + tk * dxy[:, 0], o[1] + tk * dxy[:, 1]
+        h, g = sand.height_grad(x, y)
+        f = (o[2] + tk * dz) - h
+        fp = dz - (g[..., 0] * dxy[:, 0] + g[..., 1] * dxy[:, 1])
+        step = f / np.where(np.abs(fp) < 1e-9, -1.0, fp)
+        tk = np.clip(tk - step, 0.0, t_max)
+        if np.max(np.abs(step)) < tol:
+            break
+    x, y = o[0] + tk * dxy[:, 0], o[1] + tk * dxy[:, 1]
+    h, _ = sand.height_grad(x, y)
+    res = np.abs((o[2] + tk * dz) - h)
+    t[down] = np.where((res < 1e-6) & (tk > 0.0) & (tk < t_max), tk, np.inf)
+    return t
+
+
+def ray_bottom(scene: "Scene", origin, directions, t_max: float = 50.0):
+    """First hit of each ray on the tank bottom: ``(t (n,), normal (n, 3), role (n,))``.
+
+    ``origin`` is one point (3,), ``directions`` is (n, 3) of unit vectors, both in tank ENU. A ray with
+    no hit gets ``t = inf``, a zero normal and role ``None`` - which is what a DVL beam that overshoots
+    the sand, leaves the tank footprint (the walls are not occluders) or points upward must produce.
+
+    The sand is solved analytically against ``SandField`` so the incidence angle comes from the true
+    surface normal rather than the 1 cm occlusion mesh; the rocks, pipe, flanges and supports are tested
+    as triangles behind two levels of AABB rejection. The geometry is exactly the sonar's
+    ``Scene.occluders()``, so a DVL beam and a sonar ray see the same bottom.
+    """
+    o = np.asarray(origin, float).reshape(3)
+    dirs = np.atleast_2d(np.asarray(directions, float))
+    dirs = dirs / (np.linalg.norm(dirs, axis=1, keepdims=True) + 1e-30)
+    n = len(dirs)
+    t_out = np.full(n, np.inf)
+    n_out = np.zeros((n, 3))
+    roles: list = [None] * n
+    size = np.asarray(scene.size, float)
+    parts = _bottom_parts(scene)
+
+    t_sand = _rays_sand(scene.sand, o, dirs, t_max)
+    got = np.isfinite(t_sand)
+    hit_xy = o[None, :2] + np.where(got, t_sand, 0.0)[:, None] * dirs[:, :2]
+    inside = (got & (hit_xy[:, 0] >= 0.0) & (hit_xy[:, 0] <= size[0])
+              & (hit_xy[:, 1] >= 0.0) & (hit_xy[:, 1] <= size[1]))
+    if inside.any():                            # the sand normals, in one vectorised call
+        sn = scene.sand.normal(hit_xy[inside, 0], hit_xy[inside, 1])
+        t_out[inside] = t_sand[inside]
+        n_out[inside] = sn
+        for i in np.flatnonzero(inside):
+            roles[i] = "sand"
+
+    for i, d in enumerate(dirs):
+        t_lim = min(t_out[i], t_max)
+        near = _slabs(o, d, parts["mesh_lo"], parts["mesh_hi"], t_lim)
+        for k in np.flatnonzero(near):
+            sel = _slabs(o, d, parts["tri_lo"][k], parts["tri_hi"][k], t_lim)
+            if not sel.any():
+                continue
+            tt, nn = _ray_triangles(o, d, parts["tri"][k][sel], t_lim)
+            if tt < t_out[i]:
+                t_out[i], n_out[i], roles[i] = tt, nn, parts["role"][k]
+                t_lim = tt
+    return t_out, n_out, roles
+
+
 # -------------------------------------------------------------------------------------------- scene
 
 def build_scene(cfg: dict, full: bool = True) -> Scene:
