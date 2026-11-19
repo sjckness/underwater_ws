@@ -71,6 +71,7 @@ def run(cfg: dict, pings: int, sink, plume: bool = True, fan: bool | None = None
     dt = 1.0 / float(config.get(cfg, "sonar.ping_rate_hz"))
     if info is not None:
         info.update({"config_hash": recorder.config_hash(cfg), "seed": cfg["seed"],
+                     "generator_version": recorder.generator_version(son.model_version, cfg),
                      "labels": {"threshold": son.mask_threshold, **recorder.LABELS}, "config": cfg})
     t_start = sim.t if sim is not None else 0.0
     # mount offsets only: tank -> oculus is the true pose and goes to /gt (docs/ros_hil.md §2.5 rule 4)

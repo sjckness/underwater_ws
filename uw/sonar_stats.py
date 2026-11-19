@@ -72,28 +72,77 @@ def bright_target(db, range_m, bearing_deg, r_window=(0.3, np.inf), b_window=(-1
             "width_deg": width, "sidelobe_db": side}
 
 
-def near_range(db, range_m, r_max: float = 0.5) -> dict:
+def _reference_db(prof, range_m, ref_window) -> float:
+    """Median of ``prof`` over ``ref_window`` [m], the level a normalised profile is quoted against. NaN when the
+    window holds no data, which is a refusal to normalise rather than a silent offset of 0."""
+    sel = np.isfinite(prof) & (range_m >= ref_window[0]) & (range_m <= ref_window[1])
+    return float(np.median(prof[sel])) if sel.any() else math.nan
+
+
+def _normalised(prof, range_m, normalise, ref_window) -> dict:
+    """The extra keys a profile carries when it is compared as a *shape* rather than as a level.
+
+    ``normalise=None`` (default) adds nothing, so every existing caller sees the absolute dB it always saw.
+    ``normalise="median"`` subtracts the median over ``ref_window``: a simulated profile in physical dB re 1 uPa
+    and a real recording in whatever units its 8-bit display left behind then lie on the same axis, and only
+    their shape is being compared. The reference itself is reported, so the subtraction stays auditable.
+    """
+    if normalise is None:
+        return {}
+    if normalise != "median":
+        raise ValueError(f"normalise must be None or 'median', not {normalise!r}")
+    ref = _reference_db(prof, range_m, ref_window)
+    norm = prof - ref
+    return {"normalise": normalise, "norm_ref_window_m": list(ref_window),
+            "norm_ref_db": None if not np.isfinite(ref) else ref,
+            "norm_db": [None if not np.isfinite(v) else float(v) for v in norm]}
+
+
+def near_range(db, range_m, r_max: float = 0.5, normalise: str | None = None, ref_window=(0.3, 0.5)) -> dict:
     """Blind zone (first range with data) and the beam-averaged profile near the sonar, with the ring-down decay
-    slope fitted over the first 0.1 m of data."""
+    slope fitted over the first 0.1 m of data.
+
+    ``normalise="median"`` additionally quotes the profile against its median over ``ref_window``, which should
+    sit *beyond* the ring-down so that the reference is local background and not the ring-down itself. The slope
+    and the blind zone are unaffected: a slope is already invariant to an additive dB offset.
+    """
     prof = np.array([np.nanmean(r) if np.isfinite(r).any() else np.nan for r in db])
     has = np.isfinite(prof)
     blind = float(range_m[np.argmax(has)]) if has.any() else math.nan
     sel = has & (range_m >= blind) & (range_m <= blind + 0.1)
     slope = float(np.polyfit(range_m[sel], prof[sel], 1)[0]) if sel.sum() > 3 else math.nan
     near = range_m <= r_max
-    return {"blind_zone_m": blind, "ringdown_slope_db_per_m": slope, "range_m": range_m[near].tolist(),
-            "mean_db": [None if not np.isfinite(v) else float(v) for v in prof[near]]}
+    out = {"blind_zone_m": blind, "ringdown_slope_db_per_m": slope, "range_m": range_m[near].tolist(),
+           "mean_db": [None if not np.isfinite(v) else float(v) for v in prof[near]]}
+    extra = _normalised(prof, range_m, normalise, ref_window)
+    if extra:
+        extra["norm_db"] = [extra["norm_db"][i] for i in np.flatnonzero(near)]
+        out.update(extra)
+    return out
 
 
-def tvg_profile(db, range_m, r_window) -> dict:
-    """Median level vs range, and the fit a + k log10(R) + b R over r_window (k, b: what a TVG would have to undo)."""
+def tvg_profile(db, range_m, r_window, normalise: str | None = None, ref_window=None) -> dict:
+    """Median level vs range, and the fit a + k log10(R) + b R over r_window (k, b: what a TVG would have to undo).
+
+    ``k`` and ``b`` are already invariant to an additive dB offset, so they transfer between a simulation in
+    physical dB and a real recording in sensor units; ``a_db`` does not and must not be compared.
+
+    But do not compare ``k`` and ``b`` between two recordings either. log10(R) and R are collinear over any
+    window a sonar covers, so the two constants trade off almost freely: 60 UATD pings give k = 59.7 dB/decade
+    with a per-frame spread of +-106. They are kept because they summarise one profile compactly; for sim
+    against real use ``profile_distance`` on the curve.
+    ``normalise="median"`` adds the profile quoted against its median over ``ref_window`` (default: ``r_window``),
+    which is what to plot when sim and real are put on one axis.
+    """
     prof = np.array([np.nanmedian(r) if np.isfinite(r).any() else np.nan for r in db])
     sel = np.isfinite(prof) & (range_m >= r_window[0]) & (range_m <= r_window[1])
     a = np.stack([np.ones(sel.sum()), np.log10(range_m[sel]), range_m[sel]], 1)
     coef = np.linalg.lstsq(a, prof[sel], rcond=None)[0]
-    return {"fit_window_m": list(r_window), "k_db_per_decade": float(coef[1]), "b_db_per_m": float(coef[2]),
-            "a_db": float(coef[0]), "range_m": range_m.tolist(),
-            "median_db": [None if not np.isfinite(v) else float(v) for v in prof]}
+    out = {"fit_window_m": list(r_window), "k_db_per_decade": float(coef[1]), "b_db_per_m": float(coef[2]),
+           "a_db": float(coef[0]), "range_m": range_m.tolist(),
+           "median_db": [None if not np.isfinite(v) else float(v) for v in prof]}
+    out.update(_normalised(prof, range_m, normalise, tuple(ref_window or r_window)))
+    return out
 
 
 def local_mean(intensity: np.ndarray, size=(7, 5)) -> np.ndarray:
@@ -118,3 +167,95 @@ def speckle_correlation(a: np.ndarray, b: np.ndarray, mask: np.ndarray, size=(7,
     nb = np.asarray(b, float) / local_mean(b, size)
     inner = local_mean(np.asarray(mask, float), size) > 1 - 1e-9
     return float(np.corrcoef(na[inner], nb[inner])[0, 1])
+
+
+def far_sidelobe_floor(db, range_m, bearing_deg, r_peak: float, b_peak: float, beamwidth_deg: float,
+                       n_bw: float = 5.0, r_rows: int = 3, bg_offset_m=(0.5, 1.5)) -> dict:
+    """Level of a compact target's *far* angular skirt, relative to its peak: an **upper bound** on the receive
+    array's sidelobe level, never a measurement of it.
+
+    Read the range rows within ``r_rows`` bins of ``r_peak`` (the target), take the beams further than
+    ``n_bw`` beamwidths from ``b_peak`` (past the main lobe and its first nulls), and subtract the background
+    estimated from the *same* beams at ranges ``bg_offset_m`` away on either side, where the target is not. What
+    is left is energy that the target put at a large angle.
+
+    It bounds the array sidelobe from above because everything else that puts energy there adds to it: the
+    target's own angular extent if it is not a point (a 0.4 m sphere at 8 m spans ~3 deg, several beamwidths),
+    volume reverberation, multipath, and the maker's own TVG and AGC in a recorded 8-bit image. So a measured
+    -20 dB says "the array sidelobe is at most -20 dB", and a value at or below the background says only that
+    it is unmeasurable here.
+
+    ``above_background`` false means exactly that: the skirt did not rise above the local background, so no
+    bound tighter than the background itself can be read, and ``floor_db`` is None.
+    """
+    db = np.asarray(db, float)
+    range_m, bearing_deg = np.asarray(range_m, float), np.asarray(bearing_deg, float)
+    j = int(np.argmin(np.abs(range_m - r_peak)))
+    lo, hi = max(j - r_rows, 0), min(j + r_rows + 1, db.shape[0])
+    band = db[lo:hi]
+
+    main = np.abs(bearing_deg - b_peak) <= beamwidth_deg
+    if not main.any() or not np.isfinite(band[:, main]).any():
+        raise ValueError(f"no finite data within one beamwidth of bearing {b_peak}")
+    peak_db = float(np.nanmax(band[:, main]))
+
+    far = np.abs(bearing_deg - b_peak) > n_bw * beamwidth_deg
+    if not far.any():
+        raise ValueError(f"no beams beyond {n_bw} beamwidths of bearing {b_peak} in this fan")
+
+    def mean_intensity(rows) -> float:
+        v = 10 ** (rows[:, far] / 10)
+        v = v[np.isfinite(v)]
+        return float(v.mean()) if v.size else math.nan
+
+    bg_rows = [db[a:b] for a, b in
+               ((int(np.argmin(np.abs(range_m - (r_peak - bg_offset_m[1])))),
+                 int(np.argmin(np.abs(range_m - (r_peak - bg_offset_m[0]))))),
+                (int(np.argmin(np.abs(range_m - (r_peak + bg_offset_m[0])))),
+                 int(np.argmin(np.abs(range_m - (r_peak + bg_offset_m[1]))))))
+               if b > a]
+    skirt = mean_intensity(band)
+    bg = mean_intensity(np.concatenate(bg_rows)) if bg_rows else math.nan
+
+    excess = skirt - bg
+    above = bool(np.isfinite(excess) and excess > 0)
+    return {"peak_db": peak_db, "range_m": float(range_m[j]), "bearing_deg": float(b_peak),
+            "n_beamwidths": float(n_bw), "beams": int(far.sum()),
+            "skirt_db": None if not np.isfinite(skirt) else float(10 * math.log10(skirt)),
+            "background_db": None if not np.isfinite(bg) else float(10 * math.log10(bg)),
+            "above_background": above,
+            "floor_db": float(10 * math.log10(excess) - peak_db) if above else None}
+
+
+def profile_distance(range_a, db_a, range_b, db_b, window, normalise: bool = True) -> dict:
+    """How far apart two level-vs-range profiles are in shape: rms and max difference [dB] over ``window``.
+
+    This exists because the fit constants of ``tvg_profile`` cannot carry the comparison. Over any window a
+    real sonar actually covers, log10(R) and R are collinear -- correlation 0.992 over 3-8 m, 0.997 over
+    1.8-3.4 m, condition number ~400 -- so ``k`` and ``b`` trade off against each other almost freely while
+    the fitted curve barely moves. Measured on 60 UATD pings the slope comes out 59.7 dB/decade with a
+    per-frame spread of +-106: the number is noise, and two such numbers cannot be compared. The curve can.
+
+    Both profiles are median-normalised over the window first (``normalise``), so a simulation in physical dB
+    and a recording in whatever units its display left behind are compared on shape alone. ``b`` is sampled
+    onto ``a``'s ranges inside the window; points either profile does not cover do not count, and
+    ``covered`` says how many did.
+    """
+    ra, va = np.asarray(range_a, float), np.asarray(db_a, float)
+    rb, vb = np.asarray(range_b, float), np.asarray(db_b, float)
+    sel = (ra >= window[0]) & (ra <= window[1]) & np.isfinite(va)
+    okb = np.isfinite(vb) & (rb >= min(rb.min(), window[0]))
+    if sel.sum() < 2 or okb.sum() < 2:
+        return {"rms_db": math.nan, "max_db": math.nan, "covered": 0, "window_m": list(window)}
+    a = va[sel]
+    b = np.interp(ra[sel], rb[okb], vb[okb], left=math.nan, right=math.nan)
+    both = np.isfinite(a) & np.isfinite(b)
+    if both.sum() < 2:
+        return {"rms_db": math.nan, "max_db": math.nan, "covered": 0, "window_m": list(window)}
+    a, b = a[both], b[both]
+    if normalise:
+        a = a - np.median(a)
+        b = b - np.median(b)
+    d = a - b
+    return {"rms_db": float(np.sqrt(np.mean(d ** 2))), "max_db": float(np.max(np.abs(d))),
+            "covered": int(both.sum()), "window_m": list(window)}
