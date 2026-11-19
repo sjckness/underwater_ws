@@ -46,7 +46,7 @@ publisher host is the one variable this task actually changes.
 | `ROS_DOMAIN_ID` in the login shell | **not set** → the CLI sits on **domain 0** | `env` (**V**) |
 | `ROS_AUTOMATIC_DISCOVERY_RANGE` | `SUBNET` (exported) | `env` (**V**) — `LOCALHOST` would silently kill the link |
 | NIC | `enp5s0`, 1000 Mb/s, **MTU 1500**, `a8:5e:45:17:fe:e7` | `ip link` (**V**) |
-| address | `192.168.177.140/24`, gateway `.254` | `ip -4 addr` (**V**) |
+| address | on the company LAN (a /24, gateway `.254`) | `ip -4 addr` (**V**) |
 | subnet occupancy | **20+ other hosts** in the ARP cache | `ip neigh` (**V**) — this is a shared lab LAN, not a HIL segment |
 | socket buffers | `rmem_max = wmem_max = 4194304`, `rmem_default = 212992` | `sysctl` (**V**) |
 | …pinned on disk? | **no** — nothing in `/etc/sysctl.conf` or `/etc/sysctl.d/` sets them | `grep` (**V**); they will not survive a reboot |
@@ -141,7 +141,7 @@ ethtool <nic>; ethtool -T <nic>     # link speed; PTP hardware clock (docs/ros_h
 ping -c 100 -i 0.01 <peer>          # RTT and jitter — the first unmeasured term of ros_hil §5
 ```
 
-What is needed in writing: the Windows IPv4, thor's and orin's, whether all of them sit on `192.168.177.0/24`
+What is needed in writing: the Windows IPv4, thor's and orin's, whether all of them sit on the company LAN
 with the other 20+ lab hosts or on a dedicated HIL segment, and whether a switch is in the path. On a shared LAN
 the multicast discovery of **every** host on domain 73 reaches **every** other, which is exactly how the f1tenth
 coexistence problem in `docs/ros_hil.md` §7 item 14 turns into a HIL problem.
@@ -214,7 +214,7 @@ profile at all):
         <maxMessageSize>65500</maxMessageSize>
         <!-- one line per host, that host's own NIC address; keeps Fast DDS off Hyper-V/WSL/docker0/virbr0/tailscale0 -->
         <interfaceWhiteList>
-          <address>192.168.177.140</address>
+          <address>192.168.200.2</address>
         </interfaceWhiteList>
       </transport_descriptor>
     </transport_descriptors>
@@ -227,7 +227,7 @@ profile at all):
           <!-- unicast discovery: uncomment when multicast is proven not to work (§7) -->
           <!--
           <metatrafficUnicastLocatorList>
-            <locator><udpv4><address>192.168.177.140</address></udpv4></locator>
+            <locator><udpv4><address>192.168.200.2</address></udpv4></locator>
           </metatrafficUnicastLocatorList>
           <initialPeersList>
             <locator><udpv4><address>WINDOWS_IP</address></udpv4></locator>
@@ -716,7 +716,7 @@ three of them change decisions rather than numbers.
 **B — Addressing. A dedicated subnet, static, off the lab LAN.**
 
 - [x] **`192.168.200.2` (work, was linus before 2026-11-09) and `192.168.200.10` (thor), /24, static, no gateway, no DHCP** (decided
-      2026-10-29). Deliberately not on `192.168.177.0/24`, which carries 20+ hosts and the f1tenth stacks
+      2026-10-29). Deliberately not on the company LAN, which carries 20+ hosts and the f1tenth stacks
       (**V**, §1). Static because `initialPeersList` holds addresses and a DHCP lease change breaks discovery
       silently.
 - [ ] MTU **1500** on both ends: every byte count in `docs/ros_hil.md` §2.2 and in §6.1 is computed against it.
@@ -813,7 +813,7 @@ measurement, and step 5 is where §5's table gets its two missing columns.
 | the sim slows down when you start monitoring | subscriber-side CPU on the publisher host: 12 × `ros2 topic hz` → RTF 0.5 (**V**); `ros/link_monitor` costs 0.4 % (**V**, §6.1) | move monitors to thor; log RTF per run |
 | `ros2 topic hz`/`bw` print nothing on a sensor topic | they have **no `--qos-reliability` in Jazzy** and their default RELIABLE reader cannot match a BEST_EFFORT writer (**V**, §6.1). Piped into `grep`, the usage error looks like a dead link | use `ros/link_monitor/run.sh`, or `ros2 topic echo --qos-reliability best_effort` |
 | every rate is low by the same factor | not a fault: rates are **nominal × RTF** (**V**, §6.1) — at RTF 0.787 a 10 Hz sonar is 7.88 Hz on the wire | divide by the RTF on `/sim/diagnostics` |
-| traffic appears on domain 73 that nobody here published | another host on the shared `192.168.177.0/24` LAN | `ros2 node list`; see ros_hil §7 item 14 (f1tenth coexistence) |
+| traffic appears on domain 73 that nobody here published | another host on the shared company LAN | `ros2 node list`; see ros_hil §7 item 14 (f1tenth coexistence) |
 | `rosidl`/`rclpy` import errors on the sim host | `ROS_DISTRO`, the bridge `lib` path or the RMW not exported in the launching shell | re-read §5.1; the bundled `rosidl_generator_py` also logs a harmless DEBUG traceback (**V**, `ros_bridge.py`) |
 
 ## 9. What this does not establish yet
