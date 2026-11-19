@@ -61,6 +61,9 @@ map                                   REP-105 world frame ≡ the tank (ENU: +x 
 │       │   └── rov1/camera_front_optical  static, R_BODY_OPTICAL (exists, V)
 │       ├── rov1/imu_link              static
 │       ├── rov1/pressure_link         static — the depth datum; not the same point as the CG
+│       ├── rov1/dvl_link              static, on sonar_fls like the camera. FLU (REP-103)
+│       │   └── rov1/dvl_instrument    static, diag(1,-1,-1): the A50's own FRD, which is
+│       │                                 the frame marine_acoustic_msgs/Dvl declares for itself
 │       └── rov1/lamp_0, rov1/lamp_1   static
 │
 └── gt/rov1/base_link                  ← the sim, on /gt/tf ONLY (never /tf) — ros_hil §2.5 rule 4
@@ -120,6 +123,16 @@ legitimately consumed by the Jetson stack).
 | `/rov1/sensors/camera_front/image_raw` | `sensor_msgs/Image` rgb8 1280×720 | `sim_bridge` | detector (optional), rosbag2 | S | `rov1/camera_front_optical` | 10 Hz (`camera.rate_hz`, **V**) | no |
 | `/rov1/sensors/camera_front/image_raw/compressed` | `sensor_msgs/CompressedImage` png | `sim_bridge` | same | S | `rov1/camera_front_optical` | `ros.camera_hz`, else the render rate | no — `image_transport`'s own name |
 | `/rov1/sensors/camera_front/camera_info` | `sensor_msgs/CameraInfo` | `sim_bridge` | same | S (at image rate, as a real driver) | `rov1/camera_front_optical` | 10 Hz | no |
+| `/rov1/sensors/dvl/velocity` | `marine_acoustic_msgs/Dvl` | `dvl_relay` (sim host) | rosbag2, operator | R | `rov1/dvl_instrument` | 2-15 Hz, falls with altitude (**V**, Water Linked JSON protocol) | no |
+| `/rov1/sensors/dvl/velocity_twist` | `geometry_msgs/TwistWithCovarianceStamped` | `dvl_relay` | `dvl_dr_preprocess` | R | `rov1/dvl_link` | same | no — the REP-103 form of the row above |
+| `/rov1/sensors/dvl/velocity_corrected` | `geometry_msgs/TwistWithCovarianceStamped` | `dvl_dr_preprocess` | `ekf_filter_node` | R | `rov1/base_link` | same, minus the reports with no bottom lock | no |
+| `/rov1/sensors/dvl/altitude` | `sensor_msgs/Range` | `dvl_relay` | operator, rosbag2 | R | `rov1/dvl_link` | same; `+inf` out of lock | no |
+| `/rov1/sensors/dvl/meta` | `std_msgs/String` (JSON: beam geometry, mount, envelope, sound speed) | `dvl_relay` | relay consumers, rosbag2 | L | `rov1/dvl_instrument` | on change | no — the analogue of the sonar's `meta` |
+
+The DVL is named `dvl`, not `a50`: device names below `sensors/` are functional (rule 4 above), and the model
+string lives in `config/tank.yaml` as `dvl.model`, the way `sonar.model` does. `velocity` carries the type and
+the topic name the Water Linked ROS 2 drivers publish, so swapping the simulator for the hardware changes
+nothing downstream (`docs/dvl.md`).
 
 `meta` replaces the draft's `sonar_fls/info`: `ProjectedSonarImage` already self-describes beam geometry
 (`beam_directions`, `ranges`, `sound_speed`), so an `info` topic would duplicate it. What it does **not** carry is
@@ -152,7 +165,12 @@ GUIDED are deliberately absent from this table.
 
 | topic | msg | pub | sub | QoS | frame_id | rate | sim-only |
 |---|---|---|---|---|---|---|---|
-| `/rov1/nav/odom` | `nav_msgs/Odometry` | `state_estimator` (thor) | mission, detector, rosbag2 | R | header `rov1/odom`, child `rov1/base_link` | 50 Hz (**U**) | no |
+| `/rov1/nav/odom` | `nav_msgs/Odometry` | `ekf_filter_node` (`ros/dvl_dr`) | mission, detector, rosbag2 | R | header `rov1/odom`, child `rov1/base_link` | 30 Hz (`ekf.yaml`) | no |
+| `/rov1/nav/depth` | `geometry_msgs/PoseWithCovarianceStamped` (z only) | `dvl_dr_preprocess` | `ekf_filter_node` | R | `rov1/odom` | the baro's rate (~10 Hz, **U**) | no |
+
+The estimator exists as of the DVL work: DVL velocity, the autopilot's IMU and the baro, and **nothing
+observing x or y** — the track is dead-reckoned, and `tools/dvl_drift.py` measures how fast it walks away.
+`world_frame` is `rov1/odom`, so this is odometry and not localisation (`docs/dvl.md`).
 
 **The draft's `/rov1/nav/pose` is dropped.** It would be the same information as `odom.pose` and as the
 `rov1/odom → rov1/base_link` TF edge, i.e. three sources that can disagree. If a map-frame localizer appears
@@ -240,6 +258,14 @@ is **mirrored relative to the sonar image** — publish from the unflipped `ping
 | `/sim/env/params` | `std_msgs/String` (JSON: preset, tank size, water level, temperature, salinity, sound speed, seed, config hash) | `sim_bridge` | rosbag2, evaluator | L | — | once, latched | yes |
 | `/sim/diagnostics` | `diagnostic_msgs/DiagnosticArray` (RTF, ping ms, budget overruns, bubble count) | `sim_bridge` | operator, rosbag2, link monitor | R | — | 1 Hz | yes* |
 | `/sim/debug/sonar_fan` | `sensor_msgs/Image` mono8 | `sim_bridge` | operator only | S | `rov1/sonar_fls` | 10 Hz, **off by default** | yes |
+| `/sim/dvl/report` | `std_msgs/String` (the A50's own JSON velocity report) | `sim_bridge` | `dvl_relay` **same host only** | R | — | 2-15 Hz | yes |
+| `/sim/dvl/meta` | `std_msgs/String` (JSON: the instrument's geometry) | `sim_bridge` | `dvl_relay` | L | — | on change | yes |
+
+`/sim/dvl/report` is the DVL's **device protocol**, not a ROS sensor topic, which is why it is `/sim` and not
+`/rov1/sensors/dvl/...`. `marine_acoustic_msgs` is absent from the container's rclpy (§8 item 1), so `dvl_relay`
+on the sim host builds the real types from it, exactly as `sonar_image_relay` does — and that is what makes the
+relay interchangeable with the vehicle's actual Water Linked driver. Keeping the raw report out of `/rov1` also
+leaves one fewer surface for ground truth to leak through.
 
 `/sim/env/params` carries the **environment**, not the answer: the leak's position, normal and flow live under
 `/gt/leak/*`, and the preset *name* is in `/sim/env/params` only because a bag is useless without knowing which

@@ -236,6 +236,15 @@ array is **mirrored relative to `/oculus/polar`** — publish from the unflipped
 no real head reports (**V**): the run-time path consumes `["image"]` only, and `masks`/`shares`/`targets` are
 evaluator-only keys.
 
+**A sixth path, added with the DVL (M8c, `docs/dvl.md`).** A velocity derived from the true state is the
+answer wearing a sensor's name. What keeps `/rov1/sensors/dvl/**` a measurement is the model itself: the beam
+raycast, the 0.05-50 m gate, the incidence-dependent echo, the scale factor, the bias, the noise and the
+quantisation. Two tests guard the rest —
+`tests/rov/test_dvl.py::test_the_latched_meta_leaks_no_ground_truth` and
+`tests/test_ros_messages.py::test_dvl_report_leaks_no_ground_truth` — because the DVL's `meta` is latched, and
+rule 3 says latched ground truth is the worst case. The *estimator* is the other half: `ros/dvl_dr` subscribes
+nothing under `/gt`, and `tools/dvl_drift.py` is the only thing that reads both sides, on two participants.
+
 Enforcement by namespace is what M7 adopts. The only *middleware-enforced* alternative is a second
 `ROS_DOMAIN_ID` for `/gt`, which costs the evaluator a bridge and the Jetson a second participant; hold it in
 reserve for the day a leak is actually observed.
@@ -368,6 +377,15 @@ estimation" circular.
 > needs no position estimate, so it needs no ground truth in the control path, and depth is the axis the vehicle
 > actually has authority over. GUIDED — and with it the position-source question — is a deliberate later step,
 > not a default.
+
+**Answered for the estimate, as of M8c (`docs/dvl.md`).** The dilemma above is about the *control* path, and
+it stands. For the *estimate* there is now a third option the draft did not have: a simulated DVL is not ground
+truth, so it can aid ArduSub's own EKF3 without making anything circular. The first step is already taken in
+`docker/ardusub_sitl/params/hil.parm` — `AHRS_EKF_TYPE 3` with `EK3_SRC1_POSXY/VELXY/VELZ` set to none, baro for
+z and compass for yaw — so MAVROS now reports an attitude ArduSub estimated rather than one SITL handed it. Note
+that this closes a second truth path the section above describes: the FDM-fed GPS instance 0 is still enabled by
+SITL, but the EKF no longer uses it. Feeding the DVL in as `EK3_SRC1_VELXY 6` (ExternalNav), which is what BlueOS
+does on a real BlueROV2, is the natural next step and would unblock GUIDED; it is not done.
 
 This matters more than it looks: GUIDED runs the WPNAV/PSC position controller with `PILOT_SPEED` 200 cm/s and
 `PILOT_SPEED_UP` 500 cm/s in a **2.9 m water column inside a 3 m tank** (**V**), where a single setpoint can
