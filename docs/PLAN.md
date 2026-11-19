@@ -233,6 +233,29 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
 - **3-D / multibeam-volume sonar is out of scope.**
 
 ## Real-data validation (priority over new physics)
+
+**M3.7 (2026-11-04) laid the calibration harness**; `docs/validation.md` has the detail. Done: the four real
+corpora extracted in full (80 -> 1600 native-polar UATD frames, 60 -> 1427 and 3847 fan frames) and made
+read-only; a leak-free hold-out (`tools/real_holdout.py`, `output/compare_real/holdout.json`) after finding
+that UATD's own `Test_1`/`Test_2` are a random split of one pool -- 80 % of Test_1 has a near-twin in Test_2;
+pass/fail fixed before tuning (`output/compare_real/targets.json`); `generator_version` in every ping; a
+golden-ping guard so no sonar default drifts away from v0.2; and `tests/test_compare_real.py` for loaders
+that had no tests at all. Four earlier conclusions changed:
+
+- **basin-2's contrast 0.33 is not a colour-map artifact.** Decoded correctly and off broadside it still
+  reads 0.348: its speckle was destroyed by DFKI's own 512x512 rendering, upstream of us. Not a reference.
+- **Our 8-bit display is linear in dB; a real head's is linear in amplitude.** The `img` channel now encodes
+  the way a real head does. Also means v0.2's training images are log-scaled, unlike a real head's.
+- **Contrast off a display image is gain-dependent** (0.50-2.11 on one unchanged scene), so comparisons are
+  gated on K shape and KS. Unclipped against unclipped the tank still reads 2.11 against UATD's 1.095 --
+  the 2026-10-28 ablation's verdict stands, and the gap is scene content.
+- **The TVG fit constants cannot carry a comparison**: log10(R) and R are collinear, so UATD's slope is
+  59.7 +- 106 dB/decade. `sonar_stats.profile_distance` replaces that row.
+
+Next: the M1200d / Gemini presets, then the remaining tank-contrast ablation arms, then ring-down and
+level-vs-range as shape only. `docs/dfki_bag_request.md` is drafted and unsent; steps 3-5 stay shape-only or
+bounded until those bags arrive.
+
 Sources to obtain:
 - **DeeperSense / DFKI dataset**: Blueprint Oculus M1200d + stereo camera, tank and lakes. Metadata on Zenodo (record 10373154); the full ROS bags on request.
 - **UATD** multibeam forward-looking sonar dataset (arXiv 2212.00352): background, speckle and sidelobe statistics.
@@ -275,7 +298,7 @@ scenarios exactly.
 **Open:**
 - More *kinds* of distractor: only the count was raised. Other strong point clouds (a fish school, suspended
   sediment, a second pipe) so that a detector cannot key on "anything bright above the sand".
-- **Recompression of v0.2 (measured 2026-10-27; running since 2026-10-28 10:20, docs/validation.md).** `polar_db` as
+- ~~**Recompression of v0.2**~~ **done** (measured 2026-10-27, applied 2026-10-28, docs/validation.md). `polar_db` as
   uint16 at 0.01 dB is **rejected**: deflate makes it 5–7 % *larger* than the float16 in place (quantisation noise in
   the low bits), `polar_db` goes negative so the scheme needs an offset anyway, and float16 is the coarser of the two,
   so it was never a precision win either. 0.1 dB steps or a hi/lo byte split give only ~7 %. What does pay is plain
@@ -284,10 +307,10 @@ scenarios exactly.
   ~13 h of single-threaded encoding — CPU-bound on the pass's per-scenario verification, not disk-bound at the 35–50
   min first projected (docs/validation.md). Three of the four PNGs per ping are binary masks in uncompressed 8-bit
   planes (29–860×); re-encoding them as 1-bit PNG adds under 1 % on top, so it is not worth the format change. **The
-  pass is running** since 2026-10-28 10:20 (single-threaded under `nice`/`ionice`; log
-  `/HDD2T/underwater_data/datasets/v0.2_recompress.log`): 3.69× on the first 18 scenarios, 0 failures, ETA around
-  midnight. Still open after it: the final size and ratio in a follow-up commit, and dropping the soft shares if
-  unused.
+  pass ran** 2026-10-28 10:20–22:54, single-threaded under `nice`/`ionice`: **400/400 scenarios, 0 failures,
+  216.5 → 58.4 GB (3.71×, 6.02 → 1.62 MB per ping), 158 GB freed**, and the loader reads the result unchanged
+  (36 000 pings, float16 `polar_db`, single-IDAT PNGs, `tests/test_dataset.py`). Still open: dropping the soft
+  shares if unused.
 - Leak flow driving the plume flow field while it changes (Known gaps).
 - Scatterer sampling on the GPU (the other half of "faster setup").
 - Calibrate against real data first where it exists (Real-data validation); the UNVERIFIED table in
@@ -353,15 +376,14 @@ Done on 2026-10-28:
    subscriber and its image, loopback then Ethernet with latency, rate and drop numbers.
 4. **M8a** the ROV platform, then **M8b** the closed loop, then **M9** large scenes with localized physics.
 
-Running in the background since 2026-10-28 10:20: the recompression pass over v0.2 (3.69× so far, ~154 GB freed, ~13 h
-single-threaded, ETA around midnight; log `/HDD2T/underwater_data/datasets/v0.2_recompress.log`). It needs no
-attention beyond a follow-up commit with the final size and ratio. Deferred, pick up when convenient: the remaining
+The recompression pass over v0.2 finished on 2026-10-28 at 22:54: 400/400 scenarios, 0 failures, 216.5 → 58.4 GB
+(3.71×), 158 GB freed, and nothing left to do about it. Deferred, pick up when convenient: the remaining
 "Dataset v0.2 → Open" items before a v0.3.
 
 Environment notes: `~/underwater_data/real` is a symlink to `/HDD2T/underwater_data/real` (the 6.8 GB of DeeperSense
 and UATD data, intact); the GPU is otherwise free; the f1tenth telegram bot holds 2 GB of VRAM permanently.
-`/HDD2T` has 1.5 TB free and reads cold at 186 MB/s; the root disk is at 93 % (32 GB free), so nothing large goes
-outside `/HDD2T`.
+`/HDD2T` has 1.6 TB free (136 GB used after the recompression) and reads cold at 186 MB/s; the root disk is at 93 %
+(31 GB free), so nothing large goes outside `/HDD2T`.
 
 ## For the next session
 - `docs/validation.md` records what M1–M3 and M5 checked, calibrated and measured.
