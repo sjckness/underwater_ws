@@ -104,3 +104,86 @@ def test_walls_keep_their_own_roughness_without_the_coherent_term():
     mats = geometry.surface_materials(cfg)
     assert mats["wall:x0"]["rms_height_m"] == pytest.approx(0.004)
     assert mats["wall:x0"]["rms_slope"] == pytest.approx(np.sqrt(2.0) * 0.004 / 0.01)
+
+
+# --------------------------------------------------------------------------- bottom raycast (the DVL's)
+
+def _brute_force(scene, o, d):
+    """The same query with no optimisation at all: bisection on the height field, every triangle tested."""
+    o, d = np.asarray(o, float), np.asarray(d, float) / np.linalg.norm(d)
+    best = np.inf
+    if d[2] < 0 and o[2] > scene.sand.height(o[0], o[1]):
+        lo, hi = 0.0, o[2] / -d[2]
+        for _ in range(80):
+            m = 0.5 * (lo + hi)
+            q = o + m * d
+            lo, hi = (m, hi) if q[2] - float(scene.sand.height(q[0], q[1])) > 0 else (lo, m)
+        p = o + 0.5 * (lo + hi) * d
+        if 0.0 <= p[0] <= scene.size[0] and 0.0 <= p[1] <= scene.size[1]:
+            best = 0.5 * (lo + hi)
+    for m in scene.meshes:
+        if m.role in scene.occluder_roles and m.role != "sand" and len(m.faces):
+            t, _ = geometry._ray_triangles(o, d, m.points[m.faces].astype(float), np.inf)
+            best = min(best, t)
+    return best
+
+
+def _beams(tilt_deg=22.5, azimuths=(45.0, 135.0, 225.0, 315.0)):
+    th = np.radians(tilt_deg)
+    az = np.radians(np.asarray(azimuths, float))
+    return np.stack([np.sin(th) * np.cos(az), np.sin(th) * np.sin(az), np.full(len(az), -np.cos(th))], 1)
+
+
+def test_ray_bottom_matches_a_brute_force_query(scene):
+    """The AABB rejection and the Newton solve are optimisations: they must change nothing."""
+    rng = np.random.default_rng(11)
+    L, W = scene.size[:2]
+    for _ in range(25):
+        o = np.array([rng.uniform(0.3, L - 0.3), rng.uniform(0.3, W - 0.3), rng.uniform(0.6, 1.6)])
+        dirs = _beams()
+        t, _, _ = geometry.ray_bottom(scene, o, dirs)
+        ref = np.array([_brute_force(scene, o, d) for d in dirs])
+        both = np.isfinite(t) & np.isfinite(ref)
+        assert np.array_equal(np.isfinite(t), np.isfinite(ref))
+        assert np.max(np.abs(t[both] - ref[both])) < 1e-9
+
+
+def test_ray_bottom_normals_are_unit_and_face_the_ray(scene):
+    o = np.array([1.5, 1.5, 1.3])
+    dirs = _beams()
+    t, n, roles = geometry.ray_bottom(scene, o, dirs)
+    got = np.isfinite(t)
+    assert got.any()
+    assert np.allclose(np.linalg.norm(n[got], axis=1), 1.0)
+    assert np.all(np.einsum("ij,ij->i", n[got], dirs[got]) < 0)      # the surface faces the beam
+    assert all(r in (None, "sand", "rock", "pipe", "flange", "support") for r in roles)
+
+
+def test_ray_bottom_normal_is_the_analytic_sand_normal(scene):
+    """Not the 1 cm occlusion mesh's faceted one: the incidence angle drives the DVL's beam quality."""
+    o = np.array([1.5, 1.5, 1.3])
+    dirs = _beams()
+    t, n, roles = geometry.ray_bottom(scene, o, dirs)
+    for i, role in enumerate(roles):
+        if role == "sand":
+            p = o + t[i] * dirs[i]
+            assert np.allclose(n[i], scene.sand.normal(p[0], p[1]))
+
+
+def test_ray_bottom_has_no_hit_where_there_is_no_bottom(scene):
+    o = np.array([1.5, 1.5, 1.3])
+    up = geometry.ray_bottom(scene, o, np.array([[0.0, 0.0, 1.0], [0.3, 0.0, 0.2]]))[0]
+    assert not np.isfinite(up).any()                                 # nothing above: no surface occluder
+    under = geometry.ray_bottom(scene, np.array([1.5, 1.5, 0.05]), _beams())[0]
+    assert not np.isfinite(under).any()                              # inside the sand
+    out = geometry.ray_bottom(scene, np.array([2.985, 1.5, 1.0]), np.array([[0.38, 0.0, -0.92]]))[0]
+    assert not np.isfinite(out).any()                                # leaves the footprint; walls do not occlude
+
+
+def test_ray_bottom_sees_the_same_geometry_as_the_sonar(scene):
+    """Every triangle it tests comes from Scene.occluders(), minus the sand it solves analytically."""
+    parts = geometry._bottom_parts(scene)
+    n_tri = sum(len(t) for t in parts["tri"])
+    sand = sum(len(m.faces) for m in scene.meshes if m.role == "sand")
+    assert n_tri + sand == len(scene.occluders()[1])
+    assert "wall" not in parts["role"]
