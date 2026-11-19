@@ -25,6 +25,8 @@ On the host, `pytest` runs the same tests without Warp (pure Python/numpy); the 
 `python -m uw test --isaac` also runs `tests/isaac/` (starts the Kit app, about a minute): the in-Isaac sonar gives
 bit-identical pings to `sonar-only` for the same config and seed.
 
+The tests that need ROS 2 (`ros/dvl_relay`, the host-side ROS message tests) run on the host with `pytest tests`, which has ROS 2 Jazzy and `marine_acoustic_msgs`; `python -m uw test` in the container skips them, because its rclpy lacks that package.
+
 Tools (run with `python -m uw py`): `tools/plume_preview.py` (bubble plume, both pipe presets), `tools/sonar_preview.py` (sonar images, static and with the plume, focused and unfocused, timing; `--video N`: an H.264 MP4 of N pings with axes in metres, the pose, the outlines of the plume labels and a side view of the tank), `tools/compare_real.py` (speckle, sidelobes, blind zone, TVG profile of a recording). `tools/dvl_dr_offline.py` runs the DVL and its dead reckoning against the truth with no Isaac, no ROS and no GPU, and `tools/dvl_drift.py` (host, ROS 2 sourced) does the same on the live chain, recording the estimate and the truth on their two domains; both report the drift as a percentage of distance travelled. On the host: `python3 tools/gpu_mem.py OUT.json` samples the peak GPU memory of the running `uw` processes (nvidia-smi) until Ctrl-C. What the models were checked against, and where they disagree: [docs/validation.md](docs/validation.md).
 
 The first `python -m uw test` installs pytest 7.4.4 (the host's version) into `~/.cache/uw_pydeps`, which needs network
