@@ -3,15 +3,22 @@
 # places relative to each other, centred across the 5 m width.
 # Enabled at M2: adaptive scatterer spacing passes the speckle test at 4-6 m (docs/validation.md); fixed 2 mm
 # spacing would need about 16.5 M scatterers here. tank.yaml sets the same keys.
+scene:
+  name: basin
+
 tank:
   size: [8.0, 5.0, 4.0]
   water_level: 3.9
 
 pipe:
+  x: 1.65
   flanges_at: [1.55, 3.40]
 
 leak:
   position_along: 2.45
+
+plume:
+  warmup_s: 12.0
 
 lights:
   lamps:

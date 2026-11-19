@@ -536,7 +536,8 @@ class BubbleSim:
         self.step(seconds)
 
     def snapshot(self) -> dict:
-        """Alive bubbles on the host: pos (N,3), radius (N,), vel (N,3), age (N,)."""
+        """Alive bubbles on the host: pos (N,3), radius (N,), vel (N,3), age (N,), id (N,): the pool slot, stable for
+        a bubble's lifetime (a slot is reused after the bubble bursts or leaves; age restarts at 0 then)."""
         alive = self.alive.numpy().astype(bool)
         return {"pos": self.pos.numpy()[alive], "radius": self.r.numpy()[alive], "vel": self.vel.numpy()[alive],
-                "age": self.age.numpy()[alive]}
+                "age": self.age.numpy()[alive], "id": np.flatnonzero(alive).astype(np.uint32)}

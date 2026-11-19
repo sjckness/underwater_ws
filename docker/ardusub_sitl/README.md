@@ -56,7 +56,7 @@ The equivalent `docker run` (what `run.bat up` executes):
 ```bat
 docker run -d --name uw-ardusub --restart no --init --cap-drop ALL --security-opt no-new-privileges ^
   -e PHYSICS_HOST=host.docker.internal -e MAVLINK_OUT=udpclient:192.168.200.10:14550 ^
-  -v "F:\users\andreas steffens\work\isaac_hil\underwater_ws\docker\ardusub_sitl\params:/params:ro" ^
+  -v "%cd%\docker\ardusub_sitl\params:/params:ro" ^
   uw-ardusub:4.5.7
 ```
 Other environment variables: `HOME_LOC` (lat,lon,alt,heading), `SPEEDUP`, `PARAM_FILES`, `WIPE`. Extra arguments after the image
@@ -78,5 +78,12 @@ Checked on the work machine (no Thor): stub + container + a loopback MAVLink lis
 ## Known limits
 - The stub is not a vehicle: thruster PWM is counted, never integrated. The ROV model belongs to the Isaac side.
 - ArduSub's GUIDED needs a position estimate; with the stub's fixed pose that may be refused. `thor_mavros_test.py --mode ALT_HOLD`
-  (RC override) works without one. Choosing the real position source (simulated GPS, vision pose, DVL) is an M8a decision.
+  (RC override) works without one. The position source is decided in principle by M8c: a **simulated DVL is not ground
+  truth**, so unlike a simulated GPS or a vision pose it can aid the EKF without making the estimate circular
+  (`docs/dvl.md`). Feeding it in as `EK3_SRC1_VELXY 6` is not done yet.
+- `params/hil.parm` now also takes ArduSub off the truth AHRS (`AHRS_EKF_TYPE 3`, `EK3_SRC1_*` sources), so the attitude
+  and depth MAVROS reports are estimated from SITL's own synthetic noisy IMU, baro and compass. The dead reckoning of
+  `ros/dvl_dr` depends on it. **Revert with one line** if EKF3 misbehaves: `AHRS_EKF_TYPE 10`.
+- MAVROS is version-controlled in `ros/mavros_rov1/` and namespaced `/rov1/mavros/**`; the `output/hil/thor_mavros_*`
+  copies are superseded.
 - Clock: SITL time follows the physics' timestamps. If Isaac runs at RTF 0.85, MAVLink (heartbeats, telemetry) runs at 0.85 in wall time.

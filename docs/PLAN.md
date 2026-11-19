@@ -6,7 +6,9 @@
 > M3.5 mobile sonar; M5 dataset sweeps with datasets v0.1 and v0.2; checks in `docs/validation.md`). Real-data
 > validation is adopted for the two public datasets that exist (`ab7243b`) and blocked on a real Oculus tank
 > recording for the rest; M6 is deferred on that. **Current main track: M7, ROS 2 HIL over Ethernet**, whose step 1
-> (`docs/ros_hil.md`) also carries the M8a vehicle design. M4 (camera underwater model) is unscheduled behind it.
+> (`docs/ros_hil.md`) also carries the M8a vehicle design. **M8c (DVL and dead reckoning,
+> `docs/dvl.md`) is built and host-tested; it is unverified on hardware, and its SITL parameter change
+> is the step to watch.** M4 (camera underwater model) is unscheduled behind it.
 > Order of work: "Where this session stopped".
 > Runs on **linus** for now.
 
@@ -195,6 +197,27 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
      scripting. Everything above that level is **ROS 2**. Evaluate both bridges before choosing: **MAVROS**
      (mature, Sub-aware) and ArduPilot's **native DDS/microROS** backend (fewer hops, but its Sub support needs
      checking). The result of that evaluation goes in `docs/ros_hil.md`.
+- **M8c Navigation sensing and dead reckoning (DVL)**: a four-beam Water Linked DVL A50 with bottom lock,
+  published as the device's own report and relayed into `marine_acoustic_msgs/Dvl`, feeding a
+  `robot_localization` EKF together with the autopilot's IMU and baro. Built: `uw/rov/dvl.py`,
+  `geometry.ray_bottom`, `ros/dvl_relay`, `ros/dvl_dr`, `ros/mavros_rov1`, `tools/dvl_drift.py`, and
+  `docs/dvl.md`. It is what makes `rov1/odom` stop being a static identity (`docs/topic_map.md` §2).
+  1. **The failure modes are the product**: loss of lock out of the 0.05-50 m envelope, a beam on the pipe
+     crown or past a wall, degradation with the incidence angle over soft bottom, a scale factor fixed per
+     run, a slow bias and per-beam noise. Without them a DVL derived from the true state is ground truth
+     wearing a sensor's name (`docs/ros_hil.md` §2.5).
+  2. **No ground truth in the chain.** This forces two changes to SITL, in
+     `docker/ardusub_sitl/params/hil.parm`: `AHRS_EKF_TYPE 3` instead of the truth AHRS, and the
+     `EK3_SRC1_*` sources set to none for position and velocity, because SITL feeds GPS instance 0 from the
+     FDM position whatever `GPS_TYPE` says (§4.2 of `docs/ros_hil.md`, **V**). What is left is what a real
+     BlueROV2 has underwater. Read-only MAVROS telemetry is pulled forward from M8b for this; commanding is
+     not.
+  3. **The number**: `tools/dvl_drift.py` reports position error as a percentage of distance travelled,
+     against `/gt` on its own domain. Heading dominates in a metal tank, so it is swept through SITL's own
+     compass model (`SIM_MAG1_OFS`) rather than faked in the estimator.
+  4. **Still open**: bubble degradation of the beams is deferred (the hook is named in `docs/dvl.md`), the
+     beam azimuths are **UNVERIFIED** (a third-party driver, not Water Linked), and the noise and bias
+     values are not published by anyone and need tuning against a real log.
 - **M8b HIL closed loop**: the Jetson stack commands the sim ROV through ArduSub (guided setpoints or manual
   wrenches), closing the loop sim → sonar/camera → detection → command → sim. Leak-search behaviours on top:
   lawnmower survey, bearing-following approach to a detection, hold-and-inspect at close range. Needs the

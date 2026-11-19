@@ -106,8 +106,11 @@ def test_topic_and_frame_map():
     assert t["polar_db"] == "/gt/polar_db" and t["leak"] == "/gt/leak/pose"
     assert t["plume"] == "/gt/plume/markers" and t["gt_sonar_pose"] == "/gt/sonar_pose"
     assert t["fan"] == "/sim/debug/sonar_fan"
+    # the DVL's raw report is the device's protocol, not something a real vehicle publishes, so it is /sim
+    # plumbing; ros/dvl_relay owns everything under /rov1/sensors/dvl (docs/topic_map.md §8)
+    assert t["dvl_report"] == "/sim/dvl/report"
     assert t["clock"] == "/clock" and t["tf_static"] == "/tf_static"      # global by necessity
-    # exactly four vehicle topics, and no /gt or /sim name hiding inside one
+    # exactly five vehicle topics, and no /gt or /sim name hiding inside one
     vehicle = {k: v for k, v in t.items() if v.startswith("/rov1/")}
     assert set(vehicle) == {"polar", "meta", "image", "image_compressed", "camera_info"}
     # and every ground-truth publisher of RosSink names a /gt topic, since those move to the /gt domain
@@ -115,6 +118,7 @@ def test_topic_and_frame_map():
     assert ros_bridge.topics("rov2")["meta"] == "/rov2/sensors/sonar_fls/meta"
     f = ros_bridge.frames("rov2")
     assert f["world"] == "map" and f["sonar"] == "rov2/sonar_fls" and f["gt_sonar"] == "gt/rov2/sonar_fls"
+    assert f["dvl"] == "rov2/dvl_link" and f["dvl_instrument"] == "rov2/dvl_instrument"
     assert not any(v.startswith("/") for v in f.values())                # tf2 rejects a leading slash
 
 
@@ -185,6 +189,52 @@ def test_sonar_meta_leaks_no_ground_truth():
     assert {"display_db", "tvg_db_per_decade", "absorption_db_per_m", "noise_floor_db"} <= set(meta)
 
 
+def _dvl_report():
+    """One report from the shipped config, as the sim loop makes it."""
+    from uw import config, geometry
+    from uw.rov import dvl as dvl_model
+    cfg = config.load()
+    scene = geometry.build_scene(cfg)
+    d = dvl_model.from_config(cfg, scene)
+    return cfg, d, d.sample(1.5, np.array([1.5, 1.5, 1.3]), np.eye(3), np.array([0.3, -0.1, 0.05]), np.zeros(3))
+
+
+def test_dvl_report_message_is_the_devices_json():
+    """/sim/dvl/report carries the A50's own velocity report verbatim, so the relay downstream of it is the
+    same code whether the bytes came from the simulator or from the device's TCP stream."""
+    pytest.importorskip("std_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
+    from uw import recorder
+    cfg, _, report = _dvl_report()
+    msg = recorder.dvl_message(report, 7, cfg)
+    assert msg.sensor == "dvl" and msg.seq == 7 and msg.stamp == 1.5
+    back = json.loads(json.dumps(msg.meta["dvl"]))
+    assert back["format"] == "json_v3.3" and back["type"] == "velocity"
+    assert len(back["transducers"]) == 4 and [t["id"] for t in back["transducers"]] == [0, 1, 2, 3]
+    assert back["time_of_validity"] == 1500000                      # microseconds of sim time
+    assert np.allclose([back["vx"], back["vy"], back["vz"]], report.velocity)
+
+
+def test_dvl_report_leaks_no_ground_truth():
+    """docs/ros_hil.md §2.5. A DVL derived from the true state is the answer wearing a sensor's name unless
+    the noise, the bottom-lock gate and the quantisation are real. What must never appear is the pose
+    itself, the scene, or any label - the report describes the instrument and what its beams heard."""
+    from uw import recorder
+    cfg, d, report = _dvl_report()
+    text = json.dumps({"report": recorder.dvl_message(report, 0, cfg).meta["dvl"], "meta": d.meta()}).lower()
+    for word in ("pose", "position_tank", "roll", "pitch", "yaw", "leak", "plume", "mask", "sand", "rock",
+                 "truth", "in_view", "label"):
+        assert word not in text, f"{word!r} is on the DVL wire"
+
+
+def test_the_dvl_sink_branch_exists_for_every_sensor_the_loop_publishes():
+    """uw/main.py once published a camera_right Message that RosSink.publish had no branch for, so
+    --sink ros plus stereo raised ValueError out of the loop. Pin that every name is handled."""
+    import inspect
+    src = inspect.getsource(ros_bridge.RosSink.publish)
+    for sensor in ("sonar", "camera", "camera_right", "leak", "plume", "dvl"):
+        assert f'msg.sensor == "{sensor}"' in src, f"RosSink.publish has no branch for {sensor!r}"
+
+
 def test_relay_projected_sonar_image():
     pytest.importorskip("marine_acoustic_msgs.msg", reason="host ROS 2 Jazzy with ros-jazzy-marine-acoustic-msgs")
     from sensor_msgs.msg import Image
@@ -217,3 +267,80 @@ def test_pose_input_roundtrip():
     m.pose.orientation.x, m.pose.orientation.y, m.pose.orientation.z, m.pose.orientation.w = x, y, z, w
     pos, back = ros_bridge.pose_from_msg(m)
     assert np.allclose(pos, [0.4, 1.1, 1.3]) and np.allclose(back, rot)
+
+
+def test_relay_dvl_message():
+    """The relay is the real driver's stand-in, so its Dvl must be the one the driver would publish:
+    FRD frame, piston array, bottom mode, and the CORRECT beam_unit_vec - not ndahn/dvl_a50's, which has
+    sin and cos swapped."""
+    pytest.importorskip("marine_acoustic_msgs.msg", reason="host ROS 2 Jazzy with ros-jazzy-marine-acoustic-msgs")
+    from marine_acoustic_msgs.msg import Dvl
+    sys.path.insert(0, str(WS / "ros" / "dvl_relay"))
+    from dvl_relay.relay import dvl_msg
+
+    _, d, report = _dvl_report()
+    meta, js = d.meta(), report.as_json()
+    out = dvl_msg(js, meta, "rov1/dvl_instrument")
+    assert out.header.frame_id == "rov1/dvl_instrument"
+    assert (out.header.stamp.sec, out.header.stamp.nanosec) == (1, 500000000)
+    assert out.velocity_mode == Dvl.DVL_MODE_BOTTOM and out.dvl_type == Dvl.DVL_TYPE_PISTON
+    assert (out.velocity.x, out.velocity.y, out.velocity.z) == (js["vx"], js["vy"], js["vz"])
+    assert out.num_good_beams == report.num_good_beams
+    assert out.sound_speed == pytest.approx(meta["sound_speed_mps"])
+    u = np.array([[v.x, v.y, v.z] for v in out.beam_unit_vec])
+    assert np.allclose(np.linalg.norm(u, axis=1), 1.0) and np.all(u[:, 2] > 0)     # FRD: beams point down
+    assert np.allclose(np.abs(u), [[0.27060, 0.27060, 0.92388]] * 4, atol=1e-5)
+    assert out.speed_gnd == pytest.approx(math.hypot(js["vx"], js["vy"]))
+    assert list(out.range_covar) == [-1.0] * 4 and list(out.beam_velocity_covar) == [-1.0] * 4
+    with pytest.raises(ValueError):
+        dvl_msg({**js, "transducers": js["transducers"][:3]}, meta, "f")
+
+
+def test_relay_twist_is_the_single_frd_to_flu_flip():
+    """REP-103 for the estimator's input, and the covariance rotated with the vector. A sign error here
+    is silent: the filter simply trusts the wrong axes."""
+    pytest.importorskip("geometry_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
+    sys.path.insert(0, str(WS / "ros" / "dvl_relay"))
+    from dvl_relay.relay import twist_msg
+
+    _, _, report = _dvl_report()
+    js = report.as_json()
+    out = twist_msg(js, "rov1/dvl_link")
+    assert out.header.frame_id == "rov1/dvl_link"
+    lin = out.twist.twist.linear
+    assert (lin.x, lin.y, lin.z) == (js["vx"], -js["vy"], -js["vz"])
+    cov = np.asarray(out.twist.covariance).reshape(6, 6)
+    f = np.diag([1.0, -1.0, -1.0])
+    assert np.allclose(cov[:3, :3], f @ np.asarray(js["covariance"]) @ f)
+    assert np.allclose(np.diag(cov)[3:], -1.0)              # the DVL measures no angular rate
+    # the flip is an involution, so applying the relay twice gets the original vector back
+    again = twist_msg({**js, "vx": lin.x, "vy": lin.y, "vz": lin.z}, "f").twist.twist.linear
+    assert (again.x, again.y, again.z) == (js["vx"], js["vy"], js["vz"])
+
+
+def test_relay_twist_without_a_fix_is_not_actionable():
+    pytest.importorskip("geometry_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
+    sys.path.insert(0, str(WS / "ros" / "dvl_relay"))
+    from dvl_relay.relay import twist_msg
+
+    _, _, report = _dvl_report()
+    js = {**report.as_json(), "velocity_valid": False}
+    cov = np.asarray(twist_msg(js, "f").twist.covariance).reshape(6, 6)
+    assert np.all(np.diag(cov)[:3] >= 1e6), "a lost bottom lock must not look like a good measurement"
+
+
+def test_relay_range_reports_no_return_as_infinity():
+    pytest.importorskip("sensor_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
+    from sensor_msgs.msg import Range
+    sys.path.insert(0, str(WS / "ros" / "dvl_relay"))
+    from dvl_relay.relay import range_msg
+
+    _, d, report = _dvl_report()
+    meta, js = d.meta(), report.as_json()
+    out = range_msg(js, meta, "rov1/dvl_link")
+    assert out.radiation_type == Range.ULTRASOUND
+    assert out.min_range == pytest.approx(meta["min_altitude_m"])
+    assert out.max_range == pytest.approx(meta["max_altitude_m"])
+    assert out.range == pytest.approx(js["altitude"])
+    assert out.field_of_view == pytest.approx(math.radians(meta["beam_width_deg"]))
+    assert math.isinf(range_msg({**js, "velocity_valid": False}, meta, "f").range)

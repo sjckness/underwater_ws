@@ -112,10 +112,26 @@ def static_frames(cfg: dict) -> list:
     /gt/sonar_pose and /gt/tf instead, so tank -> oculus does not resolve until an estimator publishes it. The
     camera is expressed relative to the sonar whether the sonar moves or not: both are payload on the same rig,
     and only their relative offset is not ground truth."""
-    from .geometry import rot_rpy_deg, sonar_rotation
-    from .ros_bridge import R_SONAR_PROJECTED, frames
+    from .geometry import body_rotation, rot_rpy_deg, sonar_rotation
+    from .ros_bridge import R_DVL_INSTRUMENT, R_SONAR_PROJECTED, frames
+    from .rov import frames as rov_frames
     FRAMES = frames(get(cfg, "ros.vehicle"))
     out = [(FRAMES["sonar"], FRAMES["sonar_projected"], R_SONAR_PROJECTED, (0.0, 0.0, 0.0))]
+    if get(cfg, "dvl.enabled"):
+        # the DVL is bolted to the body, so its mount is given in ArduPilot FRD; the edge is still
+        # expressed relative to the sonar, for the same reason the camera's is: payload on one rig, and
+        # only the relative offset is not ground truth. uw.rov.frames is the only converter.
+        m = get(cfg, "dvl.mount")
+        r_frd = np.asarray(m["position_frd_m"], float)
+        rot_dvl_frd = rov_frames.rot_from_rpy_deg([float(m["roll_deg"]), float(m["pitch_deg"]),
+                                                  -float(m["rotation_offset_deg"])])
+        flip = np.diag([1.0, -1.0, -1.0])            # an FRD->FRD rotation as its FLU->FLU equivalent
+        rot_dvl_flu = flip @ rot_dvl_frd @ flip
+        b_rot, s_rot = body_rotation(cfg), sonar_rotation(cfg)
+        offset = np.asarray(get(cfg, "vehicle.body.offset"), float)      # body centre from the sonar, body FLU
+        out.append((FRAMES["sonar"], FRAMES["dvl"], s_rot.T @ b_rot @ rot_dvl_flu,
+                    s_rot.T @ b_rot @ (offset + rov_frames.vec_flu_frd(r_frd))))
+        out.append((FRAMES["dvl"], FRAMES["dvl_instrument"], R_DVL_INSTRUMENT, (0.0, 0.0, 0.0)))
     if get(cfg, "camera.enabled"):
         cam_rot, cam_pos = rot_rpy_deg(get(cfg, "camera.rpy_deg")), np.asarray(get(cfg, "camera.position"), float)
         s_rot, s_pos = sonar_rotation(cfg), np.asarray(get(cfg, "sonar.position"), float)
@@ -147,6 +163,13 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
     if get(cfg, "sonar.pose_source") == "ros":
         from .ros_bridge import RosPose
         motion = RosPose(motion, get(cfg, "sonar.ros_pose_topic"))
+    elif get(cfg, "sonar.pose_source") == "ardusub":
+        from .physics_udp import ArduSubPose
+        motion = ArduSubPose(cfg)              # binds sim.physics_port now: a busy port fails the setup, loudly
+    from .physics_udp import mount as sonar_mount
+    from .rov import dvl as dvl_model
+    dvl = dvl_model.from_config(cfg, scene)    # None when dvl.enabled is false
+    dvl_motion = None if dvl is None else dvl_model.BodyMotion(motion, *sonar_mount(cfg))
     stage = omni.usd.get_context().get_stage()
     info = usd_scene.build(stage, cfg, scene)
     n_vert = usd_scene.check_geometry(stage, scene, son.mesh.points.numpy(), son.mesh.indices.numpy())
@@ -162,12 +185,16 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
     timeline.play()
     timeline.commit()
     app.update()
-    camera = None
+    camera = camera_right = None
     if info.camera and not args.no_camera:
         import omni.replicator.core as rep
         rp = rep.create.render_product(info.camera, info.camera_resolution, name="uw_camera")
         camera = rep.AnnotatorRegistry.get_annotator("rgb")
         camera.attach([rp])
+        if info.camera_right:                  # stereo: rendered in the same app.update as the left, same sim time
+            rp_r = rep.create.render_product(info.camera_right, info.camera_resolution, name="uw_camera_right")
+            camera_right = rep.AnnotatorRegistry.get_annotator("rgb")
+            camera_right.attach([rp_r])
     overlay = None
     if args.gui:
         from . import gui
@@ -185,7 +212,8 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                                camera_png_level=int(get(cfg, "ros.camera_png_level")),
                                camera_jpeg_quality=int(get(cfg, "ros.camera_jpeg_quality")))
     elif args.sink == "file":
-        sink = sinks.make_sink("file", out_dir=args.out, info={
+        sink = sinks.make_sink("file", out_dir=args.out, compress=bool(get(cfg, "recorder.compress")),
+                               png_level=int(get(cfg, "recorder.png_level")), info={
             "name": args.out, "command": "python -m uw sim " + " ".join(args.argv),
             "config_hash": recorder.config_hash(cfg), "seed": cfg["seed"],
             "labels": {"threshold": son.mask_threshold, **recorder.LABELS}, "config": cfg})
@@ -215,7 +243,11 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
     K = info.camera_K
     stats = Stats()
     count = {"ticks": 0, "pings": 0, "renders": 0, "camera": 0, "camera_pub": 0, "camera_empty": 0,
-             "over_budget": 0}
+             "camera_right": 0, "over_budget": 0, "dvl": 0, "dvl_locked": 0}
+    recorder_extra = None
+    if args.sink == "file" and get(cfg, "record.enabled"):     # tools/record.py: per-frame truth and poses.csv
+        from .record import FrameRecorder
+        recorder_extra = FrameRecorder(cfg, args.out, sink, sim, motion)
     worst = {"ping_ms": 0.0, "lag_s": 0.0}
     k = pending = 0
     batch = max(1, int(round(1.0 / (rates["ping"] * dt))))      # substeps per ping
@@ -302,6 +334,16 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                     if not live or timers["camera_pub"].due(t_loop):     # ros.camera_hz caps the publish rate
                         sink.publish(sinks.Message("camera", count["camera_pub"], t, images={"rgb": rgb},
                                                    meta={"K": K.tolist()}))
+                        if camera_right is not None:
+                            rgb_r = camera_right.get_data()
+                            if getattr(rgb_r, "size", 0):
+                                sink.publish(sinks.Message("camera_right", count["camera_pub"], t,
+                                                           images={"rgb": np.ascontiguousarray(rgb_r[..., :3])},
+                                                           meta={"K": K.tolist()}))
+                                count["camera_right"] += 1
+                        if recorder_extra is not None:
+                            recorder_extra.frame(count["camera_pub"], t, t_loop,
+                                                 motion.at(t_loop) if motion.moving else None)
                         count["camera_pub"] += 1
                     count["camera"] += 1
                     stats.add("camera_read_publish", (time.perf_counter() - t_e) * 1e3)
@@ -315,6 +357,16 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                 snap = sim.snapshot()
                 sink.publish(sinks.Message("plume", k, t, arrays={"position": snap["pos"],
                                                                    "diameter": 2.0 * snap["radius"]}))
+            if dvl is not None and dvl.due(t_loop):
+                # the DVL owns its own schedule: the report rate falls with the altitude (2-15 Hz), which a
+                # fixed-period RateTimer cannot express without giving up its exactness guarantee
+                t_a = time.perf_counter()
+                p_body, rot_body, v_frd, w_frd = dvl_motion.at(t_loop)
+                report = dvl.sample(t, p_body, rot_body, v_frd, w_frd)
+                sink.publish(recorder.dvl_message(report, count["dvl"], cfg, dvl.meta()))
+                count["dvl"] += 1
+                count["dvl_locked"] += int(report.velocity_valid)
+                stats.add("dvl", (time.perf_counter() - t_a) * 1e3)
             if live and scene.leak is not None and timers["leak"].due(t_loop):
                 sink.publish(sinks.Message("leak", k, t, meta={
                     "position": scene.leak.hole.tolist(), "direction": scene.leak.direction.tolist(),
@@ -373,8 +425,17 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
                    "gpu_used_mib_all_processes": (total - free) / 2 ** 20,
                    "torch_peak_mib": torch.cuda.max_memory_allocated() / 2 ** 20,
                    "render_settings": render_settings_report()}
-        log.info("stopped (%s): sim %.1f s, wall %.1f s, RTF %.2f, %d pings (%d over budget), %d camera frames",
-                 exit_reason, k * dt, wall, summary["rtf"], count["pings"], count["over_budget"], count["camera"])
+        if recorder_extra is not None:
+            summary["record"] = recorder_extra.close()
+        if hasattr(motion, "server"):          # ArduSubPose: the physics thread's health
+            ps = motion.server
+            summary["physics"] = {"packets": ps.packets, "steps": ps.steps, "sim_t_s": ps.state.t,
+                                  "frame_rate_hz": ps.rate_hz, "peer": str(ps.peer), "error": repr(ps.error),
+                                  "bound_activations": ps.vehicle.bound_activations}
+            motion.close()
+        log.info("stopped (%s): sim %.1f s, wall %.1f s, RTF %.2f, %d pings (%d over budget), %d camera frames, "
+                 "%d DVL reports (%d with bottom lock)", exit_reason, k * dt, wall, summary["rtf"], count["pings"],
+                 count["over_budget"], count["camera"], count["dvl"], count["dvl_locked"])
         if args.stats_file:
             with open(args.stats_file, "w") as fh:
                 json.dump(summary, fh, indent=1, default=str)

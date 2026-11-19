@@ -61,6 +61,9 @@ def frames(vehicle: str = VEHICLE) -> dict:
     return {"world": "map", "odom": f"{vehicle}/odom", "body": f"{vehicle}/base_link",
             "sonar": f"{vehicle}/sonar_fls", "sonar_projected": f"{vehicle}/sonar_fls_projected",
             "camera": f"{vehicle}/camera_front", "camera_optical": f"{vehicle}/camera_front_optical",
+            # the DVL twice, as the sonar is: dvl_link is REP-103 FLU, dvl_instrument is the device's own
+            # FRD (z along the beams' axis), which is the frame marine_acoustic_msgs/Dvl declares for itself
+            "dvl": f"{vehicle}/dvl_link", "dvl_instrument": f"{vehicle}/dvl_instrument",
             "gt_sonar": f"gt/{vehicle}/sonar_fls"}
 
 
@@ -82,6 +85,10 @@ TOPIC_TEMPLATES = {
     "plume": "/gt/plume/markers",
     "gt_sonar_pose": "/gt/sonar_pose",
     "gt_tf": "/gt/tf",
+    # the DVL's own protocol, host-local: ros/dvl_relay stands in for the real driver and publishes
+    # /{v}/sensors/dvl/** from it, because marine_acoustic_msgs is not in the container's rclpy (§8)
+    "dvl_report": "/sim/dvl/report",
+    "dvl_meta": "/sim/dvl/meta",                        # latched: the instrument's geometry, for the relay
     "diagnostics": "/sim/diagnostics",                  # RTF and loop health: see RosSink.diagnostics
     "tf_static": "/tf_static",                          # global: one TF tree for the graph
     "clock": "/clock",                                  # global: use_sim_time reads it there
@@ -92,6 +99,9 @@ def topics(vehicle: str = VEHICLE) -> dict:
     return {k: t.format(v=vehicle) for k, t in TOPIC_TEMPLATES.items()}
 # oculus_projected axes (x up, y starboard, z forward) in the oculus frame (x forward, y port, z up): columns
 R_SONAR_PROJECTED = np.array([[0.0, 0.0, 1.0], [0.0, -1.0, 0.0], [1.0, 0.0, 0.0]])
+# dvl_instrument axes (FRD: x forward, y starboard, z down) in dvl_link (FLU): the involution of
+# uw.rov.frames.M_FLU_FRD, the one fixed flip between what the device reports and what REP-103 wants
+R_DVL_INSTRUMENT = np.diag([1.0, -1.0, -1.0])
 
 
 def ensure_rclpy_path() -> None:
@@ -415,6 +425,8 @@ class RosSink(SensorSink):
             "plume": pub(MarkerArray, t["plume"], sensor),
             "gt_sonar_pose": pub(PoseStamped, t["gt_sonar_pose"], gt),
             "gt_tf": pub(TFMessage, t["gt_tf"], _qos({"depth": 100})),
+            "dvl_report": pub(String, t["dvl_report"], _qos({"depth": 10})),
+            "dvl_meta": pub(String, t["dvl_meta"], latched),
             "diagnostics": pub(DiagnosticArray, t["diagnostics"], _qos({"depth": 10})),
             "tf_static": pub(TFMessage, t["tf_static"], latched),
             "clock": pub(Clock, t["clock"], _qos({"depth": 1, "reliability": "best_effort"})),
@@ -439,6 +451,7 @@ class RosSink(SensorSink):
             jpeg_bytes(np.zeros((8, 8, 3), np.uint8))       # install and import now, not at the first frame
         self.plume_max = plume_markers
         self.meta = None
+        self.dvl_meta = None
         self.count = {}
         log.info("ROS 2: node %s on domain %d, vehicle %s%s", node_name, self.domain, vehicle,
                  "" if self.gt_node is None else
@@ -479,6 +492,18 @@ class RosSink(SensorSink):
         elif msg.sensor == "plume":
             self.pub["plume"].publish(plume_markers_msg(t, msg.arrays["position"], msg.arrays["diameter"],
                                                         self.plume_max))
+        elif msg.sensor == "dvl":
+            # the device's own JSON report, nothing added: ros/dvl_relay stands in for the real driver and
+            # publishes /<v>/sensors/dvl/** from it, because marine_acoustic_msgs is not in this rclpy
+            self.pub["dvl_report"].publish(self.msgs["String"](data=json.dumps(msg.meta["dvl"])))
+            instrument = msg.meta.get("instrument")
+            if instrument and instrument != self.dvl_meta:      # latched, so only on change
+                self.pub["dvl_meta"].publish(self.msgs["String"](data=json.dumps(instrument)))
+                self.dvl_meta = instrument
+        elif msg.sensor == "camera_right":
+            # the stereo right eye shares the left camera's intrinsics and rate; it has no topic of its own
+            # yet (docs/topic_map.md has no stereo rows), so publishing it is a no-op rather than a crash
+            pass
         else:
             raise ValueError(f"RosSink: no topic for sensor {msg.sensor!r}")
         self.count[msg.sensor] = self.count.get(msg.sensor, 0) + 1

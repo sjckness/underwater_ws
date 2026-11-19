@@ -1,0 +1,11 @@
+# Scripted trajectory "updown": up and down beside the plume at a fixed distance from the leak, yaw towards it.
+# z sweeps leak_z +- amplitude_m; in room9 the bottom half is below the sand, so the sweep is shifted up (a note in
+# run.json). Mean vertical speed speed_mps, cosine profile, starting at the bottom.
+kind: updown
+distance_m: 2.5                 # horizontal distance from the leak
+bearing_deg: 180.0              # direction leak -> ROV
+amplitude_m: 1.5
+cycles: 3
+speed_mps: 0.3
+wall_margin_m: 1.0
+floor_margin_m: 0.3

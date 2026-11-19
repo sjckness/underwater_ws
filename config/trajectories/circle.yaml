@@ -1,0 +1,12 @@
+# Scripted trajectory "circle" (sonar.pose_source script, sonar.script circle): the ROV circles the leak, yaw always
+# towards it. The leak position comes from the scene (preset), never from here. Durations follow: 2 laps of a
+# 2.5 m circle at 0.3 m/s = 104.7 s; tools/record.py holds the last pose after the end.
+kind: circle
+radius_m: 2.5
+height_above_leak_m: 1.0        # constant altitude above the leak hole
+speed_mps: 0.3                  # along the circle
+laps: 2
+start_bearing_deg: 180.0        # direction leak -> start (180: on the -x side, where the fixed rig is)
+direction: 1                    # +1 counter-clockwise seen from above
+wall_margin_m: 1.0              # body centre >= this + half the footprint diagonal from walls and surface
+floor_margin_m: 0.3             # ... and this + half the body height above the sand

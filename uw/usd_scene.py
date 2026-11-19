@@ -19,7 +19,7 @@ from pxr import Gf, Sdf, Usd, UsdGeom, UsdLux, UsdShade, Vt
 
 from . import water as wat
 from .config import get
-from .geometry import icosphere, rot_rpy_deg, sonar_rotation, surface_materials
+from .geometry import body_rotation, icosphere, rot_rpy_deg, sonar_rotation, surface_materials
 
 WORLD = "/World"
 TANK = f"{WORLD}/tank"
@@ -28,7 +28,10 @@ RIG = f"{WORLD}/rig"                     # sonar, camera and lamps; moves rigidl
 SONAR = f"{RIG}/oculus"
 CAMERA = f"{RIG}/camera"
 CAMERA_OPTICAL = f"{CAMERA}/optical"
+CAMERA_RIGHT = f"{RIG}/camera_right"     # stereo (vehicle.stereo.enabled): the left camera shifted to its right
+CAMERA_RIGHT_OPTICAL = f"{CAMERA_RIGHT}/optical"
 LAMPS = f"{RIG}/lamps"
+VEHICLE = f"{RIG}/vehicle"               # the ROV body (graphics only, vehicle.enabled)
 BUBBLES = f"{WORLD}/plume/bubbles"
 # USD camera axes (x right, y up, looking along -z) in the body frame (x forward, y left, z up): columns
 R_BODY_USDCAM = np.array([[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
@@ -42,6 +45,7 @@ class StageInfo:
     camera: str | None                  # UsdGeom.Camera path
     camera_K: np.ndarray | None         # 3x3 pinhole matrix of the rendered image
     camera_resolution: tuple | None
+    camera_right: str | None = None     # UsdGeom.Camera path of the stereo right camera (same K and resolution)
 
 
 def _matrix(rot: np.ndarray, pos) -> Gf.Matrix4d:
@@ -175,18 +179,47 @@ def build(stage: Usd.Stage, cfg: dict, scene) -> StageInfo:
     hx.AddTranslateOp().Set(Gf.Vec3d(-0.035, 0.0, 0.0))
     hx.AddScaleOp().Set(Gf.Vec3f(0.07, 0.12, 0.09))
     _bind(housing, _material(stage, f"{LOOKS}/sonar_housing", (0.05, 0.05, 0.06), 0.6, 0.2))
+    if get(cfg, "vehicle.enabled"):
+        _vehicle_body(stage, cfg)
     info = StageInfo(meshes=paths, camera=None, camera_K=None, camera_resolution=None)
     if get(cfg, "camera.enabled"):
-        _xform(stage, CAMERA, rot_rpy_deg(get(cfg, "camera.rpy_deg")), get(cfg, "camera.position"))
-        cam = _xform(stage, CAMERA_OPTICAL, R_BODY_USDCAM, kind=UsdGeom.Camera)
         K, (w, h), focal = camera_intrinsics(cfg)
-        cam.CreateProjectionAttr("perspective")
-        cam.CreateFocalLengthAttr(focal)
-        cam.CreateHorizontalApertureAttr(HORIZONTAL_APERTURE_MM)
-        cam.CreateVerticalApertureAttr(HORIZONTAL_APERTURE_MM * h / w)
-        cam.CreateClippingRangeAttr(Gf.Vec2f(0.01, 30.0))
+        cam_rot = rot_rpy_deg(get(cfg, "camera.rpy_deg"))
+        mounts = [(CAMERA, CAMERA_OPTICAL, np.asarray(get(cfg, "camera.position"), float))]
+        if get(cfg, "vehicle.stereo.enabled"):
+            mounts.append((CAMERA_RIGHT, CAMERA_RIGHT_OPTICAL, camera_right_position(cfg)))
+        for body, optical, pos in mounts:
+            _xform(stage, body, cam_rot, pos)
+            cam = _xform(stage, optical, R_BODY_USDCAM, kind=UsdGeom.Camera)
+            cam.CreateProjectionAttr("perspective")
+            cam.CreateFocalLengthAttr(focal)
+            cam.CreateHorizontalApertureAttr(HORIZONTAL_APERTURE_MM)
+            cam.CreateVerticalApertureAttr(HORIZONTAL_APERTURE_MM * h / w)
+            cam.CreateClippingRangeAttr(Gf.Vec2f(0.01, 30.0))
         info.camera, info.camera_K, info.camera_resolution = CAMERA_OPTICAL, K, (w, h)
+        if len(mounts) > 1:
+            info.camera_right = CAMERA_RIGHT_OPTICAL
     return info
+
+
+def camera_right_position(cfg: dict) -> np.ndarray:
+    """The stereo right camera at the configured rig pose: the left camera moved baseline_m along its own -y
+    (body frame x forward, y left), so both share attitude and intrinsics and differ by a pure lateral offset."""
+    rot = rot_rpy_deg(get(cfg, "camera.rpy_deg"))
+    return np.asarray(get(cfg, "camera.position"), float) + rot @ np.array([0.0, -float(get(cfg, "vehicle.stereo.baseline_m")), 0.0])
+
+
+def _vehicle_body(stage, cfg: dict) -> None:
+    """The ROV body as a box under RIG, so set_rig_pose moves it with the sensors. Graphics only: it is not in the
+    scene's meshes, hence not in the Warp occluders, the scatterers or check_geometry (mask_geom keeps its meaning)."""
+    b = get(cfg, "vehicle.body")
+    rot = body_rotation(cfg)
+    pos = np.asarray(get(cfg, "sonar.position"), float) + rot @ np.asarray(b["offset"], float)
+    _xform(stage, VEHICLE, rot, pos)
+    box = UsdGeom.Cube.Define(stage, f"{VEHICLE}/body")
+    box.CreateSizeAttr(1.0)
+    UsdGeom.Xformable(box).AddScaleOp().Set(Gf.Vec3f(*map(float, b["size"])))
+    _bind(box, _material(stage, f"{LOOKS}/vehicle_body", tuple(map(float, b["color"])), 0.6, 0.0))
 
 
 def _lights(stage, cfg: dict) -> None:

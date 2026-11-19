@@ -4,6 +4,9 @@
 
 seed: 7                         # one seed for everything procedural (sand, rocks, scatterer phases)
 
+scene:
+  name: tank                    # metadata only, recorded with the config; the size preset sets it (room9: room_9)
+
 tank:
   size: [3.0, 3.0, 3.0]         # inner dimensions [m]
   wall_thickness: 0.05
@@ -161,6 +164,7 @@ sonar:
     hold_s: 3.0                 #   for hold_s, then the next (several fixed views of one scene; static_cache on_motion)
   static_cache_motion: {position_m: 0.005, angle_deg: 0.25}   # static_cache on_motion: recompute beyond these
   ros_pose_topic: /sim/cmd/rov1/pose  # pose_source ros: geometry_msgs/PoseStamped of the sonar in the map frame
+  script: null                  # pose_source script: a trajectory in config/trajectories (circle | updown | combined)
   modes:                        # VERIFIED (datasheet): frequency, fan (h x v), beams, angular resolution (-3 dB beam
                                 # width), range resolution, min range, max range, max update rate
     lf: {frequency_hz: 750000.0, fov_h_deg: 130.0, fov_v_deg: 20.0, beams: 512, beamwidth_h_deg: 1.0,
@@ -211,6 +215,13 @@ sonar:
   scatterer_spacing: 0.002      # surface sampling [m] for the acoustic scatterers (fixed in the world: frozen speckle);
                                 # the base: scatterer_spacing_mode adaptive (profile) coarsens it far from the sonar
 
+record:                         # tools/record.py runs (--sink file): per-frame ground truth and poses.csv (uw/record.py)
+  enabled: false
+  gt_max_range_m: null          # keep only bubbles within this distance of the sonar or the left camera; null: all
+  mb_per_frame: {sonar: 1.9, camera: 0.7, gt: 3.2}   # disk estimate per 10 Hz frame [MB] (record.py refuses to start
+                                #   below 3x the estimate free). Measured 2026-11-10, 20 s room9 combined: sonar 1.89,
+                                #   camera 0.67 per eye (PNG level 1), gt 3.11 (all ~150k alive bubbles, the pool cap)
+
 recorder:                       # python -m uw sonar-only datasets
   fan_png: false                # also write the Cartesian fan image per ping (derivable from the polar one)
   compress: true                # npz: zlib (savez_compressed) | false: savez, bigger but much faster to write.
@@ -235,6 +246,9 @@ sim:                            # python -m uw sim: the Isaac app
   overlay_returns_min: 170      #   pixels (0-255) from this value up are drawn (at most 6000 points)
   view: side45                  # GUI viewport camera at start: side45 | top | sonar
   viewport_resolution: [1280, 720]   # GUI viewport render size (not the window's: a maximised window costs GPU time)
+  physics_port: null            # ArduSub SITL JSON physics (uw/physics_udp.py) on UDP 127.0.0.1:<port>, for
+                                #   sonar.pose_source ardusub; null: off. 9002 is SITL's; stop tools/stub_physics.py
+  physics_rtf: 1.0              # pace the physics timestamps (= SITL's clock, lockstep) to the wall clock; 0: unpaced
 
 ros:                            # SensorSink "ros" (uw/ros_bridge.py); the domain is UW_ROS_DOMAIN_ID (default 73).
                                 # The topic and frame map is docs/topic_map.md; uw/ros_bridge.py names them once
@@ -260,6 +274,21 @@ ros:                            # SensorSink "ros" (uw/ros_bridge.py); the domai
                                 #   convenience, not data. Off by default (docs/ros_hil.md §2.1)
   fan_width: 1024               # /sim/debug/sonar_fan (and recorder fan PNG) width [px]
 
+vehicle:                        # the ROV (M8a). Graphics only: a box in the RTX scene (camera, GUI), never an acoustic
+                                #   occluder or scatterer, so mask_geom keeps its meaning (docs/ros_hil.md §6)
+  enabled: true
+  body:
+    size: [0.457, 0.338, 0.254] # BlueROV2 frame L x W x H [m]. TO BE VERIFIED (BlueRobotics spec sheet): from memory
+    offset: [-0.26, 0.0, -0.10] # body centre relative to the sonar's acoustic centre [m], in the body frame (FLU, level,
+                                #   the sonar's yaw): behind and below the sonar, camera and lamps, out of the camera's
+                                #   view. With the fixed pose at the -x wall the back half pokes through that wall
+    color: [0.08, 0.30, 0.65]   # BlueROV2 blue (visual only)
+  params: config/rov_bluerov2_vectored.yaml   # dynamics (sonar.pose_source ardusub): 6 thrusters, FRAME_CONFIG 1
+  home_tank: null               # [x, y] of the SITL home on the free surface (NED origin); null: the start point
+  stereo:                       # a right camera beside camera (rig/camera_right): same intrinsics, same attitude,
+    enabled: false              #   offset by baseline_m along the left camera's -y (to its right). Off by default
+    baseline_m: 0.12            # TO BE VERIFIED: no stereo rig is specified yet (common ROV stereo pairs: 0.06-0.2 m)
+
 camera:
   enabled: true
   position: [0.10, 1.50, 0.95]  # just below the sonar
@@ -267,3 +296,49 @@ camera:
   resolution: [1280, 720]
   hfov_deg: 80.0                # in-water field of view (flat port)
   rate_hz: 10.0
+
+dvl:                            # Water Linked DVL A50: 4-beam convex Janus bottom track (uw/rov/dvl.py). The model
+                                #   emits the device's own velocity-and-transducer report; ros/dvl_relay turns it into
+                                #   marine_acoustic_msgs/Dvl, as the real driver would. See docs/dvl.md
+  enabled: true
+  model: Water Linked DVL A50   # VERIFIED: on docs.waterlinked.com/dvl (datasheet, JSON protocol, axes, A50 page);
+                                #   UNVERIFIED: assumed, not published by Water Linked
+  version: standard             # standard | performance. The Performance tier is a software licence on the same
+                                #   hardware, so here it is only the scale-factor sigma below. VERIFIED
+  mount:                        # on the vehicle body, in ArduPilot FRD (x forward, y right, z down), like the
+                                #   thruster positions of config/rov_bluerov2_vectored.yaml
+    position_frd_m: [0.0, 0.0, 0.12]  # the lever arm r: v_dvl = v_body + omega x r. UNVERIFIED: no DVL is mounted
+                                #   on the real vehicle yet, this is a plausible place under the hull
+    roll_deg: 0.0               # the instrument's attitude on the body; 0/0/0 looks straight down
+    pitch_deg: 0.0
+    rotation_offset_deg: 0.0    # Water Linked's mounting_rotation_offset: clockwise about z, from the vehicle's
+                                #   forward axis to the DVL's (the status LED marks the DVL's +x). VERIFIED
+  beams:
+    tilt_deg: 22.5              # beam axis from the vertical. VERIFIED (the A50 page's line-of-sight drawing; the
+                                #   65 deg obstruction-free cone it asks for is consistent with 22.5 plus margin)
+    azimuths_deg: [45.0, 135.0, 225.0, 315.0]   # about the DVL's +x. UNVERIFIED: from the beam_unit_vec hardcoded in
+                                #   the ndahn/dvl_a50 driver, not from Water Linked; that driver's own vectors have
+                                #   sin and cos swapped (they encode 22.5 deg above the horizontal), so only the
+                                #   azimuths are taken from it, never the vectors
+    width_deg: 4.4              # half-power beam width. VERIFIED (A50 page)
+  min_altitude_m: 0.05          # VERIFIED (datasheet). The end of the envelope the tank actually reaches
+  max_altitude_m: 50.0          # VERIFIED. Out of reach in every size preset (room9 tops out near 8.6 m)
+  max_speed_mps: 3.75           # VERIFIED; above it the device loses bottom lock
+  resolution_mps: 0.0001        # 0.1 mm/s velocity resolution, quantised at the output. VERIFIED
+  rate_hz: [2.0, 15.0]          # min, max of the velocity report; the rate falls as the altitude grows. VERIFIED
+                                #   (JSON protocol: "2-15 Hz depending on altitude"; the datasheet says 4-15)
+  rate_altitude_m: 3.0          # altitude at which the rate has fallen to the minimum, linear below it. UNVERIFIED:
+                                #   only the envelope is published, not its shape
+  rate_jitter: 0.05             # fraction of the period, uniform, seeded. UNVERIFIED
+  scale_sigma:                  # long-term accuracy read as a velocity scale-factor std, drawn once per run.
+    standard: 0.0101            #   +-1.01 % and +-0.1 % are VERIFIED as accuracy figures, UNVERIFIED as this
+    performance: 0.001          #   interpretation of them
+  beam_noise_mps: 0.002         # per-beam white noise std. UNVERIFIED: not published anywhere; tune against a log
+  bias_sigma_mps: 0.001         # per-beam slow bias std. UNVERIFIED
+  bias_time_s: 120.0            # its correlation time. UNVERIFIED
+  rssi_ref_dbm: -30.0           # received level of unit backscatter at 1 m: sets where echoes land inside the A50's
+                                #   rssi range. UNVERIFIED
+  nsd_dbm: -95.0                # noise spectral density reported per beam. UNVERIFIED
+  snr_threshold_db: 6.0         # a beam locks above this rssi - nsd. UNVERIFIED
+  noise: true                   # switches for tests
+  dropout: true

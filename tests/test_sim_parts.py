@@ -82,8 +82,18 @@ def test_quaternions_and_static_frames():
     cfg = config.load()
     frames = main.static_frames(cfg)
     assert [(p, c) for p, c, *_ in frames] == [("rov1/sonar_fls", "rov1/sonar_fls_projected"),
+                                               ("rov1/sonar_fls", "rov1/dvl_link"),
+                                               ("rov1/dvl_link", "rov1/dvl_instrument"),
                                                ("rov1/sonar_fls", "rov1/camera_front"),
                                                ("rov1/camera_front", "rov1/camera_front_optical")]
+    assert [(p, c) for p, c, *_ in main.static_frames(config.load(overrides=["dvl.enabled=false"]))] == [
+        ("rov1/sonar_fls", "rov1/sonar_fls_projected"), ("rov1/sonar_fls", "rov1/camera_front"),
+        ("rov1/camera_front", "rov1/camera_front_optical")]
+    # dvl_instrument is the device's FRD inside the FLU dvl_link: the one fixed flip, and its own involution
+    assert np.allclose(ros_bridge.R_DVL_INSTRUMENT @ [1, 0, 0], [1, 0, 0])      # x forward in both
+    assert np.allclose(ros_bridge.R_DVL_INSTRUMENT @ [0, 1, 0], [0, -1, 0])     # its y is starboard
+    assert np.allclose(ros_bridge.R_DVL_INSTRUMENT @ [0, 0, 1], [0, 0, -1])     # its z is down
+    assert np.allclose(ros_bridge.R_DVL_INSTRUMENT @ ros_bridge.R_DVL_INSTRUMENT, np.eye(3))
 
 
 def test_static_frames_carry_no_world_anchored_edge():
@@ -97,3 +107,24 @@ def test_static_frames_carry_no_world_anchored_edge():
     r, x = frames[(f["sonar"], f["camera"])]
     assert np.allclose(son.rot @ r, geometry.rot_rpy_deg(config.get(cfg, "camera.rpy_deg")))
     assert np.allclose(son.position + son.rot @ np.asarray(x), config.get(cfg, "camera.position"))
+
+
+def test_the_dvl_static_edge_matches_the_sensor_model():
+    """The TF edge and uw.rov.dvl must place the acoustic centre in the same spot, or the lever arm the
+    estimator removes is not the one the measurement was taken with."""
+    from uw.rov import dvl as dvl_model
+    cfg = config.load()
+    son = _sonar(cfg)
+    f = ros_bridge.frames(config.get(cfg, "ros.vehicle"))
+    frames = {(p, c): (r, x) for p, c, r, x in main.static_frames(cfg)}
+    rot, trans = frames[(f["sonar"], f["dvl"])]
+    from_tf = son.position + son.rot @ np.asarray(trans)
+    # the same point through the model: the body pose the physics server starts from, plus the mount
+    b_rot = geometry.body_rotation(cfg)
+    body = son.position + b_rot @ np.asarray(config.get(cfg, "vehicle.body.offset"), float)
+    d = dvl_model.from_config(cfg, geometry.build_scene(cfg, full=False))
+    origin, _ = d.geometry_at(body, b_rot)
+    assert np.allclose(from_tf, origin)
+    # and the FLU edge rotation agrees with the instrument rotation, through the one flip
+    flip = np.asarray(ros_bridge.R_DVL_INSTRUMENT)
+    assert np.allclose(son.rot @ rot @ flip, b_rot @ flip @ d.mount.rot_body_to_dvl.T)
