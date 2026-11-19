@@ -300,6 +300,7 @@ def test_relay_twist_is_the_single_frd_to_flu_flip():
     """REP-103 for the estimator's input, and the covariance rotated with the vector. A sign error here
     is silent: the filter simply trusts the wrong axes."""
     pytest.importorskip("geometry_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
+    pytest.importorskip("marine_acoustic_msgs.msg", reason="host ROS 2 Jazzy with ros-jazzy-marine-acoustic-msgs")
     sys.path.insert(0, str(WS / "ros" / "dvl_relay"))
     from dvl_relay.relay import twist_msg
 
@@ -320,6 +321,7 @@ def test_relay_twist_is_the_single_frd_to_flu_flip():
 
 def test_relay_twist_without_a_fix_is_not_actionable():
     pytest.importorskip("geometry_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
+    pytest.importorskip("marine_acoustic_msgs.msg", reason="host ROS 2 Jazzy with ros-jazzy-marine-acoustic-msgs")
     sys.path.insert(0, str(WS / "ros" / "dvl_relay"))
     from dvl_relay.relay import twist_msg
 
@@ -331,6 +333,7 @@ def test_relay_twist_without_a_fix_is_not_actionable():
 
 def test_relay_range_reports_no_return_as_infinity():
     pytest.importorskip("sensor_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
+    pytest.importorskip("marine_acoustic_msgs.msg", reason="host ROS 2 Jazzy with ros-jazzy-marine-acoustic-msgs")
     from sensor_msgs.msg import Range
     sys.path.insert(0, str(WS / "ros" / "dvl_relay"))
     from dvl_relay.relay import range_msg

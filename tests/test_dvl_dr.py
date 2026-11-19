@@ -79,6 +79,7 @@ def test_a_report_without_bottom_lock_is_not_a_measurement():
 
 def test_the_gate_agrees_with_what_the_relay_stamps_on_a_lost_lock():
     pytest.importorskip("geometry_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
+    pytest.importorskip("marine_acoustic_msgs.msg", reason="host ROS 2 Jazzy with ros-jazzy-marine-acoustic-msgs")
     from uw import config, geometry
     from uw.rov import dvl as dvl_model
     sys.path.insert(0, str(WS / "ros" / "dvl_relay"))
