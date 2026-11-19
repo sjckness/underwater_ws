@@ -1,0 +1,51 @@
+{
+  "params": {
+    "use_sim_time": true,
+    "threshold_db": 140.0,
+    "min_area_px": 20,
+    "run_wall_s": 120.0
+  },
+  "meta_received": true,
+  "sonar_in": {
+    "n": 1200,
+    "n_unique": 1200,
+    "sim_span_s": 119.90000958999985,
+    "rate_sim_hz": 9.999999200166881,
+    "period_median_s": 0.10000000800005182,
+    "n_gaps_gt_1p5_median": 0,
+    "est_missing": 0
+  },
+  "detections_published": 1200,
+  "detections_per_frame": {
+    "min": 10,
+    "max": 17,
+    "mean": 11.796666666666667
+  },
+  "sonar_proc_wall_s": {
+    "p50": 0.004484075001528254,
+    "p95": 0.004740630000014789,
+    "max": 0.007022188998234924
+  },
+  "proxy_simclock_at_publish_minus_stamp_s": {
+    "p50": -2.9999682737980038e-09,
+    "p95": -1.999978849198669e-09,
+    "max": -1.999751475523226e-09
+  },
+  "camera_in": {
+    "n": 1200,
+    "n_unique": 1200,
+    "sim_span_s": 119.90000959200006,
+    "rate_sim_hz": 9.999999200000058,
+    "period_median_s": 0.10000000800005182,
+    "n_gaps_gt_1p5_median": 0,
+    "est_missing": 0
+  },
+  "camera_decode_wall_s": {
+    "p50": 0.004991554997104686,
+    "p95": 0.005231099999946309,
+    "max": 0.007407244000205537
+  },
+  "camera_mean_intensity_last": 31.77418185763889,
+  "process_cpu_s": 44.108464999999995,
+  "process_cpu_pct_of_one_core": 36.75108726381366
+}

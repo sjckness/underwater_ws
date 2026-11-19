@@ -1,0 +1,30 @@
+{
+  "use_sim_time_param": true,
+  "clock_type": "1",
+  "clock_type_is_ROS_TIME": true,
+  "ros_time_is_active": true,
+  "n_timer_fires": 31,
+  "run_wall_s": 30.0,
+  "timer_sim_delta_s": {
+    "median": 1.0000000800000635,
+    "min": 1.000000079999836,
+    "max": 1.0000000800000635
+  },
+  "timer_wall_delta_s": {
+    "median": 1.0000061729988374,
+    "min": 0.8816509699972812,
+    "max": 1.1136663969991787
+  },
+  "now_minus_latest_clock_s": {
+    "min": 0.0,
+    "max": 0.016666668000084428
+  },
+  "example_fire": {
+    "now_sim": 1050.000084,
+    "latest_clock": 1050.000084,
+    "system_time": 1794241188.8041775
+  },
+  "sim_elapsed_over_fires_s": 29.000002319999908,
+  "wall_elapsed_over_fires_s": 28.883109184000205,
+  "stamped_header_example_s": 1050.000084
+}
