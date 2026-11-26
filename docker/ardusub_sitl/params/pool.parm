@@ -16,6 +16,14 @@ SYSID_THISMAV 1
 # with "Floating point exception" (2026-11-26).
 SIM_FLOAT_EXCEPT 0
 
+# Depth sensor noise as a Bar30's, not SITL's default. SITL adds SIM_BARn_RND [m] of uniform noise to the altitude
+# before turning it into water pressure, so its default 0.2 is +-20 cm of depth (+-20 mbar, seen 2026-11-26), where
+# a Bar30 (MS5837-30BA) resolves 0.2 mbar (2 mm). With 0.2, ArduSub's ground-pressure calibration at boot caught an
+# error of up to half a metre, and ALT_HOLD chased the noise. (sub-6dof.parm's BARO_RND 0.02 is an older name that
+# 4.5.7 does not have.) Baro 1, the enclosure's, gets the same value.
+SIM_BARO_RND 0.005
+SIM_BAR2_RND 0.005
+
 # One physics step per main-loop step (SITL's own default is 1200 Hz; ArduSub runs at 400): a third of the servo
 # packets for the same dynamics, which keeps the Python physics process light.
 SIM_RATE_HZ 400

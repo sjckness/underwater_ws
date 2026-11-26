@@ -19,6 +19,10 @@
 > **2026-11-26: the pool has a DVL** (`docs/pool.md`, "Il DVL"): the M8c A50 model cast at the pool, behind an
 > emulation of the device's own network side (`uw/rov/a50.py`), so BlueOS's unmodified Water Linked DVL extension
 > feeds ArduSub and POSHOLD holds to 1-3 cm. Flown with Cockpit and a gamepad on linus (BlueOS on a local bridge).
+> **2026-11-26: turbid water and the Work deployment.** `water.turbidity_per_m` (presets turbid/murky) on the camera.
+> The all-on-Work variant is prepared, not yet tried there: compose profile `work` and `hil/win/pool/` (runbook
+> `README.md`, `stack.sh`, `run_pool.bat`). SITL's default baro noise (+-20 cm of depth) was what made ALT_HOLD hunt:
+> at a Bar30's 5 mm it holds 1 cm.
 
 ## Changes in this revision (2026-10-26)
 1. **Bubble scattering**: at 750 kHz (λ ≈ 2 mm) bubbles of 1–3 mm have ka ≈ 3–10, i.e. the transition regime, not ka≫1. Replace `TS = 20 log(a/2)` and `σ_ext = 2πa²` with a high-frequency fluid-sphere model (Anderson, via the Thuraisingham / Ainslie–Leighton approximations), valid across ka. Resonance (Minnaert, a ≈ 4 µm at 750 kHz) is irrelevant for the size range and is dropped.
@@ -265,10 +269,19 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
      DVL extension v1.0.11 runs unmodified next to it (`docker/pool/compose.yaml`: `dvl`, `dvl-gateway`) and sends
      VISION_POSITION_DELTA: POSHOLD holds to 1-3 cm, ArduSub's dead reckoning is 6-7 cm off after 1.1 m.
      `SIM_FLOAT_EXCEPT 0`, because the extension's NaN-by-design EXTERNAL_POSITION_ESTIMATE aborted SITL.
-  6. **Open**: BlueOS in WSL2 (mirrored networking) and Cockpit's WebRTC and gamepad on Work, and the DVL there; the
-     all-on-Work variant; ALT_HOLD limit-cycles by 5-17 cm (T200 dead band against +2 N of buoyancy); the A50's
-     report rate against altitude (only 2-15 Hz is published); validation against logs of the real vehicle in a real
-     pool; MAVLink from BlueOS to the Thor for M8b.
+  6. **Turbidity** (2026-11-26): `water.turbidity_per_m`, a flat particle scattering coefficient on both of the
+     camera model's coefficients, the veiling light pulled towards the particle cloud's colour; presets turbid (0.6/m,
+     ~5.8 m visibility) and murky (1.5/m, ~2.5 m). Not modelled: the lamps' backscatter right in front of the camera.
+  7. **Work deployment** (2026-11-26, prepared, not yet tried there): compose profile `work` (BlueOS and the DVL
+     extension in WSL2's host networking, the extension's gateway alone on the bridge), `hil/win/pool/stack.sh` and a
+     `run_pool.bat` that restarts SITL and configures BlueOS by itself, a runbook for Claude Code on the Work
+     (`hil/win/pool/README.md`). The host-network extension was checked on linus: `pool_smoke.py --dvl` 18/18.
+     SITL's baro noise is now a Bar30's (`SIM_BARn_RND` 0.005): the default +-0.2 m made ALT_HOLD limit-cycle by
+     5-17 cm (it was blamed on the T200 dead band) and once put the boot calibration 0.5 m off; now 1 cm.
+  8. **Open**: the Work run itself (mirrored loopback for the lockstep UDP and the A50's TCP, docker's bridge under
+     mirrored networking, Cockpit's WebRTC and the gamepad there); the A50's report rate against altitude (only
+     2-15 Hz is published); validation against logs of the real vehicle in a real pool; MAVLink from BlueOS to the
+     Thor for M8b.
 - **M10 Baseline leak detector on v0.2**: the dataset exists, so the detector that justifies it comes next; it is
   also what tells us which labels and which v0.3 changes matter.
   - **Baseline**: single-frame segmentation on `mask_geom` (the geometric label, free of sidelobe leakage) from the

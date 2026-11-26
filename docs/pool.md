@@ -32,7 +32,7 @@ Questo file è la guida operativa. Il resto è nel codice:
 - **La fisica gira in un processo separato** e segue l'orologio di parete. SITL, BlueOS e il pilota vedono sempre il tempo reale: se il render rallenta perde fotogrammi, non tempo di simulazione.
 - **SITL resta accanto alla fisica**: il link JSON è un andata-e-ritorno lockstep a 400 Hz, quindi su loopback. Tra le macchine passano solo MAVLink (UDP, leggero) e il video (RTSP su TCP). Vanno bene LAN o Tailscale.
 - **BlueOS su linus.** In rete host BlueOS vuole le porte 80 (UI) e 8000 (ardupilot-manager), entrambe occupate su linus (80 da OnlyOffice).
-  - Sulla Work va in WSL2 con la rete host (profilo `blueos`).
+  - Sulla Work va in WSL2 con la rete host: profilo `work` (tutto sulla Work, con l'estensione DVL) o `blueos` (solo BlueOS, per lo scenario A).
   - Su linus gira in un container non privilegiato su una sua rete bridge, all'indirizzo fisso 172.31.250.2 (profilo `blueos-local`, scenario C).
 - **Perché la board "Manual".** Esiste da BlueOS 1.5.0-beta.3: BlueOS non lancia un autopilota suo e prende il MAVLink da SITL. La board "SITL" delle 1.4 stabili lancerebbe ArduSub dentro BlueOS, lontano dalla fisica.
 
@@ -45,7 +45,7 @@ Questo file è la guida operativa. Il resto è nel codice:
    - Senza questo file la vasca mostra un parallelepipedo delle stesse misure.
 2. **Immagine di ArduSub SITL.** Lancia `docker compose -f docker/pool/compose.yaml build sitl` (circa 3 minuti).
 
-**Sulla Work, per BlueOS:**
+**Sulla Work:** la guida passo per passo è [hil/win/pool/README.md](../hil/win/pool/README.md) (installazione, avvio, verifica, problemi noti). In breve:
 1. Copia `hil/win/pool/wslconfig.example` in `%UserProfile%\.wslconfig`, poi esegui `wsl --shutdown`.
 2. In una distro Ubuntu WSL dedicata, dal repo: `bash hil/win/pool/setup_blueos_wsl.sh`.
    - Abilita systemd e installa Docker Engine, non Docker Desktop: BlueOS vuole la vera rete host.
@@ -71,22 +71,26 @@ python3 tools/pool_blueos_setup.py --blueos http://localhost --rtsp rtsp://<IP d
 
 ### Scenario B: tutto sulla Work
 
-**In WSL:**
-```bash
-docker compose -f docker/pool/compose.yaml build sitl          # la prima volta
-docker compose -f docker/pool/compose.yaml --profile blueos up -d
-python3 tools/pool_blueos_setup.py --blueos http://localhost --rtsp rtsp://127.0.0.1:8654/rov
+Isaac e la fisica nativi su Windows; SITL, mediamtx, BlueOS e l'estensione DVL in WSL2 (profilo `work`). Guida completa: [hil/win/pool/README.md](../hil/win/pool/README.md).
+
+```bat
+hil\win\pool\run_pool.bat --gui
 ```
 
-**In Windows:** `hil\win\pool\run_pool.bat`. Usa il profilo `workstation` (30 fps, riflessi accesi).
+Fa tutto lui:
+- porta su lo stack in WSL (`hil/win/pool/stack.sh up`);
+- riavvia SITL;
+- configura BlueOS e il DVL in background, appena il veicolo c'è;
+- lancia Isaac con il profilo `workstation` (30 fps, riflessi accesi).
 
-Con la rete mirrored di WSL:
-- il `127.0.0.1:9002` di SITL è quello di Windows, dove ascolta la fisica;
-- il `127.0.0.1:8654` di mediamtx è quello dove Isaac pubblica.
+Con la rete mirrored di WSL, il `127.0.0.1` di WSL è quello di Windows:
+- SITL raggiunge la fisica su 9002;
+- l'estensione DVL raggiunge l'A50 emulato su 16171 e 8061, che sulla Work ascolta solo su loopback;
+- Isaac pubblica su mediamtx su 8654.
 
-**Da verificare** al primo avvio (non provato). Se il loopback non passa:
-- `PHYSICS_HOST=<IP di Windows>` per SITL;
-- `--set physics.bind=0.0.0.0` per la fisica.
+**Da verificare** al primo avvio (non provato). Le alternative, senza toccare file in git, sono nella guida, §5:
+- `docker/pool/.env` con `PHYSICS_HOST` e `DVL_HOST`;
+- `--set physics.bind=0.0.0.0` e `--set dvl.device.bind=0.0.0.0`.
 
 ### Scenario C: tutto su linus (Isaac con la GUI, BlueOS locale, Cockpit desktop)
 
@@ -121,7 +125,7 @@ python3 tools/pool_blueos_setup.py --blueos http://127.0.0.1:28080 --rtsp rtsp:/
   - tilt della camera (SERVO9) e luci Lumen (SERVO10).
 
   La simulazione legge tilt e luci dal PWM, come sul ROV vero.
-- **Modi.** MANUAL, STABILIZE e ALT_HOLD (depth hold) funzionano sempre. POSHOLD funziona con il DVL, come sul ROV vero: nello scenario C sì; sulla Work l'estensione DVL non è ancora sistemata (vedi "Da verificare"). Senza DVL l'EKF non ha posizione orizzontale e POSHOLD non si attiva.
+- **Modi.** MANUAL, STABILIZE e ALT_HOLD (depth hold) funzionano sempre. POSHOLD funziona con il DVL, come sul ROV vero: nello scenario C (provato) e nel B (profilo `work`, non ancora provato sulla Work). Senza DVL l'EKF non ha posizione orizzontale e POSHOLD non si attiva.
 - **Acqua torbida.** `python -m uw pool --preset turbid` (visibilità circa 5,8 m) oppure `--preset murky` (circa 2,5 m); per un valore qualsiasi `--set water.turbidity_per_m=X`. Vedi "Torbidità" sotto.
 - **Vista da fuori.** `python -m uw pool --view chase` manda nello stream una camera alle spalle del ROV invece di quella di bordo.
   - Con `--gui` il viewport di Isaac è alle spalle del ROV per default (`--gui-view chase`); lo stream resta quello di bordo.
@@ -177,6 +181,7 @@ Un Water Linked DVL A50 sotto la Heavy, a 0,14 m sotto il baricentro, rivolto in
    - Legge il DVL e manda ad ArduSub `VISION_POSITION_DELTA`, l'altitudine come rangefinder e l'origine EKF.
    - Sul ROV vero raggiunge BlueOS come `host.docker.internal`. Qui al suo posto c'è `dvl-gateway` (un nginx, `docker/pool/dvl_gateway.conf.template`), per due motivi: il BlueOS locale non ha il socket docker per le estensioni, e cable_guy è spento (gestirebbe la rete dell'host), mentre l'estensione lo aspetta all'avvio.
    - Il gateway inoltra mavlink2rest a BlueOS, risponde al posto di cable_guy e serve la pagina dell'estensione su `http://172.31.250.3`.
+   - Sulla Work (profilo `work`) l'estensione gira in rete host accanto a BlueOS (servizio `dvl-host`, pagina su `http://localhost:9001`). Il gateway (`dvl-gateway-host`) resta da solo sulla rete bridge e da lì raggiunge BlueOS su 172.31.250.1. Su linus questa variante è stata provata con BlueOS locale: `pool_smoke.py --dvl` 18/18.
 
 **Lato ArduSub** (`docker/ardusub_sitl/params/pool.parm`): EKF3 con posizione e velocità orizzontali dal DVL (`EK3_SRC1_POSXY/VELXY 6`), `VISO_TYPE 1`, `RNGFND1_TYPE 10`. Sono i valori che imposta l'estensione stessa, messi già come default perché `VISO_TYPE` vale solo dopo un riavvio. `pool_blueos_setup.py --dvl` fa quello che farebbe un operatore sulla pagina dell'estensione:
 - carica i parametri "DVL";
@@ -216,6 +221,8 @@ Sul ROV vero la velocità del suono si imposta dalla pagina web dell'A50; qui co
 | macchina sim | TCP 8654 | RTSP di mediamtx (solo TCP); 8889 è il viewer WebRTC di mediamtx per un controllo veloce |
 | macchina sim | TCP 16171, TCP 8061 | il DVL A50 emulato: protocollo JSON e API HTTP (la 80 del dispositivo vero) |
 | linus, scenario C | 172.31.250.3:80 | `dvl-gateway`: la pagina dell'estensione DVL |
+| Work, scenario B | TCP 9001 | la pagina dell'estensione DVL (`dvl-host`) |
+| macchina sim | TCP 127.0.0.1:9997 | API di mediamtx: la camera sta pubblicando? (`stack.sh status`) |
 | BlueOS | UDP 14551 | MAVLink da SITL (master della board Manual) |
 | BlueOS | TCP 80, 6020, 6021; UDP 3478 + WebRTC | UI, camera manager, segnalazione e media WebRTC per Cockpit |
 | BlueOS | UDP 14550 | "GCS Server Link" di BlueOS: un QGC si collega qui |
@@ -261,9 +268,15 @@ Sulla Work restano accesi (profilo `workstation`).
 - La mappa dei motori ora è quella di ArduSub. Prima 6 motori su 8 della Heavy e entrambi i verticali della versione a 6 avevano il verso sbagliato: stick su → il ROV scendeva.
 - L'integratore RK4 bloccava la prua quando passava per 180° (sud).
 
-**ALT_HOLD non sta fermo.** La banda morta ±25 µs dei T200 e i +2 N di galleggiamento (servono circa 1540 µs per compensarli, appena fuori banda) fanno oscillare il controllo di profondità di ArduSub di 5–17 cm picco-picco, con periodo di circa 4 s. È coerente con un ROV leggermente positivo: si riduce zavorrando più vicino al neutro.
+**Il sensore di profondità di SITL era troppo rumoroso.** SITL aggiunge `SIM_BARn_RND` metri di rumore uniforme alla quota prima di convertirla in pressione d'acqua. Il default 0,2 significa ±20 cm di profondità (±20 mbar), mentre un Bar30 risolve 2 mm. Con quel rumore:
+- ALT_HOLD oscillava di 5–17 cm picco-picco. Prima lo attribuivamo alla banda morta dei T200, ma era il rumore;
+- la calibrazione della pressione a terra all'avvio poteva sbagliare fino a mezzo metro. Visto il 2026-11-26: Cockpit segnava 0,64 m con il ROV a 0,12 m.
+
+`pool.parm` ora mette 0,005 m (stessa classe del Bar30). Misurato con `pool_smoke.py --dvl`: ALT_HOLD tiene **1 cm picco-picco**, e la profondità di ArduSub è entro 3 cm da quella vera.
 
 ## Da verificare (non ancora provato)
+
+Tutto lo scenario B, con la tabella di verifica di [hil/win/pool/README.md](../hil/win/pool/README.md) (§4). In particolare:
 
 - BlueOS in WSL2 con la rete mirrored sulla Work, e Cockpit con il video WebRTC e il gamepad. Sono state verificate su linus, con un BlueOS 1.5.0-beta.43 isolato:
   - la board Manual;
@@ -271,4 +284,4 @@ Sulla Work restano accesi (profilo `workstation`).
   - lo stream Redirect decodificato dalla camera manager.
 - Lo scenario B: loopback mirrored tra WSL e Windows per la fisica e l'RTSP.
 - Il `run_pool.bat` nativo e il profilo `workstation`.
-- Il DVL sulla Work. L'estensione dallo store di BlueOS si blocca: aspetta cable_guy, che lì è spento. La strada è la stessa di linus: i servizi `dvl` e `dvl-gateway` del compose, con il gateway verso il BlueOS in rete host e `DVL_HOST` all'indirizzo di Windows. Non ancora preparato né provato.
+- Il DVL sulla Work. L'estensione dallo store di BlueOS si bloccherebbe: aspetta cable_guy, che lì è spento. Per questo il profilo `work` ha `dvl-host` e `dvl-gateway-host`. La variante è provata su linus, ma non ancora sulla Work: restano da vedere la rete bridge docker con la rete mirrored e il TCP verso l'A50 su Windows.

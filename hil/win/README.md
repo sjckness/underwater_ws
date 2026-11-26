@@ -11,6 +11,7 @@ File di ambiente per il link HIL diretto work <-> Thor. I corrispettivi per il T
 | `netcheck.py` | diagnostica del link: interfacce, raggiungibilita', porte UDP/TCP |
 | `run_room9.bat` | avvio della scena `room9` in modalita' nativa |
 | `record_all.bat` | batch delle registrazioni headless |
+| `pool/` | M11, la vasca prove tutta sulla Work (Isaac + WSL2): guida in `pool/README.md` |
 
 ## Ambiente Python nativo
 
