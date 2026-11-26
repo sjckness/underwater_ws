@@ -12,6 +12,18 @@ coefficients for the two terms). A miss (no hit, d = inf) gets the veiling light
 surface is not attenuated, so a lamp's pool of light is brighter than in real water at range: the honest limit of a
 post-process. Coefficients: config/pool/pool.yaml water.*.
 
+Turbidity (``water.turbidity_per_m``, presets ``turbid`` / ``murky``): suspended particles add a scattering
+coefficient b_p, the same in every channel (particles much larger than the wavelength scatter all colours alike).
+In the model's terms, with B_inf = E b / c per channel (E the ambient light in the water, b the scattering, c the
+attenuation, taken as beta_b), particles that only scatter give
+
+    beta_d' = beta_d + b_p        beta_b' = beta_b + b_p        B_inf' = (beta_b B_inf + b_p E) / (beta_b + b_p)
+
+so the far field turns from the clear water's blue towards the colour of the lit particle cloud, E =
+``water.turbidity_veil``, while everything fades sooner. What it does not do: the ROV's own lamps light the particles
+right in front of the camera (backscatter cones, the dominant look of turbid water at night), and that needs the
+light's path, which a post-process does not have.
+
 ``apply_numpy`` is the reference; ``WaterPost`` runs the same arithmetic as a Warp kernel on the GPU arrays the
 annotators return, and hands back one host RGB frame for the encoder.
 """
@@ -19,15 +31,30 @@ from __future__ import annotations
 
 import numpy as np
 
-from .config import get
+from .config import ConfigError, get
 
 
 def coefficients(cfg: dict):
-    """(beta_d, beta_b, b_inf * gain) as float32 RGB triples."""
-    bd = np.asarray(get(cfg, "water.beta_d"), np.float32)
-    bb = np.asarray(get(cfg, "water.beta_b"), np.float32)
-    binf = np.asarray(get(cfg, "water.b_inf"), np.float32) * np.float32(get(cfg, "water.b_inf_gain"))
-    return bd, bb, binf
+    """(beta_d, beta_b, b_inf * gain) as float32 RGB triples, turbidity included."""
+    bd = np.asarray(get(cfg, "water.beta_d"), np.float64)
+    bb = np.asarray(get(cfg, "water.beta_b"), np.float64)
+    binf = np.asarray(get(cfg, "water.b_inf"), np.float64)
+    tau = float(get(cfg, "water.turbidity_per_m"))
+    if not tau >= 0.0:
+        raise ConfigError(f"water.turbidity_per_m must be >= 0, got {tau}")
+    if tau > 0.0:
+        veil = np.asarray(get(cfg, "water.turbidity_veil"), np.float64)
+        binf = (bb * binf + tau * veil) / (bb + tau)
+        bd, bb = bd + tau, bb + tau
+    binf = binf * float(get(cfg, "water.b_inf_gain"))
+    return bd.astype(np.float32), bb.astype(np.float32), binf.astype(np.float32)
+
+
+def visibility_m(cfg: dict) -> float:
+    """How far a dark target stays visible in green, the channel that carries furthest: where its contrast with
+    the veiling light falls to 2 % (Duntley), ln(50) / beta_d."""
+    bd, _, _ = coefficients(cfg)
+    return float(np.log(50.0) / float(bd[1]))
 
 
 def _to_linear(c):

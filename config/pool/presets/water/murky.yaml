@@ -1,0 +1,4 @@
+# Water preset "murky" for the pool (python -m uw pool --preset murky): a dark target fades at about 2.5 m, so from
+# the ROV only the floor below it and what is within a couple of metres can be seen (uw/camera_uw.py).
+water:
+  turbidity_per_m: 1.5
