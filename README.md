@@ -129,7 +129,7 @@ colcon (`ros2 run sonar_relay relay`).
 A 10 x 10 x 5 m tiled test tank with a BlueROV2 Heavy (Blue Robotics' own model, fetched once by
 `python -m uw py tools/fetch_bluerov2.py`), piloted exactly like the real vehicle: ArduSub SITL 4.5.7 runs the
 autopilot, BlueOS (1.5 beta, "Manual" board) and Cockpit are the operator interface, a Bluetooth gamepad flies it.
-Camera and vehicle dynamics only: no bubbles, no sonar. Operator guide, ports and measurements: [docs/pool.md](docs/pool.md).
+Camera, vehicle dynamics and a DVL: no bubbles, no sonar. Operator guide, ports and measurements: [docs/pool.md](docs/pool.md).
 
 - **Physics** (`uw/rov/physics_proc.py`): the Fossen model of `uw/rov/dynamics.py` (von Benzon 2022, the Heavy's
   measured set) in its own process, lockstep with SITL over the JSON backend (UDP 9002) and paced to the wall
@@ -142,6 +142,9 @@ Camera and vehicle dynamics only: no bubbles, no sonar. Operator guide, ports an
   network in WSL2 on the Work machine, or `blueos-local` (profile) on its own bridge at 172.31.250.2 where ports 80
   and 8000 are taken (linus), flown from the Cockpit desktop app. `tools/pool_blueos_setup.py` configures BlueOS;
   `tools/pool_smoke.py` flies the vehicle over MAVLink and checks every axis, ALT_HOLD, lights and tilt.
+- **DVL** (`uw/rov/a50.py`, `uw/pool_geometry.py`): the A50 model of `uw/rov/dvl.py` cast at the pool, served as the
+  device itself (Water Linked's JSON protocol on TCP 16171 and its HTTP API) from the physics process, so BlueOS's
+  unmodified Water Linked DVL extension feeds ArduSub VISION_POSITION_DELTA: POSHOLD works as on the real vehicle.
 - Config: `config/pool/pool.yaml` with its own profiles (`config/pool/profiles/`), `--set` as for the tank.
 
 ## Datasets (sweeps)

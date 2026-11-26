@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdLux, UsdShade, Vt
 
+from . import pool_geometry
 from .config import WS, get
 from .sinks import write_png
 from .usd_scene import HORIZONTAL_APERTURE_MM, R_BODY_USDCAM, _bind, _look_at, _matrix, _mdl_material, _xform
@@ -224,27 +225,19 @@ def _tank(stage, cfg: dict, texture_dir: Path) -> None:
                                                       (0.5 + w_mark, 0.002, z + 0.02), (0.5, 0.002, z + 0.02)]), dark)
         k += 1
 
-    if get(cfg, "pool.ladder"):
-        steel = _surface(stage, f"{LOOKS}/steel", (0.62, 0.62, 0.64), 0.25, metallic=1.0)
-        x0, y0, top = L - 2.0, 0.15, wl + 0.9
-        for side, x in (("a", x0), ("b", x0 + 0.5)):
-            _bind(_cylinder(stage, f"{POOL}/ladder/rail_{side}", (x, y0, (wl - 1.5 + top) / 2), 0.02,
-                            top - (wl - 1.5)), steel)
-        for r in range(5):
-            z = wl - 1.4 + 0.3 * r
-            _bind(_cylinder(stage, f"{POOL}/ladder/rung_{r}", (x0 + 0.25, y0, z), 0.015, 0.5, axis="X"), steel)
-
-    if get(cfg, "pool.props"):
-        concrete = _surface(stage, f"{LOOKS}/concrete", (0.35, 0.35, 0.33), 0.9)
-        _bind(_box(stage, f"{POOL}/props/block", (3.0, 6.0, 0.1), (0.4, 0.2, 0.2)), concrete)
-        pipe = _surface(stage, f"{LOOKS}/pipe", (0.55, 0.40, 0.05), 0.5)
-        _bind(_cylinder(stage, f"{POOL}/props/pipe", (6.5, 6.5, 0.15), 0.15, 1.5, axis="X"), pipe)
-        board_png = texture_dir / "checker.png"
-        write_png(board_png, checker_texture())
-        board = _surface(stage, f"{LOOKS}/checker", None, 0.6, texture=board_png)
-        cx, cy, s = 5.0, 8.5, 0.6
-        _bind(_quad(stage, f"{POOL}/props/board", [(cx - s / 2, cy, 0.05), (cx + s / 2, cy, 0.05),
-                                                   (cx + s / 2, cy, 0.05 + s), (cx - s / 2, cy, 0.05 + s)], s), board)
+    looks = {}                                                    # role -> material, made on first use
+    for solid in pool_geometry.solids(cfg):                       # the ladder and the props: the DVL's beams see
+        if solid.role not in looks:                               #   the same list (uw.pool_geometry.PoolBottom)
+            looks[solid.role] = _prop_look(stage, solid.role, texture_dir)
+        path = f"{POOL}/{solid.name}"
+        if isinstance(solid, pool_geometry.Box):
+            prim = _box(stage, path, solid.center, solid.size)
+        elif isinstance(solid, pool_geometry.Cylinder):
+            prim = _cylinder(stage, path, solid.center, solid.radius, solid.length, axis=solid.axis)
+        else:
+            c = np.asarray(solid.corners, float)
+            prim = _quad(stage, path, c, float(np.linalg.norm(c[1] - c[0])))
+        _bind(prim, looks[solid.role])
 
     if get(cfg, "water.surface"):
         water = _mdl_material(stage, f"{LOOKS}/water_surface", "OmniGlass.mdl", "OmniGlass",
@@ -254,6 +247,22 @@ def _tank(stage, cfg: dict, texture_dir: Path) -> None:
         surf = _quad(stage, f"{POOL}/water_surface", [(0, 0, wl), (L, 0, wl), (L, W, wl), (0, W, wl)])
         UsdGeom.PrimvarsAPI(surf).CreatePrimvar("doNotCastShadows", Sdf.ValueTypeNames.Bool).Set(True)
         _bind(surf, water)
+
+
+def _prop_look(stage, role: str, texture_dir: Path):
+    """The visual material of a solid's role (uw.pool_geometry): ladder steel, a concrete block, a rusty pipe, the
+    checkerboard."""
+    if role == "ladder":
+        return _surface(stage, f"{LOOKS}/steel", (0.62, 0.62, 0.64), 0.25, metallic=1.0)
+    if role == "block":
+        return _surface(stage, f"{LOOKS}/concrete", (0.35, 0.35, 0.33), 0.9)
+    if role == "pipe":
+        return _surface(stage, f"{LOOKS}/pipe", (0.55, 0.40, 0.05), 0.5)
+    if role == "board":
+        board_png = texture_dir / "checker.png"
+        write_png(board_png, checker_texture())
+        return _surface(stage, f"{LOOKS}/checker", None, 0.6, texture=board_png)
+    return _surface(stage, f"{LOOKS}/{role}", (0.5, 0.5, 0.5), 0.5)
 
 
 def _hall_lights(stage, cfg: dict) -> None:
