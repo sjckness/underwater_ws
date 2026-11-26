@@ -16,6 +16,9 @@
 > flown through ArduSub SITL, BlueOS and Cockpit with a gamepad; 30 fps on linus. Its first step corrected the
 > vehicle files' thruster map (6 of 8 Heavy thrusters were reversed against ArduSub) and an RK4 attitude stall,
 > which the room9 HIL path shares (`docs/ros_hil.md` §6.3). BlueOS in WSL2 on Work and Cockpit are not yet tried.
+> **2026-11-26: the pool has a DVL** (`docs/pool.md`, "Il DVL"): the M8c A50 model cast at the pool, behind an
+> emulation of the device's own network side (`uw/rov/a50.py`), so BlueOS's unmodified Water Linked DVL extension
+> feeds ArduSub and POSHOLD holds to 1-3 cm. Flown with Cockpit and a gamepad on linus (BlueOS on a local bridge).
 
 ## Changes in this revision (2026-10-26)
 1. **Bubble scattering**: at 750 kHz (λ ≈ 2 mm) bubbles of 1–3 mm have ka ≈ 3–10, i.e. the transition regime, not ka≫1. Replace `TS = 20 log(a/2)` and `σ_ext = 2πa²` with a high-frequency fluid-sphere model (Anderson, via the Thuraisingham / Ainslie–Leighton approximations), valid across ka. Resonance (Minnaert, a ≈ 4 µm at 750 kHz) is irrelevant for the size range and is dropped.
@@ -256,9 +259,16 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
      2.4 GB VRAM; physics 400 packets/s with no stalls; `tools/pool_smoke.py` 12/12 (every axis, ALT_HOLD, depth
      against the baro, lights, tilt). BlueOS 1.5.0-beta.43 verified in isolation (Manual board, MAVLink to
      mavlink2rest, the Redirect stream decoded).
-  5. **Open**: BlueOS in WSL2 (mirrored networking) and Cockpit's WebRTC and gamepad on Work; the all-on-Work variant;
-     ALT_HOLD limit-cycles by 5-17 cm (T200 dead band against +2 N of buoyancy); next natural steps are an emulated
-     Water Linked A50 for BlueOS's DVL extension (POSHOLD), and MAVLink from BlueOS to the Thor for M8b.
+  5. **The DVL** (2026-11-26): the M8c model (`uw/rov/dvl.py`) cast at the pool's solids (`uw/pool_geometry.py`,
+     the same list the USD stage is built from) and served as the device itself (`uw/rov/a50.py`: Water Linked's
+     JSON protocol on TCP 16171, the HTTP API the extension probes), in the physics process. BlueOS's Water Linked
+     DVL extension v1.0.11 runs unmodified next to it (`docker/pool/compose.yaml`: `dvl`, `dvl-gateway`) and sends
+     VISION_POSITION_DELTA: POSHOLD holds to 1-3 cm, ArduSub's dead reckoning is 6-7 cm off after 1.1 m.
+     `SIM_FLOAT_EXCEPT 0`, because the extension's NaN-by-design EXTERNAL_POSITION_ESTIMATE aborted SITL.
+  6. **Open**: BlueOS in WSL2 (mirrored networking) and Cockpit's WebRTC and gamepad on Work, and the DVL there; the
+     all-on-Work variant; ALT_HOLD limit-cycles by 5-17 cm (T200 dead band against +2 N of buoyancy); the A50's
+     report rate against altitude (only 2-15 Hz is published); validation against logs of the real vehicle in a real
+     pool; MAVLink from BlueOS to the Thor for M8b.
 - **M10 Baseline leak detector on v0.2**: the dataset exists, so the detector that justifies it comes next; it is
   also what tells us which labels and which v0.3 changes matter.
   - **Baseline**: single-frame segmentation on `mask_geom` (the geometric label, free of sidelobe leakage) from the

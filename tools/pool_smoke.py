@@ -11,6 +11,9 @@ state our physics replied with.
 
 Checks, in order: arm in MANUAL; dive on "throttle down"; ALT_HOLD holds depth; forward, lateral and yaw move the
 vehicle the right way; the depth ArduSub estimates from its baro matches the simulated one; climb; disarm.
+With --dvl (the emulated A50 feeding ArduSub through BlueOS's DVL extension, docs/pool.md), after ALT_HOLD: the EKF
+has a horizontal velocity, POSHOLD engages and holds the vehicle in place, a stick input moves it and it holds the
+new place, and ArduSub's dead-reckoned track (LOCAL_POSITION_NED) follows the true one.
 Exit code 0 only if every check passed.
 """
 from __future__ import annotations
@@ -27,10 +30,12 @@ if str(REPO) not in sys.path:
 
 from uw import deps  # noqa: E402
 
-MODES = {"STABILIZE": 0, "ALT_HOLD": 2, "MANUAL": 19}
-MSG = {"ATTITUDE": 30, "SCALED_PRESSURE": 29, "SERVO_OUTPUT_RAW": 36, "VFR_HUD": 74, "SIM_STATE": 108}
+MODES = {"STABILIZE": 0, "ALT_HOLD": 2, "POSHOLD": 16, "MANUAL": 19}
+MSG = {"ATTITUDE": 30, "SCALED_PRESSURE": 29, "SERVO_OUTPUT_RAW": 36, "VFR_HUD": 74, "SIM_STATE": 108,
+       "LOCAL_POSITION_NED": 32, "EKF_STATUS_REPORT": 193}
+EKF_VELOCITY_HORIZ = 1 << 1                 # EKF_STATUS_FLAGS
 # sub.parm's joystick map (the one Cockpit and QGC start from): BTN10 tilt up, BTN14 lights brighter
-BTN_TILT_UP, BTN_LIGHTS_UP, BTN_LIGHTS_DOWN = 10, 14, 13
+BTN_MOUNT_CENTER, BTN_TILT_UP, BTN_LIGHTS_UP, BTN_LIGHTS_DOWN = 7, 10, 14, 13
 EARTH_R = 6378137.0
 
 
@@ -46,10 +51,18 @@ class Pilot:
 
     # ---- plumbing
     def wait_heartbeat(self, timeout: float = 30.0) -> None:
-        hb = self.m.wait_heartbeat(timeout=timeout)
-        if hb is None:
-            raise SystemExit(f"no heartbeat in {timeout:.0f} s: is SITL running "
-                             "(with --serial1 udpclient:127.0.0.1:14560)?")
+        """The autopilot's heartbeat. Not just the first one: with BlueOS connected, ArduSub routes its components'
+        heartbeats (camera manager, ...) to this port too, under the vehicle's system id."""
+        t_end = time.monotonic() + timeout
+        while True:
+            hb = self.m.recv_match(type="HEARTBEAT", blocking=True, timeout=max(0.1, t_end - time.monotonic()))
+            if hb is not None and hb.autopilot == self.ml.MAV_AUTOPILOT_ARDUPILOTMEGA:
+                break
+            if time.monotonic() > t_end:
+                raise SystemExit(f"no autopilot heartbeat in {timeout:.0f} s: is SITL running "
+                                 "(with --serial1 udpclient:127.0.0.1:14560)?")
+        self.m.target_system, self.m.target_component = hb.get_srcSystem(), hb.get_srcComponent()
+        self.last["HEARTBEAT"] = hb
         for name, mid in MSG.items():
             self.command(self.ml.MAV_CMD_SET_MESSAGE_INTERVAL, mid, 1e6 / 10.0)
 
@@ -65,7 +78,8 @@ class Pilot:
             t_next = time.monotonic() + self.dt
             while True:
                 msg = self.m.recv_match(blocking=True, timeout=max(0.0, t_next - time.monotonic()))
-                if msg is not None:
+                if msg is not None and (msg.get_srcSystem(), msg.get_srcComponent()) == (self.m.target_system,
+                                                                                         self.m.target_component):
                     self.last[msg.get_type()] = msg
                 if time.monotonic() >= t_next:
                     break
@@ -96,7 +110,10 @@ class Pilot:
         s = self.last.get("SIM_STATE")
         if s is None:
             raise SystemExit("no SIM_STATE from SITL: cannot read the simulated state")
-        lat, lon = s.lat * (1e-7 if abs(s.lat) > 1000 else 1.0), s.lon * (1e-7 if abs(s.lon) > 1000 else 1.0)
+        if getattr(s, "lat_int", 0):        # degE7 as int32: 1 cm. The float32 lat/lon resolve only ~0.35 m here
+            lat, lon = s.lat_int * 1e-7, s.lon_int * 1e-7
+        else:
+            lat, lon = s.lat * (1e-7 if abs(s.lat) > 1000 else 1.0), s.lon * (1e-7 if abs(s.lon) > 1000 else 1.0)
         north = math.radians(lat) * EARTH_R
         east = math.radians(lon) * EARTH_R * math.cos(math.radians(lat))
         return north, east, -float(s.alt), float(s.yaw)          # depth below the home altitude (0 at the surface)
@@ -116,6 +133,55 @@ def displacement(a, b, heading: float):
     return dn * math.cos(heading) + de * math.sin(heading), -dn * math.sin(heading) + de * math.cos(heading)
 
 
+def horizontal(a, b) -> float:
+    return math.hypot(b[0] - a[0], b[1] - a[1])
+
+
+def dvl_checks(p: Pilot, tol: float) -> None:
+    """POSHOLD on the DVL. Starts and ends in ALT_HOLD, sticks centred."""
+    ekf = p.last.get("EKF_STATUS_REPORT")
+    p.check("EKF horizontal velocity (DVL)", bool(ekf and ekf.flags & EKF_VELOCITY_HORIZ),
+            "the EKF has it" if ekf and ekf.flags & EKF_VELOCITY_HORIZ else
+            "missing: is the DVL extension running (docker compose ... dvl), and set up (pool_blueos_setup --dvl)?")
+    p.set_mode("POSHOLD")
+    hb = p.last.get("HEARTBEAT")
+    if not p.check("POSHOLD engages", hb is not None and hb.custom_mode == MODES["POSHOLD"],
+                   f"mode {hb.custom_mode if hb else None}"):
+        p.set_mode("ALT_HOLD")
+        return
+    p.pump(5.0)                                              # settle, then hold for 10 s
+    a, la = p.truth(), p.last["LOCAL_POSITION_NED"]
+    track = []
+    for _ in range(10):
+        p.pump(1.0)
+        track.append(p.truth())
+    drift = max(horizontal(a, b) for b in track)
+    p.check("POSHOLD holds position", drift < tol, f"{100 * drift:.1f} cm at most from where it was, over 10 s")
+    p.pump(4.0, x=500)                                       # the pilot moves it, then lets go
+    b0 = p.truth()
+    p.pump(4.0)                                              # it brakes and takes the new place
+    b1 = p.truth()
+    track = []
+    for _ in range(8):
+        p.pump(1.0)
+        track.append(p.truth())
+    moved = horizontal(a, b1)
+    drift = max(horizontal(b1, b) for b in track)
+    p.check("POSHOLD moves with the stick and holds again", moved > 0.5 and drift < tol,
+            f"{moved:.2f} m moved ({horizontal(a, b0):.2f} m during the input), then {100 * drift:.1f} cm drift "
+            "over 8 s")
+    lb, b = p.last["LOCAL_POSITION_NED"], p.truth()
+    est = (lb.x - la.x, lb.y - la.y)
+    true = (b[0] - a[0], b[1] - a[1])
+    err = math.hypot(est[0] - true[0], est[1] - true[1])
+    dist = math.hypot(*true)
+    p.check("dead reckoning follows the truth", err < 0.1 + 0.05 * dist,
+            f"ArduSub {est[0]:+.2f} N {est[1]:+.2f} E against the truth {true[0]:+.2f} N {true[1]:+.2f} E m: "
+            f"{100 * err:.1f} cm apart")
+    p.set_mode("ALT_HOLD")
+    p.pump(2.0)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--url", default="udpin:0.0.0.0:14560", help="pymavlink connection (default: %(default)s)")
@@ -124,6 +190,9 @@ def main(argv=None) -> int:
     # Measured 2026-11-25 with sub.parm's gains: 5-16 cm peak to peak (18 cm with the firmware defaults).
     ap.add_argument("--hold-tol", type=float, default=0.20,
                     help="ALT_HOLD depth, peak to peak [m] (default %(default)s)")
+    ap.add_argument("--dvl", action="store_true", help="also check POSHOLD on the DVL (docs/pool.md)")
+    ap.add_argument("--poshold-tol", type=float, default=0.25,
+                    help="POSHOLD, the most the vehicle may wander from its place [m] (default %(default)s)")
     args = ap.parse_args(argv)
 
     p = Pilot(args.url)
@@ -131,6 +200,19 @@ def main(argv=None) -> int:
     p.wait_heartbeat()
     p.pump(2.0)
     print(f"vehicle {p.m.target_system}/{p.m.target_component}; flying", flush=True)
+
+    # The physics restarted without SITL (a new `uw pool`) puts the vehicle back at its start: ArduSub's EKF then
+    # needs a while to follow the jump in heading, and anything flown before it has would be flown on a wrong one.
+    t_end = time.monotonic() + 45.0
+    errs: list = []
+    while time.monotonic() < t_end:
+        errs.append(math.degrees(math.remainder(float(p.last["ATTITUDE"].yaw) - p.truth()[3], 2 * math.pi)))
+        if len(errs) >= 5 and max(abs(e) for e in errs[-5:]) < 3.0:
+            break
+        p.pump(1.0)
+    ok = len(errs) >= 5 and max(abs(e) for e in errs[-5:]) < 3.0
+    p.check("ArduSub's heading matches the sim", ok, f"{errs[-1]:+.1f} deg off" + (
+        " (within 3 deg for 5 s)" if ok else ": restart SITL together with the physics (docs/pool.md)"))
 
     # the parameters our physics assumes (tests/rov/test_motor_map.py): a real vehicle's parameter file loaded into
     # SITL can break them (a reversed MOTn_DIRECTION is a propeller fix on hardware, a sign error here)
@@ -163,6 +245,8 @@ def main(argv=None) -> int:
     b = p.truth()
     p.check("ArduSub's depth matches the sim", abs(p.depth_estimate() - b[2]) < 0.1,
             f"baro {p.depth_estimate():.3f} m, sim {b[2]:.3f} m")
+    if args.dvl:
+        dvl_checks(p, args.poshold_tol)
 
     a = p.truth()
     p.pump(4.0, x=600)
@@ -191,6 +275,8 @@ def main(argv=None) -> int:
     p.check("climb", a[2] - b[2] > 0.3, f"depth {a[2]:.2f} -> {b[2]:.2f} m")
 
     # the aux outputs the sim reads (vehicle.camera.tilt_servo, vehicle.lights.servo): a button press must move them
+    p.pump(0.3, buttons=1 << BTN_MOUNT_CENTER)               # a previous run may have left the camera tilted up
+    p.pump(0.5)
     s0 = p.last["SERVO_OUTPUT_RAW"]
     for _ in range(4):
         p.pump(0.3, buttons=1 << BTN_LIGHTS_UP)

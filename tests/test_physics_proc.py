@@ -23,6 +23,7 @@ def cfg():
     c = config.load(config.POOL_CONFIG)
     c["physics"]["port"] = 0           # ephemeral: never collides with a real SITL on 9002
     c["physics"]["rtf"] = 0.0          # unpaced
+    c["dvl"]["device"].update(bind="127.0.0.1", tcp_port=0, http_port=0)    # the emulated A50, likewise
     return c
 
 
@@ -84,3 +85,36 @@ def test_a_busy_port_fails_the_start_with_a_clear_error(cfg):
         assert time.monotonic() - t0 < 15.0
     finally:
         blocker.close()
+
+
+def test_the_child_runs_the_a50_and_reports_it(cfg):
+    """The emulated DVL lives in the child (uw/rov/a50.py): reachable on its ports, counted in the shared record."""
+    import json
+    import urllib.request
+    proc = PhysicsProcess(cfg).start()
+    try:
+        tcp, http = proc.dvl_ports
+        about = json.load(urllib.request.urlopen(f"http://127.0.0.1:{http}/api/v1/about", timeout=3))
+        assert "DVL" in about["product_name"]
+        client = socket.create_connection(("127.0.0.1", tcp), timeout=3)
+        time.sleep(0.3)
+        fly(proc.port, [1500] * 8, 800)                     # 2 s of simulated time: a few reports at 2-15 Hz
+        time.sleep(0.3)
+        data = client.recv(1 << 16).decode()
+        client.close()
+        kinds = {json.loads(line)["type"] for line in data.splitlines() if line.strip()}
+        assert {"velocity", "position_local"} <= kinds
+        dvl = proc.stats()["dvl"]
+        assert dvl["reports"] >= 2 and dvl["locked"] == dvl["reports"]
+    finally:
+        proc.close()
+    assert proc.proc.returncode == 0
+
+
+def test_without_a_dvl_the_child_has_no_ports(cfg):
+    cfg["dvl"]["enabled"] = False
+    proc = PhysicsProcess(cfg).start()
+    try:
+        assert proc.dvl_ports is None and proc.stats()["dvl"]["reports"] == 0
+    finally:
+        proc.close()

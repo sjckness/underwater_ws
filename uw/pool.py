@@ -63,7 +63,8 @@ def main(argv: list[str]) -> int:
     cfg = config.from_args(args, config.POOL_CONFIG)
     from .rov.physics_proc import PhysicsProcess
     physics = PhysicsProcess(cfg).start()            # first: SITL can lock on while Kit boots, a busy port fails fast
-    log.info("physics process up on UDP %s:%d", get(cfg, "physics.bind"), physics.port)
+    log.info("physics process up on UDP %s:%d; %s", get(cfg, "physics.bind"), physics.port,
+             "DVL A50 on TCP %d, HTTP %d" % physics.dvl_ports if physics.dvl_ports else "no DVL")
     stop = {"flag": False}
 
     def _sig(_s, _f):
@@ -199,10 +200,12 @@ def run(app, cfg: dict, args, physics, stop: dict) -> int:  # noqa: C901 - one f
                 fps = (count["frames"] - last_stats[1]) / (now - last_stats[0])
                 pk = (st["packets"] - last_stats[2]) / (now - last_stats[0])
                 tail = {k: float(np.mean(v[-200:])) if v else 0.0 for k, v in times.items()}
+                dvl = st["dvl"]
                 log.info("%.1f fps (render %.1f, water %.1f, loop %.1f ms); physics %.0f packets/s, sim t %.1f s, "
-                         "%d stalls; depth %.2f m; video %s", fps, tail["render"], tail["post"], tail["loop"], pk,
-                         st["t"], st["stalls"], float(get(cfg, "pool.water_level")) - float(p[2]),
-                         stream.stats() if stream else "off")
+                         "%d stalls; depth %.2f m; DVL %s; video %s", fps, tail["render"], tail["post"], tail["loop"],
+                         pk, st["t"], st["stalls"], float(get(cfg, "pool.water_level")) - float(p[2]),
+                         f"{dvl['reports']} reports ({dvl['locked']} locked), {dvl['clients']} clients"
+                         if physics.dvl_ports else "off", stream.stats() if stream else "off")
                 last_stats = (now, count["frames"], st["packets"])
             if args.duration and now - wall0 >= args.duration:
                 exit_reason = "duration"

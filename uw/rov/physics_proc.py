@@ -40,6 +40,8 @@ ROT = slice(11, 20)             # body FLU -> tank ENU, row-major 3x3
 VEL = slice(20, 23)             # body FRD linear velocity [m/s]
 RATE = slice(23, 26)            # body FRD angular velocity [rad/s]
 PWM = slice(26, 42)             # the last servo packet's 16 channels [us]
+DVL_REPORTS, DVL_LOCKED, DVL_CLIENTS = 42, 43, 44     # the emulated A50 (uw/rov/a50.py), when dvl.device is on
+DVL_TCP_PORT, DVL_HTTP_PORT = 45, 46                  # its ports (0: no DVL)
 SIZE = 48
 STARTING, RUNNING, FAILED, STOPPED = 0.0, 1.0, -1.0, 2.0
 
@@ -65,8 +67,10 @@ def make_pool_server(cfg: dict, on_step=None):
 class _Writer:
     """The child's side of the seqlock: one consistent record per servo packet."""
 
-    def __init__(self, arr: np.ndarray):
+    def __init__(self, arr: np.ndarray, device=None):
         self.a = arr
+        self.device = device
+        self.server = None                      # set once the server exists: its stall count
 
     def write(self, state, pwm, pose) -> None:
         a = self.a
@@ -80,7 +84,34 @@ class _Writer:
         a[PWM.start:PWM.start + n] = pwm[:n]
         a[PACKETS] += 1.0
         a[WALL] = time.time()
+        if self.server is not None:
+            a[STALLS] = self.server.stalls
+        if self.device is not None:
+            a[DVL_REPORTS] = self.device.count["velocity"]
+            a[DVL_LOCKED] = self.device.count["locked"]
+            a[DVL_CLIENTS] = self.device.clients
         a[SEQ] += 1.0
+
+
+class _Steps:
+    """What runs at every servo packet in the child: the emulated DVL, then the shared-memory record. A DVL that
+    raises is switched off with its traceback logged, so that the vehicle keeps flying without it."""
+
+    def __init__(self, writer, device):
+        self.writer = writer
+        self.device = device
+
+    def __call__(self, state, pwm, pose) -> None:
+        if self.device is not None:
+            try:
+                self.device.step(state.t, pose, state)
+            except Exception:  # noqa: BLE001 - the physics must not die of its sensor
+                log.exception("physics: the DVL failed and is off from now on")
+                self.device = None
+                if self.writer is not None:
+                    self.writer.device = None
+        if self.writer is not None:
+            self.writer.write(state, pwm, pose)
 
 
 def _attach(name: str) -> shared_memory.SharedMemory:
@@ -117,15 +148,24 @@ def child_main(argv=None) -> int:
         arr = np.ndarray((SIZE,), np.float64, shm.buf)
     else:
         cfg = config.from_args(args, config.POOL_CONFIG)
-    writer = _Writer(arr) if arr is not None else None
+    device = None
     try:
-        server = make_pool_server(cfg, on_step=writer.write if writer else None)
+        from .a50 import pool_device
+        device = pool_device(cfg)                # None when dvl.enabled or dvl.device.enabled is off
+        if device is not None:
+            device.start()
+        writer = _Writer(arr, device) if arr is not None else None
+        server = make_pool_server(cfg, on_step=_Steps(writer, device))
+        if writer:
+            writer.server = server
         if writer:
             writer.write(server.state, server.pwm, server.body_pose())
             arr[PACKETS] = 0.0
         server.start()
     except Exception:  # noqa: BLE001 - reported to the parent through STATUS, the traceback on stderr
         log.exception("physics: could not start")
+        if device is not None:
+            device.close()
         if arr is not None:
             arr[STATUS] = FAILED
             del arr
@@ -133,6 +173,8 @@ def child_main(argv=None) -> int:
         return 1
     if arr is not None:
         arr[PORT] = server.port
+        if device is not None:
+            arr[DVL_TCP_PORT], arr[DVL_HTTP_PORT] = device.tcp_port, device.http_port
         arr[STATUS] = RUNNING
     try:
         if arr is not None:
@@ -142,13 +184,17 @@ def child_main(argv=None) -> int:
                 time.sleep(2.0)
                 p, r = server.body_pose()
                 v, w, t = server.body_twist()
-                log.info("t %.1f s, %d packets, CG %s m (depth %.2f m), speed %.2f m/s, heading %.0f deg ENU",
+                log.info("t %.1f s, %d packets, CG %s m (depth %.2f m), speed %.2f m/s, heading %.0f deg ENU%s",
                          t, server.packets, np.round(p, 2).tolist(), float(get_depth(cfg, p)),
-                         float(np.linalg.norm(v)), float(np.degrees(np.arctan2(r[1, 0], r[0, 0]))))
+                         float(np.linalg.norm(v)), float(np.degrees(np.arctan2(r[1, 0], r[0, 0]))),
+                         "" if device is None else "; DVL %d reports (%d locked), %d clients" % (
+                             device.count["velocity"], device.count["locked"], device.clients))
     except KeyboardInterrupt:
         pass
     finally:
         server.close()
+        if device is not None:
+            device.close()
         if arr is not None:
             arr[STATUS] = STOPPED if server.error is None else FAILED
             del arr
@@ -234,10 +280,17 @@ class PhysicsProcess:
             raise ValueError(f"servo {servo}: only SERVO1-16 reach the JSON physics")
         return float(self.snapshot()[PWM][int(servo) - 1])
 
+    @property
+    def dvl_ports(self):
+        """(TCP, HTTP) port of the emulated A50, or None without one."""
+        s = self.snapshot()
+        return (int(s[DVL_TCP_PORT]), int(s[DVL_HTTP_PORT])) if s[DVL_TCP_PORT] else None
+
     def stats(self) -> dict:
         s = self.snapshot()
         return {"t": float(s[T]), "packets": int(s[PACKETS]), "stalls": int(s[STALLS]),
-                "age_s": (time.time() - float(s[WALL])) if s[WALL] else None}
+                "age_s": (time.time() - float(s[WALL])) if s[WALL] else None,
+                "dvl": {"reports": int(s[DVL_REPORTS]), "locked": int(s[DVL_LOCKED]), "clients": int(s[DVL_CLIENTS])}}
 
     def close(self, timeout_s: float = 5.0) -> None:
         if self.proc is not None:

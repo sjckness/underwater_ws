@@ -9,6 +9,11 @@ runs anywhere (linus, Work's Windows Python, WSL).
 2. A "Redirect" video stream in the camera manager, pulling the Isaac camera from mediamtx over RTSP; Cockpit then
    gets it over WebRTC like a real camera. An existing stream with the same name is replaced.
 
+3. With --dvl: the Water Linked DVL extension (docker/pool/compose.yaml, service dvl; on a vehicle, BlueOS's
+   Extensions page) set up as an operator would on its page: "DVL" parameters (the EKF's horizontal position and
+   velocity from the DVL), VISION_POSITION_DELTA messages, the DVL as rangefinder, and the EKF origin at the SITL
+   home ("set current position" on its map), which POSHOLD needs.
+
 Cockpit itself is a BlueOS extension (Extensions -> Cockpit -> Install) or the desktop app; docs/pool.md.
 """
 from __future__ import annotations
@@ -85,18 +90,52 @@ def set_stream(blueos: str, rtsp: str) -> None:
     print(f"  video: '{STREAM_NAME}' <- {rtsp} ({st[0]['state']}{', ' + st[0]['error'] if st[0]['error'] else ''})")
 
 
+def set_dvl(dvl: str, origin: tuple, timeout_s: float) -> None:
+    """The extension's own API (its main.py, v1.0.11): plain GETs that answer "True" / "False"."""
+    t_end = time.monotonic() + timeout_s
+    while True:
+        try:
+            st = call("GET", f"{dvl}/get_status", timeout=3.0)
+            break
+        except (urllib.error.URLError, OSError):
+            if time.monotonic() > t_end:
+                raise SystemExit(f"the DVL extension is not reachable at {dvl} (is the dvl service up?)")
+            time.sleep(2.0)
+    print(f"  DVL extension: {st.get('status')!r}, DVL at {st.get('hostname')}")
+    t_end = time.monotonic() + timeout_s
+    while st.get("status") != "Running":                # the parameters go to the vehicle: wait for it and the DVL
+        if time.monotonic() > t_end:
+            raise SystemExit(f"the DVL extension did not reach 'Running' (last: {st.get('status')!r}): is the "
+                             "physics process (python -m uw pool) up, and SITL sending to BlueOS?")
+        time.sleep(2.0)
+        st = call("GET", f"{dvl}/get_status", timeout=3.0)
+    for path, what in (("load_params/dvl", "EKF3 sources: DVL for horizontal position and velocity"),
+                       ("message_type/POSITION_DELTA", "messages: VISION_POSITION_DELTA"),
+                       ("use_as_rangefinder/true", "rangefinder: on"),
+                       (f"setcurrentposition/{origin[0]}/{origin[1]}", f"EKF origin: {origin[0]}, {origin[1]}")):
+        ok = call("GET", f"{dvl}/{path}", timeout=30.0)
+        print(f"  {what}{'' if str(ok) in ('True', 'None') else f' (answered {ok!r})'}")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--blueos", default="http://localhost", help="BlueOS base URL (default %(default)s)")
     ap.add_argument("--rtsp", required=True, help="the pool camera, e.g. rtsp://100.89.193.76:8654/rov")
     ap.add_argument("--mavlink-port", type=int, default=14551, help="Manual board master endpoint, UDP")
     ap.add_argument("--wait", type=float, default=120.0, help="seconds to wait for BlueOS to come up")
+    ap.add_argument("--dvl", default="", help="the Water Linked DVL extension's page, e.g. http://172.31.250.3 "
+                                              "(docker/pool/compose.yaml dvl-gateway); default: leave it alone")
+    ap.add_argument("--origin", default="45.0703,7.6869",
+                    help="EKF origin lat,lon for --dvl (default: the compose file's HOME_LOC, %(default)s)")
     args = ap.parse_args(argv)
     blueos = args.blueos.rstrip("/")
     print(f"BlueOS {blueos}:")
     wait_up(blueos, args.wait)
     set_manual_board(blueos, args.mavlink_port)
     set_stream(blueos, args.rtsp)
+    if args.dvl:
+        lat, lon = (float(v) for v in args.origin.split(","))
+        set_dvl(args.dvl.rstrip("/"), (lat, lon), args.wait)
     print(f"done. Open {blueos} (BlueOS) and Cockpit; the vehicle appears once SITL sends to UDP {args.mavlink_port}.")
     return 0
 

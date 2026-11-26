@@ -201,13 +201,35 @@ class _BiasField:
 
 # ----------------------------------------------------------------------------------------- the model
 
-class Dvl:
-    """The sensor. ``due(t)`` owns the altitude-dependent schedule, ``sample(...)`` makes one report."""
+class TankBottom:
+    """The tank as the DVL's bottom: ``uw.geometry.ray_bottom`` over the sand and the meshes (the sonar's own
+    occluders), with the materials of config/tank.yaml.
 
-    def __init__(self, params: Params, mount: Mount, scene, cfg: dict, seed: int = 0):
+    The bottom interface ``Dvl`` needs, which ``uw.pool_geometry.PoolBottom`` also provides: ``ray_bottom(origin,
+    directions, t_max)``, ``materials`` (name -> Z or reflection, lambert_db, rms_slope) and ``role_material``
+    (what a hit's role is made of)."""
+
+    def __init__(self, scene, cfg: dict):
+        self.scene = scene
+        self.materials = geom.surface_materials(cfg)
+        self.role_material = {"sand": "sand", "rock": get(cfg, "rocks.material"),
+                              "pipe": get(cfg, "pipe.material"), "flange": get(cfg, "pipe.material"),
+                              "support": "concrete"}
+
+    def ray_bottom(self, origin, directions, t_max: float = 50.0):
+        return geom.ray_bottom(self.scene, origin, directions, t_max=t_max)
+
+
+class Dvl:
+    """The sensor. ``due(t)`` owns the altitude-dependent schedule, ``sample(...)`` makes one report.
+
+    ``bottom`` is what the beams are cast at: a ``TankBottom`` or a ``uw.pool_geometry.PoolBottom``."""
+
+    def __init__(self, params: Params, mount: Mount, bottom, seed: int = 0):
         self.p = params
         self.mount = mount
-        self.scene = scene
+        self.bottom = bottom
+        self.scene = getattr(bottom, "scene", None)
         self.seed = int(seed)
         self.beams = beam_directions(params)
         self.seq = 0
@@ -217,15 +239,13 @@ class Dvl:
         # one scale factor per run, drawn once: +-1.01 % is a long-term accuracy, not a per-ping error
         self._scale = 1.0 + float(np.random.default_rng([self.seed, 5456451]).normal(0.0,
                                                                                      params.scale_sigma))
-        mats = geom.surface_materials(cfg)
+        mats = bottom.materials
         self._mu = {k: 10 ** (float(v["lambert_db"]) / 10.0) for k, v in mats.items()}
         self._s2 = {k: max(float(v.get("rms_slope", 0.25)), 1e-3) ** 2 for k, v in mats.items()}
         self._r0 = {k: (float(v["reflection"]) if v.get("reflection") is not None
                         else (float(v["Z"]) - Z_WATER_MRAYL) / (float(v["Z"]) + Z_WATER_MRAYL))
                     for k, v in mats.items()}
-        self._role_material = {"sand": "sand", "rock": get(cfg, "rocks.material"),
-                               "pipe": get(cfg, "pipe.material"), "flange": get(cfg, "pipe.material"),
-                               "support": "concrete"}
+        self._role_material = dict(bottom.role_material)
         self._next = self._period(None)
 
     # -- schedule ------------------------------------------------------------------------------------
@@ -307,8 +327,7 @@ class Dvl:
         origin, dirs = self.geometry_at(position_tank, rot)
 
         cos_t = math.cos(p.tilt_rad)
-        ranges, normals, roles = geom.ray_bottom(self.scene, origin, dirs,
-                                                 t_max=p.max_altitude_m / max(cos_t, 1e-6))
+        ranges, normals, roles = self.bottom.ray_bottom(origin, dirs, t_max=p.max_altitude_m / max(cos_t, 1e-6))
         altitudes = ranges * cos_t
         cos_i = np.abs(np.einsum("ij,ij->i", normals, dirs))
         rssi = self._echo(ranges, cos_i, roles)
@@ -437,7 +456,9 @@ class BodyMotion:
 
 
 def from_config(cfg: dict, scene):
-    """The configured DVL, or ``None`` when ``dvl.enabled`` is false."""
+    """The configured DVL, or ``None`` when ``dvl.enabled`` is false. ``scene`` is the tank's ``uw.geometry``
+    scene, or already a bottom (anything with ``ray_bottom``, e.g. ``uw.pool_geometry.PoolBottom``)."""
     if not bool(get(cfg, "dvl.enabled")):
         return None
-    return Dvl(params_from_config(cfg), mount_from_config(cfg), scene, cfg, seed=int(cfg["seed"]))
+    bottom = scene if hasattr(scene, "ray_bottom") else TankBottom(scene, cfg)
+    return Dvl(params_from_config(cfg), mount_from_config(cfg), bottom, seed=int(cfg["seed"]))

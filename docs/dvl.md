@@ -254,6 +254,16 @@ One corollary worth keeping in mind when reading a drift number: a **closed** pa
 heading error, because rotating a loop maps it nearly onto itself. `orbit` shows 0.06 % drift at a 0°
 bias and barely more at 5°. Measure heading sensitivity on an open path.
 
+## In the pool: the device on the network
+
+`python -m uw pool` (M11, `docs/pool.md`) uses this model too, cast at the pool's floor, walls, ladder and props
+(`uw/pool_geometry.PoolBottom`, the same solids the USD stage is built from; unlike the tank's, the pool's walls stop
+a beam). There the report does not go to ROS but to the network, as the device's own: `uw/rov/a50.py` serves Water
+Linked's JSON protocol (json_v3.3) on TCP 16171 (velocity reports, the device's dead reckoning, its commands) and
+the HTTP API BlueOS's Water Linked DVL extension probes, from the physics process. The extension runs unmodified
+and feeds ArduSub; the `ndahn/dvl_a50` driver could connect the same way. The pool's `dvl:` section repeats this
+file's instrument values (kept equal by `tests/rov/test_a50.py`) with its own mount and echo reference.
+
 ## Running it
 
 ```bash

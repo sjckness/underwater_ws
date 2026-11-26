@@ -10,6 +10,12 @@ FRAME_CONFIG 2
 # against.
 SYSID_THISMAV 1
 
+# Floating-point errors as on the flight controller, which does not trap them: SITL's default (1) kills ArduSub at
+# the first one. The DVL extension's "set current position" sends MAV_CMD_EXTERNAL_POSITION_ESTIMATE with a NaN
+# accuracy and altitude, by design (ArduPilot takes NaN as "unknown"), and that alone aborted ArduSub-4.5.7 SITL
+# with "Floating point exception" (2026-11-26).
+SIM_FLOAT_EXCEPT 0
+
 # One physics step per main-loop step (SITL's own default is 1200 Hz; ArduSub runs at 400): a third of the servo
 # packets for the same dynamics, which keeps the Python physics process light.
 SIM_RATE_HZ 400
@@ -25,11 +31,19 @@ SERVO10_FUNCTION 181
 SERVO10_MIN 1100
 SERVO10_MAX 1900
 
-# What a real BlueROV2 has underwater (as in hil.parm, which explains it): no GPS, no truth AHRS; baro for depth,
-# compass for heading. MANUAL, STABILIZE and ALT_HOLD (depth hold) work; POSHOLD needs a position source (a DVL).
+# What a real BlueROV2 with a Water Linked A50 has underwater (as in hil.parm, which explains the rest): no GPS, no
+# truth AHRS; baro for depth, compass for heading, and the DVL for horizontal velocity and, dead reckoned, position.
+# The DVL arrives as VISION_POSITION_DELTA from BlueOS's Water Linked DVL extension (docker/pool/compose.yaml, the
+# A50 emulated by uw/rov/a50.py). These are the values the extension sets itself: AHRS_EKF_TYPE, VISO_TYPE and
+# RNGFND1_TYPE at its start (VISO_TYPE only after a reboot, hence here), the EK3_SRC1_* with its "DVL" parameter
+# button (tools/pool_blueos_setup.py presses it). POSHOLD then also needs an EKF origin, which the extension's map
+# sets (the setup tool does it at the SITL home). Without the extension the EKF has no horizontal source, exactly as
+# before: MANUAL, STABILIZE and ALT_HOLD.
 AHRS_EKF_TYPE 3
-EK3_SRC1_POSXY 0
-EK3_SRC1_VELXY 0
+EK3_SRC1_POSXY 6
+EK3_SRC1_VELXY 6
 EK3_SRC1_VELZ 0
 EK3_SRC1_POSZ 1
 EK3_SRC1_YAW 1
+VISO_TYPE 1
+RNGFND1_TYPE 10

@@ -1,6 +1,7 @@
 # M11 pool stack (docs/pool.md). Host networking: ArduSub SITL next to the physics (the JSON link is a lockstep round
 # trip at 400 Hz, so it stays on loopback), the RTSP server the Isaac camera publishes to, and BlueOS (profile
-# "blueos") wherever it can have its ports. Where 80 and 8000 are taken (linus), profile "blueos-local" instead.
+# "blueos") wherever it can have its ports. Where 80 and 8000 are taken (linus), profile "blueos-local" instead,
+# which also brings BlueOS's Water Linked DVL extension for the A50 the physics process emulates (docs/pool.md).
 #
 #   linus, BlueOS on Work:   BLUEOS_HOST=<Work IPv4> docker compose -f docker/pool/compose.yaml up -d sitl mediamtx
 #   linus, all local:        BLUEOS_HOST=172.31.250.2 docker compose -f docker/pool/compose.yaml --profile blueos-local up -d
@@ -104,6 +105,57 @@ services:
     volumes:
       - blueos_local_config:/root/.config
 
+  dvl:
+    # BlueOS's Water Linked DVL extension, unmodified: the one a real BlueROV2 with an A50 runs. It talks to the A50
+    # that the physics process emulates on the host (uw/rov/a50.py: TCP 16171, its HTTP API on 8061 because 80 is
+    # taken on linus) and feeds ArduSub VISION_POSITION_DELTA through BlueOS's mavlink2rest, by way of dvl-gateway.
+    # Its settings live in a volume, as on a vehicle; DVL_HOST is written into them at every start.
+    profiles: [blueos-local]
+    image: bluerobotics/blueos-water-linked-dvl:v1.0.11
+    container_name: uw-pool-dvl
+    restart: "no"
+    networks:
+      blueos_local:
+        ipv4_address: 172.31.250.4
+    extra_hosts:
+      - "host.docker.internal:172.31.250.3"
+    environment:
+      DVL_HOST: ${DVL_HOST:-172.31.250.1:8061}
+    entrypoint:
+      - python3
+      - -c
+      - |
+        import json, os
+        f = "/root/.config/dvl/settings.json"
+        os.makedirs(os.path.dirname(f), exist_ok=True)
+        d = {"enabled": True, "orientation": 1, "origin": [0, 0], "rangefinder": True, "should_send": "POSITION_DELTA"}
+        if os.path.exists(f):
+            d.update(json.load(open(f)))
+        d["hostname"] = os.environ["DVL_HOST"]
+        json.dump(d, open(f, "w"))
+        os.chdir("/home/pi/dvl-a50")
+        os.execv("/home/pi/dvl-a50/main.py", ["/home/pi/dvl-a50/main.py"])
+    volumes:
+      - dvl_settings:/root/.config
+
+  dvl-gateway:
+    # The extension's "vehicle" (host.docker.internal on a real one is BlueOS): BlueOS's mavlink2rest, a stand-in
+    # for cable_guy (off in this BlueOS), and the extension's own page at http://172.31.250.3
+    # (dvl_gateway.conf.template).
+    profiles: [blueos-local]
+    image: nginx:1.28.0-alpine
+    container_name: uw-pool-dvl-gateway
+    restart: "no"
+    networks:
+      blueos_local:
+        ipv4_address: 172.31.250.3
+    environment:
+      BLUEOS_HOST: 172.31.250.2
+      DVL_EXTENSION_HOST: 172.31.250.4:9001
+      DVL_EXTENSION_IP: 172.31.250.4
+    volumes:
+      - ./dvl_gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
+
 networks:
   blueos_local:
     name: uw-pool-blueos
@@ -115,3 +167,4 @@ networks:
 volumes:
   sitl_eeprom:
   blueos_local_config:
+  dvl_settings:

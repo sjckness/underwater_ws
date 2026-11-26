@@ -24,6 +24,8 @@ pool:
   props: true                     # on the floor: a concrete block, a pipe section, a marker board
 
 water:
+  temperature_c: 27.0            # an indoor pool. Sets the speed of sound the DVL sees (uw/water.py). GUESS
+  salinity_psu: 0.0              # fresh water
   surface: true                   # the free surface as a dielectric plane (ior 1.333): total internal reflection
                                   #   and the Snell window seen from below. Casts no shadow.
   # Underwater look, applied to the rendered frame (uw/camera_uw.py) with the per-pixel distance d [m]:
@@ -82,6 +84,65 @@ stream:                           # H.264 to an RTSP server (mediamtx, docker/po
   encoder: libx264                # libx264 | h264_nvenc
   bitrate_kbps: 4000
   threads: 2                      # libx264 threads; the encoder also runs niced, so it does not slow the renderer
+
+acoustics:                        # what the DVL's beams hit (uw/pool_geometry.py) is made of: the echo law of
+                                  #   uw/rov/dvl.py, units as config/tank.yaml materials (Z [MRayl] or reflection,
+                                  #   lambert_db, rms_slope of the incoherent Kirchhoff term). All GUESS
+  materials:
+    tiles:    {Z: 10.0, lambert_db: -30.0, rms_slope: 0.10}   # glazed ceramic, grout every 0.25 m
+    concrete: {Z: 8.0,  lambert_db: -32.0, rms_slope: 0.10}
+    steel:    {Z: 45.0, lambert_db: -35.0, rms_slope: 0.03}   # the ladder
+    pipe:     {Z: 30.0, lambert_db: -35.0, rms_slope: 0.05}   # coated steel
+    board:    {Z: 3.0,  lambert_db: -30.0, rms_slope: 0.10}   # a plastic marker board
+  roles: {floor: tiles, wall: tiles, ladder: steel, block: concrete, pipe: pipe, board: board}
+
+dvl:                              # Water Linked DVL A50 under the Heavy: the model of config/tank.yaml (uw/rov/dvl.py,
+                                  #   docs/dvl.md) cast at the pool (uw/pool_geometry.py), and the device's network side
+                                  #   (uw/rov/a50.py) so that BlueOS's Water Linked DVL extension and the ndahn/dvl_a50
+                                  #   driver talk to it unmodified. The instrument values are config/tank.yaml's, kept
+                                  #   equal by tests/test_pool_dvl.py; only rssi_ref_dbm and the mount differ
+  enabled: true
+  model: Water Linked DVL A50
+  version: standard
+  mount:                          # body FRD from the CG
+    position_frd_m: [0.0, 0.0, 0.14]  # under the hull's bottom panel (hull height 0.254 m): the extension does not
+                                  #   set VISO_POS_*, so a DVL off the CG would be a lever arm ArduSub does not know.
+                                  #   UNVERIFIED: where the real one goes is not decided
+    roll_deg: 0.0
+    pitch_deg: 0.0
+    rotation_offset_deg: 0.0
+  beams:
+    tilt_deg: 22.5
+    azimuths_deg: [45.0, 135.0, 225.0, 315.0]
+    width_deg: 4.4
+  min_altitude_m: 0.05
+  max_altitude_m: 50.0
+  max_speed_mps: 3.75
+  resolution_mps: 0.0001
+  rate_hz: [2.0, 15.0]
+  rate_altitude_m: 3.0
+  rate_jitter: 0.05
+  scale_sigma:
+    standard: 0.0101
+    performance: 0.001
+  beam_noise_mps: 0.002
+  bias_sigma_mps: 0.001
+  bias_time_s: 120.0
+  rssi_ref_dbm: 0.0               # the tank's -30 is set for its 0.1-2.6 m altitudes and would lose lock beyond ~3 m;
+                                  #   0 dBm keeps the datasheet's 50 m over a sand-like bottom (mu -27 dB) and the
+                                  #   whole 5 m pool over tiles. UNVERIFIED, like the tank's
+  nsd_dbm: -95.0
+  snr_threshold_db: 6.0
+  noise: true
+  dropout: true
+  device:                         # the A50's network side, emulated in the physics process (uw/rov/a50.py)
+    enabled: true
+    bind: 0.0.0.0                 # the BlueOS extension reaches it from a container (linus: 172.31.250.1)
+    tcp_port: 16171               # the JSON protocol. VERIFIED, and fixed on the device and in the extension
+    http_port: 8061               # the device's HTTP API is on 80, taken on linus; the extension accepts host:port
+    dead_reckoning_hz: 5.0        # position_local reports. VERIFIED ("the expected update rate is 5 Hz")
+    temperature_c: 30.0           # what /api/v1/about/status reports (the extension warns above 45). GUESS
+    yaw_drift_deg_per_h: 0.0      # the A50's own gyro, in its dead reckoning only. UNVERIFIED: off
 
 physics:                          # uw.rov.physics_proc: the ArduSub JSON server in its own process
   port: 9002                      # UDP; ArduSub SITL --model JSON sends here
