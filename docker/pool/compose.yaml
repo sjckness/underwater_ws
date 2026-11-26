@@ -1,0 +1,117 @@
+# M11 pool stack (docs/pool.md). Host networking: ArduSub SITL next to the physics (the JSON link is a lockstep round
+# trip at 400 Hz, so it stays on loopback), the RTSP server the Isaac camera publishes to, and BlueOS (profile
+# "blueos") wherever it can have its ports. Where 80 and 8000 are taken (linus), profile "blueos-local" instead.
+#
+#   linus, BlueOS on Work:   BLUEOS_HOST=<Work IPv4> docker compose -f docker/pool/compose.yaml up -d sitl mediamtx
+#   linus, all local:        BLUEOS_HOST=172.31.250.2 docker compose -f docker/pool/compose.yaml --profile blueos-local up -d
+#   Work, all in WSL2:       docker compose -f docker/pool/compose.yaml --profile blueos up -d
+#   stop:                    docker compose -f docker/pool/compose.yaml --profile blueos --profile blueos-local down
+name: uw-pool
+
+services:
+  sitl:
+    # ArduSub-4.5.7 (docker/ardusub_sitl/README.md); built here on first use.
+    image: uw-ardusub:4.5.7
+    build: ../ardusub_sitl
+    container_name: uw-pool-sitl
+    network_mode: host
+    init: true
+    restart: "no"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      PHYSICS_HOST: ${PHYSICS_HOST:-127.0.0.1}      # where uw.rov.physics_proc listens (UDP 9002); an IPv4 literal
+      # MAVLink to BlueOS's "Manual" board (its default master endpoint is udpin 0.0.0.0:14551). An IPv4 literal:
+      # ardusub's udpclient silently sends nothing to a host name.
+      MAVLINK_OUT: udpclient:${BLUEOS_HOST:-127.0.0.1}:14551
+      PARAM_FILES: /opt/ardupilot/default_params/sub-6dof.parm,/params/pool.parm
+      WIPE: ${SITL_WIPE:-0}
+      HOME_LOC: ${HOME_LOC:-45.0703,7.6869,0,0}
+    # a second MAVLink output for the local tools (tools/pool_smoke.py, a QGC on the sim host)
+    command: ["--serial1", "udpclient:127.0.0.1:14560"]
+    volumes:
+      - ../ardusub_sitl/params:/params:ro
+      - sitl_eeprom:/home/ardu/sitl
+
+  mediamtx:
+    # RTSP server: `uw pool` publishes H.264 to rtsp://<host>:8654/rov, BlueOS's camera manager pulls it.
+    # 8554 is left to BlueOS's own RTSP server; everything else mediamtx would open is moved or off.
+    # Browser check of the stream: http://<host>:8889/rov (WebRTC).
+    image: bluenviron/mediamtx:1.21.3
+    container_name: uw-pool-mediamtx
+    network_mode: host
+    restart: "no"
+    environment:
+      MTX_RTSPADDRESS: ":8654"
+      # TCP only: BlueOS's camera manager otherwise picks RTP over UDP (seen 2026-11-25), which needs two more
+      # inbound UDP ports through the firewall; over TCP the stream is one connection to 8654.
+      MTX_RTSPTRANSPORTS: "tcp"
+      MTX_RTPADDRESS: ":18000"
+      MTX_RTCPADDRESS: ":18001"
+      MTX_RTMP: "no"
+      MTX_HLS: "no"
+      MTX_SRT: "no"
+      MTX_WEBRTCADDRESS: ":8889"
+
+  blueos:
+    # BlueOS without its bootstrap (it would manage the host's network and updates): the core alone, as in the
+    # project's own dev compose. 1.5 beta for the "Manual" board, which takes MAVLink from this SITL instead of
+    # running an autopilot of its own. Privileged with the docker socket, as on a vehicle: root on this host.
+    profiles: [blueos]
+    image: bluerobotics/blueos-core:1.5.0-beta.43
+    container_name: uw-pool-blueos
+    network_mode: host
+    pid: host
+    privileged: true
+    restart: "no"
+    environment:
+      BLUEOS_DISABLE_STARTUP_UPDATE: "true"
+      BLUEOS_DISABLE_MEMORY_LIMIT: "true"
+      BLUEOS_DISABLE_SERVICES: cable_guy,wifi,commander
+    volumes:
+      - ${UW_BLUEOS_DIR:-${HOME}/.config/uw_blueos}/config:/root/.config
+      - ${UW_BLUEOS_DIR:-${HOME}/.config/uw_blueos}/etc:/etc/blueos
+      - ${UW_BLUEOS_DIR:-${HOME}/.config/uw_blueos}/bin:/usr/blueos/bin
+      - ${UW_BLUEOS_DIR:-${HOME}/.config/uw_blueos}/extensions:/usr/blueos/extensions
+      - ${UW_BLUEOS_DIR:-${HOME}/.config/uw_blueos}/userdata:/usr/blueos/userdata
+      - ${UW_BLUEOS_DIR:-${HOME}/.config/uw_blueos}/logs:/var/logs/blueos
+      - /dev:/dev
+      - /sys:/sys
+      - /etc/machine-id:/etc/machine-id:ro
+      - /run/udev:/run/udev:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/dbus:/var/run/dbus
+
+  blueos-local:
+    # BlueOS on a machine whose ports 80 and 8000 are taken (linus): unprivileged, on its own bridge at a fixed
+    # address instead of the host network. SITL sends MAVLink to 172.31.250.2:14551 (BLUEOS_HOST), Cockpit (the
+    # desktop app) and the browser reach it at http://172.31.250.2, the UI also at http://localhost:28080, and its
+    # camera manager pulls the RTSP stream from the host at 172.31.250.1:8654. No docker socket, hence no
+    # extensions: Cockpit runs as the desktop app.
+    profiles: [blueos-local]
+    image: bluerobotics/blueos-core:1.5.0-beta.43
+    container_name: uw-pool-blueos-local
+    restart: "no"
+    environment:
+      BLUEOS_DISABLE_STARTUP_UPDATE: "true"
+      BLUEOS_DISABLE_MEMORY_LIMIT: "true"
+      BLUEOS_DISABLE_SERVICES: cable_guy,wifi,commander
+    networks:
+      blueos_local:
+        ipv4_address: 172.31.250.2
+    ports:
+      - "127.0.0.1:28080:80"
+    volumes:
+      - blueos_local_config:/root/.config
+
+networks:
+  blueos_local:
+    name: uw-pool-blueos
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24
+          gateway: 172.31.250.1
+
+volumes:
+  sitl_eeprom:
+  blueos_local_config:

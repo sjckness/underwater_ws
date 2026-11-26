@@ -48,7 +48,7 @@ def main(argv: list[str]) -> int:
         signal.signal(signal.SIGTERM, _interrupt)
     cmd, args = argv[0], argv[1:]
     # Warp from the Isaac install; USD (pxr) too, except in the Kit app, which sets up its own
-    for path in [os.environ.get("UW_WARP_PATH")] + ([] if cmd == "sim" else [os.environ.get("UW_USD_PATH")]):
+    for path in [os.environ.get("UW_WARP_PATH")] + ([] if cmd in ("sim", "pool") else [os.environ.get("UW_USD_PATH")]):
         if path and Path(path).is_dir() and path not in sys.path:
             sys.path.insert(1, path)
     try:        # cache native code (cubin), not PTX: else the driver re-JITs every module in every new process
@@ -67,6 +67,9 @@ def main(argv: list[str]) -> int:
         if cmd == "sim":
             from . import main as sim_main
             return sim_main.main(args)
+        if cmd == "pool":
+            from . import pool
+            return pool.main(args)
     except KeyboardInterrupt:
         print("uw: interrupted", file=sys.stderr)
         return 130

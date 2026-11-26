@@ -14,8 +14,13 @@ RENDER_KEYS = ["/rtx/rendermode", "/rtx/post/aa/op", "/rtx/translucency/enabled"
                "/rtx/translucency/maxRefractionBounces", "/rtx/reflections/enabled", "/app/useFabricSceneDelegate"]
 
 
-def create_app(gui: bool, width: int = 1280, height: int = 720, refraction_bounces: int = 2):
-    """The SimulationApp: headless unless ``gui``; RTX real-time ("RaytracedLighting")."""
+DLSS_AA_OP = 3
+
+
+def create_app(gui: bool, width: int = 1280, height: int = 720, refraction_bounces: int = 2, dlss: bool = False,
+               translucency: bool = True, reflections: bool = True):
+    """The SimulationApp: headless unless ``gui``; RTX real-time ("RaytracedLighting"). ``dlss``: DLSS (render below
+    the output resolution and upscale) instead of DLAA, the pool's lever for a slower GPU."""
     from isaacsim import SimulationApp
 
     app = SimulationApp({
@@ -23,30 +28,31 @@ def create_app(gui: bool, width: int = 1280, height: int = 720, refraction_bounc
         "width": width,
         "height": height,
         "renderer": "RaytracedLighting",
-        "anti_aliasing": NATIVE_AA_OP,
+        "anti_aliasing": DLSS_AA_OP if dlss else NATIVE_AA_OP,
         "hide_ui": not gui,
     })
     app.update()
-    _settings(refraction_bounces)
+    _settings(refraction_bounces, DLSS_AA_OP if dlss else NATIVE_AA_OP, translucency, reflections)
     return app
 
 
-def _settings(refraction_bounces: int) -> None:
-    """Renderer settings. Translucency and reflections stay on: the bubbles are a refractive dielectric (gas in
-    water, total internal reflection at their rims). Indirect diffuse and ambient occlusion are off (lamp-lit,
-    dark scene; saves GPU time and VRAM)."""
+def _settings(refraction_bounces: int, aa_op: int = NATIVE_AA_OP, translucency: bool = True,
+              reflections: bool = True) -> None:
+    """Renderer settings. Translucency and reflections are on by default: the bubbles are a refractive dielectric
+    (gas in water, total internal reflection at their rims); the pool's linus profile turns reflections off.
+    Indirect diffuse and ambient occlusion are off (lamp-lit, dark scene; saves GPU time and VRAM)."""
     import carb
 
     s = carb.settings.get_settings()
-    s.set("/rtx/translucency/enabled", True)
+    s.set("/rtx/translucency/enabled", bool(translucency))
     s.set("/rtx/translucency/maxRefractionBounces", int(refraction_bounces))
-    s.set("/rtx/reflections/enabled", True)
+    s.set("/rtx/reflections/enabled", bool(reflections))
     s.set("/rtx/indirectDiffuse/enabled", False)
     s.set("/rtx/ambientOcclusion/enabled", False)
     s.set("/app/asyncRendering", False)
     s.set("/app/runLoops/main/rateLimitEnabled", False)     # the sim loop paces itself
     for root in ("/rtx", "/rtx-defaults"):
-        s.set(f"{root}/post/aa/op", NATIVE_AA_OP)
+        s.set(f"{root}/post/aa/op", aa_op)
 
 
 def render_settings_report() -> dict:

@@ -22,3 +22,6 @@ docs/slides_assets/*.jpeg
 docs/slides_assets/*.gif
 docs/slides_assets/*.svg
 docs/slides_assets/*.pdf
+
+# generated 3D assets (tools/fetch_bluerov2.py): third-party licences, regenerated on demand
+assets/

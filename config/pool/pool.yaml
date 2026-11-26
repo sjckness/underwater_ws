@@ -1,0 +1,103 @@
+# M11 "vasca prove": a BlueROV2 Heavy flown through ArduSub SITL, BlueOS and Cockpit with a gamepad, in a deep test
+# tank. Camera and vehicle dynamics only: no bubbles, no sonar. Plan: docs/pool.md.
+#
+# The base config of `python -m uw pool` and of `uw.rov.physics_proc`, layered like config/tank.yaml (uw/config.py):
+# this file, then profiles/<name>.yaml (--profile, default linus), then --set (existing keys only).
+#
+# Frames: tank/ENU, origin at a floor corner, x and y along two walls, z up; the body is FLU.
+# uw/rov/frames.py is the only converter to ArduPilot's NED/FRD.
+seed: 0
+
+scene:
+  name: pool10
+
+pool:
+  size: [10.0, 10.0, 5.5]         # inner length x width x wall height [m]
+  water_level: 5.0                # free surface, above the floor [m]
+  tile_m: 0.25                    # tile pitch on the walls and the floor
+  tile_color: [0.70, 0.78, 0.78]  # linear RGB
+  grout_color: [0.30, 0.34, 0.34]
+  floor_grid_m: 1.0               # a dark line on the floor every metre: a reference for the pilot
+  grid_color: [0.05, 0.06, 0.08]
+  depth_marks_m: 0.5              # depth marks on the y = 0 wall, every depth_marks_m from the surface
+  ladder: true                    # a stainless ladder on the y = 0 wall
+  props: true                     # on the floor: a concrete block, a pipe section, a marker board
+
+water:
+  surface: true                   # the free surface as a dielectric plane (ior 1.333): total internal reflection
+                                  #   and the Snell window seen from below. Casts no shadow.
+  # Underwater look, applied to the rendered frame (uw/camera_uw.py) with the per-pixel distance d [m]:
+  #   I = J exp(-beta_d d) + b_inf (1 - exp(-beta_b d))
+  # GUESS, clear fresh pool water: pure-water absorption is ~0.35 / 0.06 / 0.015 1/m at 650 / 550 / 450 nm,
+  # plus a little scattering. Red is gone after a few metres, blue-green carries the far wall.
+  # Tuned by eye on 2026-11-25 renders (output/pool/snapshots) towards a lit indoor pool: blue-cyan, the far wall
+  # (8 m) still readable.
+  beta_d: [0.40, 0.075, 0.05]     # direct-signal attenuation, R G B [1/m]
+  beta_b: [0.36, 0.065, 0.045]    # backscatter, R G B [1/m]
+  b_inf: [0.035, 0.16, 0.22]      # veiling light at infinite distance, linear RGB (scaled by water.b_inf_gain)
+  b_inf_gain: 1.0
+
+lights:
+  ceiling:                        # rect lights above the water (an indoor test hall), facing down
+    height_m: 2.5                 # above the free surface
+    grid: [2, 2]                  # lights along x and y, evenly spaced
+    size_m: [1.2, 0.6]
+    intensity: 20000.0            # luminance [nits]; with the dome, set by eye for a lit hall
+    color: [1.0, 0.98, 0.94]
+  dome: 150.0                     # room fill; 0 = none
+
+vehicle:
+  params: config/rov_bluerov2.yaml                    # BlueROV2 Heavy, FRAME_CONFIG 2 (8 x T200)
+  asset: assets/bluerov2_heavy/bluerov2_heavy.usd     # tools/fetch_bluerov2.py; if missing, a box of the hull size
+  start: [5.0, 1.5, 4.88, 90.0]   # CG x, y, z [m] and heading [deg, ENU: 0 = +x, 90 = +y]: floating at the
+                                  #   surface near the y = 0 wall, facing the far one
+  home: null                      # SITL home [x, y] on the surface; null = the start point
+  camera:                         # the Low-Light HD USB camera behind the front dome, on its tilt servo
+    position_body: [0.15, 0.0, 0.05]   # FLU from the CG [m]: the centre of the front dome in the BlueSim mesh
+                                       #   (dome tip at x 0.211, radius ~0.065, axis at z ~0.05)
+    tilt_servo: 9                 # ArduSub SERVOn driving the tilt (pool.parm: SERVO9_FUNCTION 7, mount pitch)
+    tilt_range_deg: [-45.0, 45.0] # at PWM 1100 / 1900 (sub.parm MNT1_PITCH_MIN / MAX)
+  lights:                         # Lumen lights (the Heavy's four), dimmed by ArduSub's lights 1 output
+    servo: 10                     # pool.parm: SERVO10_FUNCTION 181 (lights 1), PWM 1100 (off) .. 1900 (full)
+    cone_deg: 135.0               # Lumen beam angle (full)
+    radius_m: 0.02
+    intensity: 310000.0           # sphere luminance at full PWM [nits]: 1500 lm over 135 deg ~ 390 cd
+    color: [1.0, 0.96, 0.90]
+    lamps:                        # FLU from the CG [m], pointing along +x: just ahead of the four Lumen lenses of
+      - [0.235, 0.189, 0.097]     #   the BlueSim mesh (centres at x 0.22, y +-0.189, z 0.097 and -0.070)
+      - [0.235, -0.189, 0.097]
+      - [0.235, 0.189, -0.070]
+      - [0.235, -0.189, -0.070]
+
+camera:
+  resolution: [1280, 720]
+  hfov_deg: 80.0                  # in-water field of view behind the flat/dome port
+  rate_hz: 30.0                   # render, post-process and stream rate (the BlueROV2 camera streams at 30)
+  clip_m: [0.10, 40.0]            # near plane beyond the front dome (radius ~0.065 m around the camera), which
+                                  #   would otherwise be the first hit of every pixel and blind the water model
+
+stream:                           # H.264 to an RTSP server (mediamtx, docker/pool/compose.yaml), which BlueOS's
+  enabled: true                   #   camera manager pulls as a "Redirect" source and serves to Cockpit over WebRTC
+  url: rtsp://127.0.0.1:8654/rov
+  encoder: libx264                # libx264 | h264_nvenc
+  bitrate_kbps: 4000
+  threads: 2                      # libx264 threads; the encoder also runs niced, so it does not slow the renderer
+
+physics:                          # uw.rov.physics_proc: the ArduSub JSON server in its own process
+  port: 9002                      # UDP; ArduSub SITL --model JSON sends here
+  bind: 127.0.0.1                 # Work with SITL in WSL2: the address SITL reaches Windows on (docs/pool.md)
+  rtf: 1.0                        # paced to the wall clock: SITL, BlueOS and the pilot see real time
+  surface_model: true             # partial-submersion buoyancy: the vehicle floats at the surface
+
+render:
+  translucency: true              # needed for the water surface (refraction, total internal reflection)
+  reflections: true               # linus turns them off: 26 -> 38 fps GPU-bound for 1/255 of mean image difference
+                                  #   (the glossy tiles, 2026-11-25)
+  refraction_bounces: 1           # 2 costs 31 against 8.5 ms a frame on linus with the surface in view, for a
+                                  #   difference of 0.2/255 on average in the image (2026-11-25)
+  dlss: true                      # DLSS (render below the camera resolution, upscale) instead of DLAA: on linus
+                                  #   7.7 against 55 ms a frame at 1280 x 720 (2026-11-25), and no visible loss
+
+sim:
+  gui_fps: 20.0                   # --gui viewport rate
+  stats_every_s: 10.0             # log fps, render / post / encode times, physics packets and stalls

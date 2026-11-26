@@ -16,6 +16,7 @@ Linux it runs everything in the Isaac Sim container (image `isaac_ws_devcontaine
 | `python -m uw test [pytest args]` | pytest on `tests/` in the container, Warp tests on the GPU |
 | `python -m uw sim [--gui]` | the Isaac app: USD stage, bubbles in the RTX scene, sonar in the loop, RTX camera, ROS 2 topics (see below) |
 | `python -m uw sonar-only --pings N --out output/datasets/NAME` | Warp-only bubbles + sonar without RTX: writes a dataset (`--sink ros`: the sonar topics instead) |
+| `python -m uw pool [--gui] [--view chase]` | M11 test pool: a BlueROV2 Heavy flown through ArduSub SITL, BlueOS and Cockpit with a gamepad; the onboard camera as a live H.264 stream ([docs/pool.md](docs/pool.md)) |
 
 How commands run is set in `config/runtime.yaml`: `mode: docker` (Linux) or `native` (a local Python, e.g. a
 Windows venv with `warp-lang`, or a native Isaac install), and the install paths. Override per machine in
@@ -122,6 +123,26 @@ model, the measured hardware figures and what is still unverified: [docs/dvl.md]
 `/oculus/meta` as `marine_acoustic_msgs/ProjectedSonarImage` on `/oculus/sonar_image`, the message of the Oculus ROS
 drivers (`--db`: the float dB image instead). Run it without building: `ros/sonar_relay/run.sh`; or build it with
 colcon (`ros2 run sonar_relay relay`).
+
+## The test pool (`python -m uw pool`, M11)
+
+A 10 x 10 x 5 m tiled test tank with a BlueROV2 Heavy (Blue Robotics' own model, fetched once by
+`python -m uw py tools/fetch_bluerov2.py`), piloted exactly like the real vehicle: ArduSub SITL 4.5.7 runs the
+autopilot, BlueOS (1.5 beta, "Manual" board) and Cockpit are the operator interface, a Bluetooth gamepad flies it.
+Camera and vehicle dynamics only: no bubbles, no sonar. Operator guide, ports and measurements: [docs/pool.md](docs/pool.md).
+
+- **Physics** (`uw/rov/physics_proc.py`): the Fossen model of `uw/rov/dynamics.py` (von Benzon 2022, the Heavy's
+  measured set) in its own process, lockstep with SITL over the JSON backend (UDP 9002) and paced to the wall
+  clock, with partial-submersion buoyancy at the surface. The render loop reads pose, camera tilt and lights from
+  shared memory.
+- **Camera** (`uw/pool.py`, `uw/camera_uw.py`, `uw/video.py`): RTX render, then the water as a per-pixel
+  attenuation and veiling light from the distance annotator, then H.264 (constrained baseline) over RTSP to mediamtx,
+  which BlueOS pulls as a "Redirect" stream for Cockpit. linus: 30 fps at 1280 x 720, 7 ms a frame, 2.4 GB VRAM.
+- **Stack** (`docker/pool/compose.yaml`): `sitl` and `mediamtx` next to the sim; `blueos` (profile) on the host
+  network in WSL2 on the Work machine, or `blueos-local` (profile) on its own bridge at 172.31.250.2 where ports 80
+  and 8000 are taken (linus), flown from the Cockpit desktop app. `tools/pool_blueos_setup.py` configures BlueOS;
+  `tools/pool_smoke.py` flies the vehicle over MAVLink and checks every axis, ALT_HOLD, lights and tilt.
+- Config: `config/pool/pool.yaml` with its own profiles (`config/pool/profiles/`), `--set` as for the tank.
 
 ## Datasets (sweeps)
 

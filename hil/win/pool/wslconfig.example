@@ -1,0 +1,15 @@
+# Copy to %UserProfile%\.wslconfig on the Work machine, then `wsl --shutdown` (docs/pool.md, "Work: WSL2").
+#
+# Mirrored networking: WSL shares Windows' network interfaces and its loopback. BlueOS (host networking in WSL)
+# answers on Windows' own addresses and on http://localhost; ArduSub SITL in WSL reaches Isaac on Windows at
+# 127.0.0.1:9002 and Isaac publishes to mediamtx at 127.0.0.1:8654, with no port forwarding.
+[wsl2]
+networkingMode=mirrored
+dnsTunneling=true
+firewall=true
+# BlueOS and mediamtx run as long-lived containers: keep the VM up while they do
+vmIdleTimeout=-1
+
+[experimental]
+# lets Windows and WSL also reach each other through the host's own IP addresses, not only 127.0.0.1
+hostAddressLoopback=true

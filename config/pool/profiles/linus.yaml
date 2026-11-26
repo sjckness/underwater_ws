@@ -1,0 +1,13 @@
+# Pool hardware profile "linus": RTX 5050 8 GB, shared with other GPU processes. The default.
+# workstation.yaml sets exactly the same keys (tests/test_pool.py checks it).
+profile:
+  name: linus
+camera:
+  resolution: [1280, 720]
+  rate_hz: 30.0
+render:
+  dlss: true
+  refraction_bounces: 1
+  reflections: false
+stream:
+  encoder: libx264

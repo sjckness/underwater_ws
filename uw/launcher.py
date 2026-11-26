@@ -25,7 +25,7 @@ import yaml
 from .config import merge
 
 WS = Path(__file__).resolve().parents[1]
-COMMANDS = ("py", "test", "sim", "sonar-only")
+COMMANDS = ("py", "test", "sim", "sonar-only", "pool")
 STUBS: dict[str, str] = {}                      # command: milestone that implements it
 
 # In the image: what python.sh does, except that Python is exec'd so that signals reach it ($0 = Isaac root); plus
@@ -109,7 +109,7 @@ def run_docker(rt: dict, cmd: str, args: list[str]) -> int:
     workdir = cwd if cwd.is_relative_to(WS) else WS
     for d in ("uw_warp", "uw_cuda", "uw_pydeps", "uw_home/kit_cache", "uw_home/kit_data"):   # else root-owned
         (Path.home() / ".cache" / d).mkdir(parents=True, exist_ok=True)
-    extra = x11_args() if cmd == "sim" and "--gui" in args else []
+    extra = x11_args() if cmd in ("sim", "pool") and "--gui" in args else []
     data = Path(os.path.expanduser(str(rt.get("data_root") or "")))
     if str(data) not in ("", ".") and (data.is_dir() or _mkdir(data)):
         extra += ["-v", f"{data}:{data}:rw", "-e", f"UW_DATA={data}"]

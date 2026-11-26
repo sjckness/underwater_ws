@@ -1,0 +1,35 @@
+# M11 pool: ArduSub SITL for the BlueROV2 Heavy, physics from uw.rov.physics_proc over the JSON backend.
+# Loaded after ArduPilot's stock sub.parm and sub-6dof.parm (docker/pool/compose.yaml sets PARAM_FILES), so these win.
+# Defaults only: with SITL_WIPE=0 (the compose default) parameters changed later from BlueOS or Cockpit persist in
+# the eeprom volume, as on a real vehicle. Wipe to get back here: SITL_WIPE=1 for one start.
+#
+# Heavy: 4 vectored horizontals + 4 verticals, "Vectored 6DOF" (tests/rov/test_motor_map.py pins its mixer).
+FRAME_CONFIG 2
+
+# One vehicle, system id 1. Cockpit and QGC are GCS 255, the SYSID_MYGCS default that MANUAL_CONTROL is checked
+# against.
+SYSID_THISMAV 1
+
+# One physics step per main-loop step (SITL's own default is 1200 Hz; ArduSub runs at 400): a third of the servo
+# packets for the same dynamics, which keeps the Python physics process light.
+SIM_RATE_HZ 400
+
+# Outputs. Motors 1-8 on SERVO1-8: sub.parm puts the camera mount on SERVO8, which only fits the 6-thruster frame,
+# so the mount moves to SERVO9 and the lights go on SERVO10. Both reach the physics in the 16-channel JSON packet,
+# and `uw pool` reads them (config/pool/pool.yaml vehicle.camera.tilt_servo, vehicle.lights.servo).
+SERVO8_FUNCTION 40
+SERVO9_FUNCTION 7
+SERVO9_MIN 1100
+SERVO9_MAX 1900
+SERVO10_FUNCTION 181
+SERVO10_MIN 1100
+SERVO10_MAX 1900
+
+# What a real BlueROV2 has underwater (as in hil.parm, which explains it): no GPS, no truth AHRS; baro for depth,
+# compass for heading. MANUAL, STABILIZE and ALT_HOLD (depth hold) work; POSHOLD needs a position source (a DVL).
+AHRS_EKF_TYPE 3
+EK3_SRC1_POSXY 0
+EK3_SRC1_VELXY 0
+EK3_SRC1_VELZ 0
+EK3_SRC1_POSZ 1
+EK3_SRC1_YAW 1
