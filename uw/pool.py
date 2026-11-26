@@ -127,6 +127,8 @@ def run(app, cfg: dict, args, physics, stop: dict) -> int:  # noqa: C901 - one f
         except Exception as exc:  # noqa: BLE001 - only the GUI's convenience
             log.warning("GUI viewport camera: %r", exc)
     post = camera_uw.WaterPost(cfg)
+    log.info("water: turbidity %.2f /m, a dark target visible to about %.1f m", float(get(cfg, "water.turbidity_per_m")),
+             camera_uw.visibility_m(cfg))
     w, h = info.camera_resolution
     rate = float(get(cfg, "camera.rate_hz"))
     stream = None

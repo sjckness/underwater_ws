@@ -38,6 +38,13 @@ water:
   beta_b: [0.36, 0.065, 0.045]    # backscatter, R G B [1/m]
   b_inf: [0.035, 0.16, 0.22]      # veiling light at infinite distance, linear RGB (scaled by water.b_inf_gain)
   b_inf_gain: 1.0
+  turbidity_per_m: 0.0            # suspended particles: an extra scattering coefficient b_p [1/m], flat in R, G, B. It
+                                  #   adds to beta_d and beta_b and pulls the veiling light towards turbidity_veil
+                                  #   (uw/camera_uw.py). 0 = the clear pool above. Presets: --preset turbid (0.6) or
+                                  #   murky (1.5); or --set water.turbidity_per_m=X. A dark target stays visible to about
+                                  #   3.9 / (beta_d green + b_p): 52 m clear, 5.8 m turbid, 2.5 m murky
+  turbidity_veil: [0.10, 0.12, 0.09]  # the veiling light of water so full of particles that they alone count: the
+                                  #   lit particle cloud, linear RGB (greenish grey: silt and algae). GUESS, by eye
 
 lights:
   ceiling:                        # rect lights above the water (an indoor test hall), facing down

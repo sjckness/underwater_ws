@@ -122,6 +122,7 @@ python3 tools/pool_blueos_setup.py --blueos http://127.0.0.1:28080 --rtsp rtsp:/
 
   La simulazione legge tilt e luci dal PWM, come sul ROV vero.
 - **Modi.** MANUAL, STABILIZE e ALT_HOLD (depth hold) funzionano sempre. POSHOLD funziona con il DVL, come sul ROV vero: nello scenario C sì; sulla Work l'estensione DVL non è ancora sistemata (vedi "Da verificare"). Senza DVL l'EKF non ha posizione orizzontale e POSHOLD non si attiva.
+- **Acqua torbida.** `python -m uw pool --preset turbid` (visibilità circa 5,8 m) oppure `--preset murky` (circa 2,5 m); per un valore qualsiasi `--set water.turbidity_per_m=X`. Vedi "Torbidità" sotto.
 - **Vista da fuori.** `python -m uw pool --view chase` manda nello stream una camera alle spalle del ROV invece di quella di bordo.
   - Con `--gui` il viewport di Isaac è alle spalle del ROV per default (`--gui-view chase`); lo stream resta quello di bordo.
 
@@ -141,6 +142,24 @@ python3 tools/pool_blueos_setup.py --blueos http://127.0.0.1:28080 --rtsp rtsp:/
 Con `--dvl` (estensione DVL attiva e configurata) verifica anche: l'EKF ha la velocità orizzontale, POSHOLD si attiva e tiene il posto, si sposta con lo stick e tiene il nuovo posto, e la posizione stimata da ArduSub segue quella vera. Prima di tutto controlla che la prua stimata da ArduSub coincida con quella vera (entro 3° per 5 s).
 
 Per provare SITL senza GPU c'è la fisica da sola: `python -m uw py -m uw.rov.physics_proc` (il ROV è invisibile ma vola, e il DVL emulato c'è anche qui).
+
+## Torbidità
+
+Un solo parametro, `water.turbidity_per_m` (b_p, in 1/m): il coefficiente di diffusione delle particelle sospese, uguale nei tre canali, perché particelle molto più grandi della lunghezza d'onda diffondono tutti i colori allo stesso modo (`uw/camera_uw.py`).
+- Si somma all'attenuazione del segnale diretto e a quella della luce diffusa.
+- Sposta la luce diffusa di fondo dal blu dell'acqua limpida verso `water.turbidity_veil`, il colore della nuvola di particelle illuminata (grigio-verde, a occhio).
+
+| | b_p [1/m] | un oggetto scuro si vede fino a |
+|---|---|---|
+| limpida (default) | 0 | ~52 m (la piscina è tutta visibile) |
+| `--preset turbid` | 0,6 | ~5,8 m |
+| `--preset murky` | 1,5 | ~2,5 m |
+
+La visibilità è ln(50)/β_d nel verde, il canale che arriva più lontano: dove il contrasto di un oggetto scuro scende al 2 %.
+
+Con acqua torbida, dalla superficie guardando dritto non si vede niente: il fondo è a quasi 5 m. Scendi o inclina la camera verso il basso.
+
+Cosa non c'è: le lampade del ROV illuminano le particelle subito davanti alla camera, ed è l'effetto più tipico dell'acqua torbida (i "coni" e la neve). Serve il percorso della luce, che un post-processing non ha.
 
 ## Il DVL
 
@@ -229,7 +248,7 @@ Sulla Work restano accesi (profilo `workstation`).
 - galleggiamento parziale in superficie: il ROV galleggia con il tetto appena fuori;
 - pareti e fondo come limite morbido;
 - camera con tilt e luci comandati da ArduSub;
-- l'acqua sull'immagine: attenuazione e luce diffusa per canale, in funzione della distanza.
+- l'acqua sull'immagine: attenuazione e luce diffusa per canale, in funzione della distanza, con la torbidità regolabile.
 
 **Non simulato:**
 - collisioni con scaletta e oggetti;
