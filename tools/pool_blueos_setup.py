@@ -9,10 +9,13 @@ runs anywhere (linus, Work's Windows Python, WSL).
 2. A "Redirect" video stream in the camera manager, pulling the Isaac camera from mediamtx over RTSP; Cockpit then
    gets it over WebRTC like a real camera. An existing stream with the same name is replaced.
 
-3. With --dvl: the Water Linked DVL extension (docker/pool/compose.yaml, service dvl; on a vehicle, BlueOS's
-   Extensions page) set up as an operator would on its page: "DVL" parameters (the EKF's horizontal position and
-   velocity from the DVL), VISION_POSITION_DELTA messages, the DVL as rangefinder, and the EKF origin at the SITL
-   home ("set current position" on its map), which POSHOLD needs.
+3. With --dvl: the Water Linked DVL extension (docker/pool/compose.yaml, service dvl or dvl-host; on a vehicle,
+   BlueOS's Extensions page) set up as an operator would on its page: "DVL" parameters (the EKF's horizontal
+   position and velocity from the DVL), VISION_POSITION_DELTA messages, the DVL as rangefinder, and the EKF origin
+   at the SITL home ("set current position" on its map), which POSHOLD needs. It first waits for ArduSub's
+   heartbeat to be live in BlueOS: those settings go to the vehicle, and a restarted SITL needs the origin again.
+   So it can be started together with `uw pool` (hil/win/pool/stack.sh configure does) and does its part once the
+   vehicle is up.
 
 Cockpit itself is a BlueOS extension (Extensions -> Cockpit -> Install) or the desktop app; docs/pool.md.
 """
@@ -90,6 +93,28 @@ def set_stream(blueos: str, rtsp: str) -> None:
     print(f"  video: '{STREAM_NAME}' <- {rtsp} ({st[0]['state']}{', ' + st[0]['error'] if st[0]['error'] else ''})")
 
 
+def wait_vehicle(blueos: str, timeout_s: float) -> None:
+    """Until ArduSub's heartbeat is live in BlueOS's mavlink2rest: SITL runs (it steps only once the physics process
+    answers) and its MAVLink reaches BlueOS. mavlink2rest keeps the last message of a vehicle that went away, so
+    live means a counter that moves."""
+    url = f"{blueos}/mavlink2rest/mavlink/vehicles/1/components/1/messages/HEARTBEAT"
+    t_end = time.monotonic() + timeout_s
+    last = None
+    while True:
+        try:
+            n = int(call("GET", url, timeout=3.0)["status"]["time"]["counter"])
+            if last is not None and n > last:
+                print("  vehicle: ArduSub's heartbeat reaches BlueOS")
+                return
+            last = n
+        except (urllib.error.URLError, OSError, KeyError, TypeError, ValueError):
+            pass
+        if time.monotonic() > t_end:
+            raise SystemExit("no live heartbeat from ArduSub in BlueOS's mavlink2rest: is the physics process "
+                             "(python -m uw pool) up, and SITL sending to BlueOS (MAVLINK_OUT)?")
+        time.sleep(2.0)
+
+
 def set_dvl(dvl: str, origin: tuple, timeout_s: float) -> None:
     """The extension's own API (its main.py, v1.0.11): plain GETs that answer "True" / "False"."""
     t_end = time.monotonic() + timeout_s
@@ -122,9 +147,11 @@ def main(argv=None) -> int:
     ap.add_argument("--blueos", default="http://localhost", help="BlueOS base URL (default %(default)s)")
     ap.add_argument("--rtsp", required=True, help="the pool camera, e.g. rtsp://100.89.193.76:8654/rov")
     ap.add_argument("--mavlink-port", type=int, default=14551, help="Manual board master endpoint, UDP")
-    ap.add_argument("--wait", type=float, default=120.0, help="seconds to wait for BlueOS to come up")
-    ap.add_argument("--dvl", default="", help="the Water Linked DVL extension's page, e.g. http://172.31.250.3 "
-                                              "(docker/pool/compose.yaml dvl-gateway); default: leave it alone")
+    ap.add_argument("--wait", type=float, default=120.0,
+                    help="seconds to wait for BlueOS to come up, and with --dvl for the vehicle and the extension")
+    ap.add_argument("--dvl", default="", help="the Water Linked DVL extension's page: http://172.31.250.3 on linus "
+                                              "(dvl-gateway), http://127.0.0.1:9001 on the Work (dvl-host); "
+                                              "default: leave it alone")
     ap.add_argument("--origin", default="45.0703,7.6869",
                     help="EKF origin lat,lon for --dvl (default: the compose file's HOME_LOC, %(default)s)")
     args = ap.parse_args(argv)
@@ -135,6 +162,7 @@ def main(argv=None) -> int:
     set_stream(blueos, args.rtsp)
     if args.dvl:
         lat, lon = (float(v) for v in args.origin.split(","))
+        wait_vehicle(blueos, args.wait)
         set_dvl(args.dvl.rstrip("/"), (lat, lon), args.wait)
     print(f"done. Open {blueos} (BlueOS) and Cockpit; the vehicle appears once SITL sends to UDP {args.mavlink_port}.")
     return 0

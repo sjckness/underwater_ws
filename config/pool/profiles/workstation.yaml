@@ -10,3 +10,7 @@ render:
   reflections: true
 stream:
   encoder: libx264
+dvl:
+  device:
+    bind: 127.0.0.1               # the emulated A50 (uw/rov/a50.py): the DVL extension in WSL reaches it on the
+                                  #   mirrored loopback; loopback only, so no Windows firewall prompt for python.exe

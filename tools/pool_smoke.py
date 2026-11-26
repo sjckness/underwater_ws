@@ -185,10 +185,10 @@ def dvl_checks(p: Pilot, tol: float) -> None:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--url", default="udpin:0.0.0.0:14560", help="pymavlink connection (default: %(default)s)")
-    # ALT_HOLD does not sit still: the T200's +-25 us dead band around 1500 us and the +2 N of buoyancy (which needs
-    # ~1540 us to cancel, just outside it) make ArduSub's depth loop limit-cycle by a few cm with a period of ~4 s.
-    # Measured 2026-11-25 with sub.parm's gains: 5-16 cm peak to peak (18 cm with the firmware defaults).
-    ap.add_argument("--hold-tol", type=float, default=0.20,
+    # ALT_HOLD holds 1 cm peak to peak (2026-11-26) since pool.parm gives SITL's depth sensor a Bar30's noise; with
+    # SITL's default +-0.2 m it hunted by 5-16 cm, which was first blamed on the T200 dead band. 5 cm leaves margin
+    # and still catches that noise coming back.
+    ap.add_argument("--hold-tol", type=float, default=0.05,
                     help="ALT_HOLD depth, peak to peak [m] (default %(default)s)")
     ap.add_argument("--dvl", action="store_true", help="also check POSHOLD on the DVL (docs/pool.md)")
     ap.add_argument("--poshold-tol", type=float, default=0.25,

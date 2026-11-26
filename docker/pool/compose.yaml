@@ -1,13 +1,34 @@
 # M11 pool stack (docs/pool.md). Host networking: ArduSub SITL next to the physics (the JSON link is a lockstep round
 # trip at 400 Hz, so it stays on loopback), the RTSP server the Isaac camera publishes to, and BlueOS (profile
-# "blueos") wherever it can have its ports. Where 80 and 8000 are taken (linus), profile "blueos-local" instead,
-# which also brings BlueOS's Water Linked DVL extension for the A50 the physics process emulates (docs/pool.md).
+# "blueos") wherever it can have its ports. Where 80 and 8000 are taken (linus), profile "blueos-local" instead.
+# Both full profiles also bring BlueOS's Water Linked DVL extension for the A50 the physics process emulates, with a
+# small gateway that stands in for the vehicle's BlueOS host (docs/pool.md, "Il DVL"):
+#   blueos-local (linus):  BlueOS, the extension and the gateway on the bridge 172.31.250.0/24
+#   work (Work, WSL2):     BlueOS and the extension in host networking (mirrored: 127.0.0.1 is Windows', where Isaac
+#                          and the physics run), the gateway alone on the bridge
 #
 #   linus, BlueOS on Work:   BLUEOS_HOST=<Work IPv4> docker compose -f docker/pool/compose.yaml up -d sitl mediamtx
 #   linus, all local:        BLUEOS_HOST=172.31.250.2 docker compose -f docker/pool/compose.yaml --profile blueos-local up -d
-#   Work, all in WSL2:       docker compose -f docker/pool/compose.yaml --profile blueos up -d
-#   stop:                    docker compose -f docker/pool/compose.yaml --profile blueos --profile blueos-local down
+#   Work, all in WSL2:       bash hil/win/pool/stack.sh up    (= docker compose ... --profile work up -d)
+#   stop:                    docker compose -f docker/pool/compose.yaml --profile blueos --profile blueos-local --profile work down
 name: uw-pool
+
+# The extension's start, shared by its two services: its settings file gets the defaults a vehicle's operator would
+# pick, and the A50's address (DVL_HOST) at every start; then the extension's own main.py, unmodified.
+x-dvl-entrypoint: &dvl-entrypoint
+  - python3
+  - -c
+  - |
+    import json, os
+    f = "/root/.config/dvl/settings.json"
+    os.makedirs(os.path.dirname(f), exist_ok=True)
+    d = {"enabled": True, "orientation": 1, "origin": [0, 0], "rangefinder": True, "should_send": "POSITION_DELTA"}
+    if os.path.exists(f):
+        d.update(json.load(open(f)))
+    d["hostname"] = os.environ["DVL_HOST"]
+    json.dump(d, open(f, "w"))
+    os.chdir("/home/pi/dvl-a50")
+    os.execv("/home/pi/dvl-a50/main.py", ["/home/pi/dvl-a50/main.py"])
 
 services:
   sitl:
@@ -53,12 +74,16 @@ services:
       MTX_HLS: "no"
       MTX_SRT: "no"
       MTX_WEBRTCADDRESS: ":8889"
+      # the control API, on loopback only: is the camera publishing? (hil/win/pool/stack.sh status)
+      MTX_API: "yes"
+      MTX_APIADDRESS: "127.0.0.1:9997"
 
   blueos:
     # BlueOS without its bootstrap (it would manage the host's network and updates): the core alone, as in the
     # project's own dev compose. 1.5 beta for the "Manual" board, which takes MAVLink from this SITL instead of
-    # running an autopilot of its own. Privileged with the docker socket, as on a vehicle: root on this host.
-    profiles: [blueos]
+    # running an autopilot of its own. Privileged with the docker socket, as on a vehicle: root on this host (on the
+    # Work, a WSL2 distribution of its own). Its extensions page works: Cockpit installs from there.
+    profiles: [blueos, work]
     image: bluerobotics/blueos-core:1.5.0-beta.43
     container_name: uw-pool-blueos
     network_mode: host
@@ -121,20 +146,7 @@ services:
       - "host.docker.internal:172.31.250.3"
     environment:
       DVL_HOST: ${DVL_HOST:-172.31.250.1:8061}
-    entrypoint:
-      - python3
-      - -c
-      - |
-        import json, os
-        f = "/root/.config/dvl/settings.json"
-        os.makedirs(os.path.dirname(f), exist_ok=True)
-        d = {"enabled": True, "orientation": 1, "origin": [0, 0], "rangefinder": True, "should_send": "POSITION_DELTA"}
-        if os.path.exists(f):
-            d.update(json.load(open(f)))
-        d["hostname"] = os.environ["DVL_HOST"]
-        json.dump(d, open(f, "w"))
-        os.chdir("/home/pi/dvl-a50")
-        os.execv("/home/pi/dvl-a50/main.py", ["/home/pi/dvl-a50/main.py"])
+    entrypoint: *dvl-entrypoint
     volumes:
       - dvl_settings:/root/.config
 
@@ -153,6 +165,43 @@ services:
       BLUEOS_HOST: 172.31.250.2
       DVL_EXTENSION_HOST: 172.31.250.4:9001
       DVL_EXTENSION_IP: 172.31.250.4
+    volumes:
+      - ./dvl_gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
+
+  dvl-host:
+    # Work (profile "work", docs in hil/win/pool/README.md): the same extension, next to the BlueOS above in WSL2's
+    # host networking. Host networking for it too, because with mirrored networking 127.0.0.1 is Windows', where
+    # the physics process inside Isaac emulates the A50 (bound to 127.0.0.1 by the workstation profile); its page is
+    # then http://localhost:9001 on Windows as well. Its "vehicle" (host.docker.internal) is dvl-gateway-host on
+    # the bridge, since BlueOS's own nginx would send the extension's cable_guy request to a service that is off.
+    profiles: [work]
+    image: bluerobotics/blueos-water-linked-dvl:v1.0.11
+    container_name: uw-pool-dvl-host
+    network_mode: host
+    restart: "no"
+    depends_on: [dvl-gateway-host]
+    extra_hosts:
+      - "host.docker.internal:172.31.250.3"
+    environment:
+      DVL_HOST: ${DVL_HOST:-127.0.0.1:8061}
+    entrypoint: *dvl-entrypoint
+    volumes:
+      - dvl_settings:/root/.config
+
+  dvl-gateway-host:
+    # dvl-gateway for the Work: alone on the bridge, at the address dvl-host knows as host.docker.internal. From
+    # the bridge, 172.31.250.1 is the WSL host, where BlueOS (port 80) and the extension (9001) listen.
+    profiles: [work]
+    image: nginx:1.28.0-alpine
+    container_name: uw-pool-dvl-gateway-host
+    restart: "no"
+    networks:
+      blueos_local:
+        ipv4_address: 172.31.250.3
+    environment:
+      BLUEOS_HOST: 172.31.250.1
+      DVL_EXTENSION_HOST: 172.31.250.1:9001
+      DVL_EXTENSION_IP: 127.0.0.1
     volumes:
       - ./dvl_gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
 
