@@ -99,15 +99,19 @@ def test_neutral_pwm_hovers_and_reports_rest(cfg):
     assert not srv.thread.is_alive()
 
 
-def test_vertical_thrusters_push_up(cfg):
+@pytest.mark.parametrize("pwm,sign", [(1100, -1), (1900, 1)])
+def test_vertical_thrusters_follow_ardusub(cfg, pwm, sign):
+    """ArduSub's convention (tests/rov/test_motor_map.py): the verticals have climb factor -1, so a climb demand
+    drives MOT_5, MOT_6 (channels 4, 5) BELOW 1500 us and the vehicle rises; above 1500 it dives."""
     srv = make_server(cfg).start()
     c = Client(srv.port)
     try:
         d0 = c.send(servo([1500] * 16))["position"][2]
-        for i in range(400):                       # MOT_5, MOT_6 (channels 4, 5) full positive: climb
-            r = c.send(servo([1500, 1500, 1500, 1500, 1900, 1900], frame=i))
-        assert r["position"][2] < d0 - 0.2
-        assert r["velocity"][2] < -0.1
+        for i in range(400):
+            r = c.send(servo([1500, 1500, 1500, 1500, pwm, pwm], frame=i))
+        assert sign * (r["position"][2] - d0) > 0.2          # NED: down is +z
+        if sign < 0:                                          # diving, the soft bound over the sand stops it
+            assert r["velocity"][2] < -0.1
     finally:
         c.close()
         srv.close()

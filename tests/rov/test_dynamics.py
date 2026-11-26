@@ -25,13 +25,15 @@ TANK = (3.0, 3.0, 3.0)
 SAND = 0.3                   # config/tank.yaml sand.thickness
 MID_TANK_NED = F.position_tank_to_ned([1.5, 1.5, 1.5], WL)
 
-FWD = np.array([1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0])          # pure surge
-SWAY = np.array([-1.0, 1.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0])       # pure sway
-YAW = np.array([1.0, -1.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0])        # pure yaw
-UP = np.array([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0])           # pure heave, upward
+# The six patterns are the factor columns of ArduSub's SUB_FRAME_VECTORED_6DOF (tests/rov/test_motor_map.py
+# pins the table): what the mixer sends for a pure demand on one axis, in channel order.
+FWD = np.array([-1.0, -1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0])        # pure surge (forward factors)
+SWAY = np.array([1.0, -1.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0])       # pure sway, to starboard (lateral factors)
+YAW = np.array([1.0, -1.0, -1.0, 1.0, 0.0, 0.0, 0.0, 0.0])        # pure yaw, nose to starboard (yaw factors)
+UP = np.array([0.0, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, -1.0])       # pure heave, upward (climb factors)
 DOWN = -UP
-ROLL = np.array([0.0, 0.0, 0.0, 0.0, 1.0, -1.0, 1.0, -1.0])       # pure roll
-PITCH = np.array([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, -1.0, -1.0])      # pure pitch
+ROLL = np.array([0.0, 0.0, 0.0, 0.0, 1.0, -1.0, 1.0, -1.0])       # pure roll, starboard down (roll factors)
+PITCH = np.array([0.0, 0.0, 0.0, 0.0, -1.0, -1.0, 1.0, 1.0])      # pure pitch, nose up (pitch factors)
 ZERO = np.zeros(8)
 
 
@@ -131,23 +133,30 @@ def test_each_axis_thrust_pattern_is_decoupled(params, cmd, dof):
     assert others.max() < 1e-9 * max(abs(tau[dof]), 1.0) + 1e-9, f"cross-coupling in {tau}"
 
 
-@pytest.mark.parametrize("cmd,dof,leak_dof", [(SWAY, 1, 0), (ROLL, 3, 2), (PITCH, 4, 2), (YAW, 5, 0)])
+@pytest.mark.parametrize("cmd,dof,leak_dof", [(ROLL, 3, 2), (PITCH, 4, 2)])
 def test_the_t200_asymmetry_couples_a_symmetric_command(params, cmd, dof, leak_dof):
     """A real and load-bearing property, not a defect: the T200 gives 51.5 N forward and only 40.2 N in
     reverse, so a command pattern with mixed signs does NOT produce a pure wrench.
 
-    A symmetric roll or pitch command (the vertical four) leaks 22.6 N = 2 (51.5 - 40.2) of heave; a
-    symmetric sway or yaw command (the horizontal four, mounted at 45 deg) leaks 16.0 N of surge. Open loop
-    the vehicle therefore sinks while it rolls and creeps forward while it turns; ArduSub's mixer and its
-    closed loop are what remove this. Any test that assumes a pure wrench has to set the thrusts, not the
-    commands.
+    A symmetric roll or pitch command (the vertical four) leaks 22.6 N = 2 (51.5 - 40.2) of heave: open loop
+    the vehicle dives while it rolls; ArduSub's closed loop is what removes this. Any test that assumes a pure
+    wrench has to set the thrusts, not the commands.
     """
     tau = params.allocation @ params.t200.thrust_of_command(cmd)
     assert abs(tau[dof]) > 1e-3
     assert abs(tau[leak_dof]) > 1.0, f"expected a real asymmetry leak in DOF {leak_dof}, got {tau}"
     expected = 2.0 * (params.t200.thrust_fwd_max_n - params.t200.thrust_rev_max_n)
-    scale = 1.0 if leak_dof == 2 else np.sqrt(2.0) / 2.0
-    assert np.isclose(abs(tau[leak_dof]), expected * scale, rtol=1e-6), f"leak {tau[leak_dof]:.3f} N"
+    assert np.isclose(abs(tau[leak_dof]), expected, rtol=1e-6), f"leak {tau[leak_dof]:.3f} N"
+
+
+@pytest.mark.parametrize("cmd,dof", [(FWD, 0), (SWAY, 1), (YAW, 5)])
+def test_the_horizontal_four_cancel_their_own_asymmetry(params, cmd, dof):
+    """With ArduSub's real layout every horizontal pattern runs one thruster of each diagonal pair forward and
+    the other in reverse, so the 51.5 / 40.2 N asymmetry cancels between the pairs: surge, sway and yaw
+    commands give a pure wrench even as commands (the earlier, reversed layout leaked 16 N of surge)."""
+    tau = params.allocation @ params.t200.thrust_of_command(cmd)
+    assert abs(tau[dof]) > 1.0
+    assert np.abs(np.delete(tau, dof)).max() < 1e-9, f"{tau}"
 
 
 def test_coriolis_is_skew_symmetric(params):
@@ -244,6 +253,20 @@ def test_simulation_is_deterministic_and_reads_no_clock(vehicle):
     b, _ = D.simulate(v, s, FWD, 2.0)
     assert np.array_equal(a.position_ned, b.position_ned)
     assert np.array_equal(a.quat_frd_ned, b.quat_frd_ned)
+
+
+def test_the_attitude_integrates_through_every_heading(vehicle):
+    """A steady yaw spin must keep turning through all headings at every step size. Before M11 the RK4 stages
+    canonicalised the quaternion to w >= 0, so at heading 180 deg NED (w = 0 for a level vehicle) a stage got
+    the derivative of -q and the heading stalled there while the yaw rate stayed at 2.7 rad/s."""
+    v = free(vehicle, neutral=True, no_damping=True)
+    r = 1.0
+    s = replace(at_tank([1.5, 1.5, 1.5]), rate_frd=np.array([0.0, 0.0, r]))
+    for k in (1, 2, 4):
+        end, tr = D.simulate(v, s, ZERO, 7.0, dt=v.params.dt / k, record_every=40 * k)
+        yaw = np.unwrap(np.radians(tr.rpy_ned_deg[:, 2]))
+        assert np.all(np.diff(yaw) > 0.0), f"dt/{k}: the heading stalls or reverses"
+        assert np.isclose(yaw[-1] - yaw[0], r * 7.0, rtol=1e-6), f"dt/{k}: turned {yaw[-1] - yaw[0]:.4f} rad"
 
 
 # ===================================================================== (a) hover with no thrust
@@ -421,7 +444,7 @@ def test_e_a_tilt_returns_toward_upright_with_a_plausible_period(vehicle, params
 def test_e_the_righting_stiffness_is_one_number(params):
     """Everything in test (e) rests on body.r_b_frd_m[2] alone; make that visible, because it is UNVERIFIED
     and it is the single parameter the righting period is proportional to."""
-    assert np.isclose(params.buoyancy_n * abs(params.r_b_frd_m[2]), 1.148, rtol=1e-3)
+    assert np.isclose(params.buoyancy_n * abs(params.r_b_frd_m[2]), 1.344, rtol=1e-3)
 
 
 # ===================================================================== (f) energy
@@ -463,14 +486,16 @@ def test_f_the_undamped_vehicle_is_rotationally_unstable_but_the_damped_one_is_n
 
     The added mass is anisotropic (Z_wdot 18.68 vs X_udot 6.36), so a body with both surge and heave feels a
     destabilising pitch moment ``(a_x - a_z) u w``, and the righting moment available to oppose it is only
-    ``B |z_b| = 1.148 N m``. With the damping removed the attitude diverges exponentially; with the published
+    ``B |z_b| = 1.344 N m``. With the damping removed the attitude diverges exponentially; with the published
     damping it does not. The shipped model is the damped one, so the shipped model is stable - but open loop
     it is barely so, which is why M8a step 2's attitude hold is not a formality.
     """
     s = replace(at_tank([1.5, 1.5, 1.5], (0.0, 2.0, 0.0)), velocity_frd=np.array([0.5, 0.0, -0.1]))
     _, undamped = D.simulate(free(vehicle, neutral=True, no_damping=True), s, ZERO, 20.0, record_every=40)
     _, damped = D.simulate(free(vehicle, neutral=True), s, ZERO, 20.0, record_every=40)
-    assert np.abs(undamped.rate_frd).max() > 10.0 * np.abs(damped.rate_frd).max(), \
+    # The undamped rate is bounded by the energy the Munk moment can move from surge into pitch (it saturates at
+    # 1.32 rad/s with the Heavy's 13.5 kg, against 0.14 damped), so the factor is 5, not an exponential's 10.
+    assert np.abs(undamped.rate_frd).max() > 5.0 * np.abs(damped.rate_frd).max(), \
         "the damping must be what stops the divergence"
     assert np.abs(damped.rate_frd[-1]).max() < 1.0, "and the damped vehicle must stay slow"
     assert np.all(np.diff(damped.energy_j) <= 1e-9), "the damped run still never gains energy"
@@ -510,7 +535,7 @@ def test_g_a_turning_manoeuvre_is_phase_sensitive_not_step_sensitive(vehicle):
     """
     v = free(vehicle, neutral=True)
     s = at_tank([1.5, 1.5, 1.5])
-    cmd = np.array([1.0, 0.5, 1.0, 0.5, 0.0, 0.0, 0.0, 0.0])
+    cmd = np.clip(FWD + 0.5 * YAW, -1.0, 1.0)             # surge with a yaw demand on top, as ArduSub mixes it
     dt = v.params.dt
     a, _ = D.simulate(v, s, cmd, 2.0, dt=dt)
     b, _ = D.simulate(v, s, cmd, 2.0, dt=dt / 2.0)
@@ -521,8 +546,10 @@ def test_g_a_turning_manoeuvre_is_phase_sensitive_not_step_sensitive(vehicle):
 
 
 def test_g_semi_implicit_agrees_with_rk4_to_first_order(vehicle):
-    """The alternative integrator is wired up and behaves: much less accurate, but not wrong."""
-    rk4 = free(vehicle)
+    """The alternative integrator is wired up and behaves: much less accurate, but not wrong. Buoyancy
+    neutralised, as in (g): a rising vehicle in surge meets the Munk moment and pitches over within seconds
+    (test (f)), and then the two integrators are comparing a divergence, not an integration."""
+    rk4 = free(vehicle, neutral=True)
     semi = D.Vehicle(replace(rk4.params, method="semi_implicit"), water_level=WL, bounds=None)
     s = at_tank([1.5, 1.5, 1.5])
     a, _ = D.simulate(rk4, s, FWD, 5.0)
@@ -601,3 +628,34 @@ def test_bound_applies_no_moment(vehicle, params):
     w = v._bound_wrench(s.position_ned, s.rot_frd_ned, np.array([0.5, 0.0, 0.0]))
     assert np.linalg.norm(w[:3]) > 1.0, "the bound must be pushing"
     assert np.allclose(w[3:], 0.0), "and it must make no moment"
+
+
+# ===================================================================== the surface model (M11 pool)
+
+def pool_vehicle(**kw) -> D.Vehicle:
+    """The M11 pool: 10 x 10 m, water 5 m deep over a bare floor, partial-submersion buoyancy at the top."""
+    return D.make_vehicle(tank_size=(10.0, 10.0, 5.3), sand_base=0.0, water_level=5.0, surface_model=True, **kw)
+
+
+def test_surface_model_floats_the_vehicle_at_the_surface():
+    """With zero thrust a positively buoyant vehicle rises and settles where the submerged share of the hull
+    carries exactly its weight: CG depth (W / B - 0.5) * hull height, i.e. the top of the hull just out."""
+    v = pool_vehicle()
+    p = v.params
+    s = D.State.rest(8, position_ned=F.position_tank_to_ned([5.0, 5.0, 4.5], 5.0))
+    end, _ = D.simulate(v, s, ZERO, 90.0, record_every=4000)
+    expect = (p.weight_n / p.buoyancy_n - 0.5) * p.hull_height_m
+    assert 0.0 < expect < 0.5 * p.hull_height_m
+    assert np.isclose(end.position_ned[2], expect, atol=5e-3), f"CG depth {end.position_ned[2]:.4f} vs {expect:.4f}"
+    assert abs(end.velocity_frd[2]) < 1e-3
+    assert v.submerged(-1.0) == 0.0 and v.submerged(1.0) == 1.0
+
+
+def test_surface_model_lets_the_vehicle_dive_and_off_by_default_nothing_changes(vehicle):
+    v = pool_vehicle()
+    s = D.State.rest(8, position_ned=F.position_tank_to_ned([5.0, 5.0, 4.88], 5.0))
+    end, _ = D.simulate(v, s, DOWN, 5.0)
+    assert end.position_ned[2] > 1.0, "full down thrust from the surface must dive"
+    assert vehicle.submerged(-10.0) == 1.0, "without the surface model the buoyancy never scales"
+    with pytest.raises(D.VehicleError, match="hull_height_m"):
+        D.Vehicle(replace(vehicle.params, hull_height_m=None), surface_model=True)

@@ -86,4 +86,6 @@ Checked on the work machine (no Thor): stub + container + a loopback MAVLink lis
   `ros/dvl_dr` depends on it. **Revert with one line** if EKF3 misbehaves: `AHRS_EKF_TYPE 10`.
 - MAVROS is version-controlled in `ros/mavros_rov1/` and namespaced `/rov1/mavros/**`; the `output/hil/thor_mavros_*`
   copies are superseded.
-- Clock: SITL time follows the physics' timestamps. If Isaac runs at RTF 0.85, MAVLink (heartbeats, telemetry) runs at 0.85 in wall time.
+- Clock: SITL time follows the physics' timestamps, and the physics paces them to the wall clock at `sim.physics_rtf`
+  on its own (`uw/physics_udp.py`), independently of the Isaac render loop. So SITL and MAVLink run at real time even
+  when Isaac renders at RTF 0.85; it is Isaac's `/clock` that then falls behind SITL's, not the other way round.

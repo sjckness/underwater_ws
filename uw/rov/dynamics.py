@@ -167,13 +167,18 @@ class TankBounds:
     @staticmethod
     def from_tank(size, sand_base: float, water_level: float, margin: float, sand_extra: float,
                   stiffness: float, damping: float, surface_stiffness: float,
-                  surface_damping: float) -> "TankBounds":
+                  surface_damping: float, open_surface: bool = False) -> "TankBounds":
         """The same box ``uw.pose.Bounds`` clips the kinematic trajectories to: ``margin`` from the walls,
-        ``margin + sand_extra`` over the sand, ``margin`` below the surface."""
+        ``margin + sand_extra`` over the sand, ``margin`` below the surface.
+
+        ``open_surface``: no top face and no surface spring, because the partial-submersion buoyancy of
+        ``Vehicle(surface_model=True)`` holds the vehicle at the surface the way water does."""
         size = np.asarray(size, float)
         lo = np.array([margin, margin, float(sand_base) + margin + sand_extra])
-        hi = np.array([size[0] - margin, size[1] - margin, float(water_level) - margin])
-        return TankBounds(lo, hi, float(water_level), stiffness, damping, surface_stiffness, surface_damping)
+        top = np.inf if open_surface else float(water_level) - margin
+        hi = np.array([size[0] - margin, size[1] - margin, top])
+        surface = np.inf if open_surface else float(water_level)
+        return TankBounds(lo, hi, surface, stiffness, damping, surface_stiffness, surface_damping)
 
 
 @dataclass(frozen=True)
@@ -200,6 +205,7 @@ class Params:
     bound_margin_m: float
     bound_sand_extra_m: float
     bound_gains: tuple[float, float, float, float]
+    hull_height_m: float | None = None  # body.hull_height_m: only the surface model reads it
 
     @property
     def dt(self) -> float:
@@ -318,6 +324,7 @@ def load_params(path: str | Path | None = None) -> Params:
         bound_sand_extra_m=float(bd["sand_extra_m"]),
         bound_gains=(float(bd["stiffness_n_per_m"]), float(bd["damping_n_s_per_m"]),
                      float(bd["surface_stiffness_n_per_m"]), float(bd["surface_damping_n_s_per_m"])),
+        hull_height_m=float(body["hull_height_m"]) if body.get("hull_height_m") is not None else None,
     )
 
 
@@ -377,16 +384,19 @@ def damping(params: Params, nu: np.ndarray) -> np.ndarray:
     return (params.d_lin + params.d_quad * np.abs(nu)) * nu
 
 
-def restoring(params: Params, rot_frd_ned: np.ndarray) -> np.ndarray:
+def restoring(params: Params, rot_frd_ned: np.ndarray, submerged: float = 1.0) -> np.ndarray:
     """Fossen's ``g(eta)``: the wrench the weight and the buoyancy put on the LHS of the equation.
 
     Vectorial, no Euler angles. ``e_D`` is the NED down axis expressed in the body frame; the weight acts at
     the CG (the body origin) and the buoyancy at ``r_b``, so with the CB above the CG the moment is a righting
     one - ``tests/rov/test_dynamics.py`` checks the sign for roll and for pitch.
+
+    ``submerged`` scales the buoyancy (the fraction of the displaced volume under water; 1 when fully
+    submerged), for the surface model of ``Vehicle``.
     """
     e_d_body = rot_frd_ned.T @ np.array([0.0, 0.0, 1.0])
     f_w = params.weight_n * e_d_body
-    f_b = -params.buoyancy_n * e_d_body
+    f_b = -params.buoyancy_n * float(submerged) * e_d_body
     force = -(f_w + f_b)
     moment = -(frames.cross3(params.r_g_frd_m, f_w) + frames.cross3(params.r_b_frd_m, f_b))
     return np.concatenate([force, moment])
@@ -402,10 +412,18 @@ class Vehicle:
     the depth ArduSub's simulated barometer reads.
     """
 
-    def __init__(self, params: Params, water_level: float = 2.9, bounds: TankBounds | None = None):
+    def __init__(self, params: Params, water_level: float = 2.9, bounds: TankBounds | None = None,
+                 surface_model: bool = False):
         self.params = params
         self.water_level = float(water_level)
         self.bounds = bounds if params.bound_enabled else None
+        # The partial-submersion surface model (M11): the buoyancy scales with the fraction of the hull height
+        # under water, so the vehicle floats AT the surface with its top just out, as a real one does, instead of
+        # being held a bound margin below it. Attitude is ignored (the hull is treated as a level slab), and the
+        # added mass and damping keep their submerged values: good enough for launching and surfacing.
+        if surface_model and not params.hull_height_m:
+            raise VehicleError("surface_model needs body.hull_height_m in the vehicle file")
+        self.surface_model = bool(surface_model)
         self.bound_activations = 0          # derivative evaluations in which the bound pushed in. RK4 calls
                                             #   the derivative 4x per step, so this is ~4x the step count.
         self.bound_max_penetration_m = 0.0
@@ -476,7 +494,11 @@ class Vehicle:
         """The packed derivative. ``steady_thrust`` is the thrust the current command asks for, already
         converted, because it is constant across the four RK4 stages."""
         p = self.params
-        q = frames.quat_normalize(y[3:7])
+        # Unit length only, NOT quat_normalize's w >= 0 representative: an RK4 stage whose quaternion has crossed
+        # w = 0 (a level vehicle heading through south) would otherwise get the derivative of -q, of the opposite
+        # sign to the state it is added to, and the attitude stalls at that heading. The once-per-step
+        # canonicalisation in step() is harmless: it flips the whole state before the next step starts.
+        q = y[3:7] / np.linalg.norm(y[3:7])
         rot = frames.quat_to_rot(q)
         nu = y[7:13]
         thrust = y[13:]
@@ -484,7 +506,7 @@ class Vehicle:
         tau = p.allocation @ thrust
         if self.bounds is not None:
             tau = tau + self._bound_wrench(y[0:3], rot, nu[:3])
-        nu_dot = p.M_inv @ (tau - coriolis_nu(p, nu) - damping(p, nu) - restoring(p, rot))
+        nu_dot = p.M_inv @ (tau - coriolis_nu(p, nu) - damping(p, nu) - restoring(p, rot, self.submerged(y[2])))
 
         d = np.empty_like(y)
         d[0:3] = rot @ nu[:3]
@@ -492,6 +514,13 @@ class Vehicle:
         d[7:13] = nu_dot
         d[13:] = (steady_thrust - thrust) / p.t200.tau_s
         return d
+
+    def submerged(self, depth_m: float) -> float:
+        """The fraction of the hull under water at CG depth ``depth_m`` (NED down from the free surface): 1
+        without the surface model, else linear over the hull height, centred on the CG."""
+        if not self.surface_model:
+            return 1.0
+        return min(max(float(depth_m) / self.params.hull_height_m + 0.5, 0.0), 1.0)
 
     def _bound_wrench(self, p_ned: np.ndarray, rot: np.ndarray, v_frd: np.ndarray) -> np.ndarray:
         """The soft bound's wrench in body FRD. NON-PHYSICAL - see the module docstring.
@@ -529,18 +558,19 @@ class Vehicle:
 # ------------------------------------------------------------------------------------------- helpers
 
 def make_vehicle(params_path: str | Path | None = None, tank_size=(3.0, 3.0, 3.0), sand_base: float = 0.3,
-                 water_level: float = 2.9) -> Vehicle:
+                 water_level: float = 2.9, surface_model: bool = False) -> Vehicle:
     """A ``Vehicle`` with its soft bound built from the tank geometry.
 
     The three tank numbers are passed in rather than read from ``config/tank.yaml`` here, so that this module
     stays independent of the repo's config layering; the runner wires them from ``tank.size``,
-    ``sand.thickness`` and ``tank.water_level``.
+    ``sand.thickness`` and ``tank.water_level``. ``surface_model``: partial-submersion buoyancy and an open
+    top (see ``Vehicle``), off by default so the tank scenes keep their bound.
     """
     params = load_params(params_path)
     k, c, ks, cs = params.bound_gains
     bounds = TankBounds.from_tank(tank_size, sand_base, water_level, params.bound_margin_m,
-                                 params.bound_sand_extra_m, k, c, ks, cs)
-    return Vehicle(params, water_level=water_level, bounds=bounds)
+                                 params.bound_sand_extra_m, k, c, ks, cs, open_surface=surface_model)
+    return Vehicle(params, water_level=water_level, bounds=bounds, surface_model=surface_model)
 
 
 @dataclass(frozen=True)
