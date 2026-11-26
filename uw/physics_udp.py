@@ -63,14 +63,21 @@ class PhysicsServer:
     """The UDP server thread. ``start`` binds first, in the caller's thread, so a busy port is an immediate
     ``ConfigError`` (typically tools/stub_physics.py still running), never a silently dead thread."""
 
+    # A step this far behind the wall clock re-anchors the pacing instead of letting SITL catch up at full speed
+    # (a stall of the host would otherwise be followed by a burst of fast-forwarded physics).
+    MAX_LAG_S = 0.1
+
     def __init__(self, vehicle, state, home_tank, water_level: float, port: int, bind: str = "127.0.0.1",
-                 rtf: float = 1.0):
+                 rtf: float = 1.0, on_step=None):
         from .rov import frames
         self.frames, self.vehicle, self.state = frames, vehicle, state
         self.home_ned = frames.position_tank_to_ned(np.array([home_tank[0], home_tank[1], water_level]), water_level)
         self.water_level, self.port, self.bind_addr, self.rtf = float(water_level), int(port), bind, float(rtf)
         self.channels = [t.channel for t in vehicle.params.thrusters]
         self.cmd = np.zeros(vehicle.params.n_thrusters)
+        self.pwm = (1500,) * 16                  # the last servo packet's channels, aux outputs included
+        self.on_step = on_step                   # called in the thread after every packet: (state, pwm, pose)
+        self.stalls = 0
         self.lock = threading.Lock()
         self.stop_flag = threading.Event()
         self.sock = None
@@ -108,8 +115,8 @@ class PhysicsServer:
         if self.sock is not None:
             self.sock.close()
             self.sock = None
-        log.info("physics: stopped after %d servo packets, %d steps, sim t %.2f s, %d bound activations",
-                 self.packets, self.steps, self.state.t, self.vehicle.bound_activations)
+        log.info("physics: stopped after %d servo packets, %d steps, sim t %.2f s, %d bound activations, %d stalls",
+                 self.packets, self.steps, self.state.t, self.vehicle.bound_activations, self.stalls)
 
     # ---- shared state
     def _body_pose(self, state):
@@ -120,6 +127,11 @@ class PhysicsServer:
         """(position in the tank [m], body FLU -> tank ENU rotation) of the latest step."""
         with self.lock:
             return self._pose
+
+    def last_pwm(self) -> tuple:
+        """The PWM of every channel in the last servo packet (thrusters and the aux outputs: lights, tilt)."""
+        with self.lock:
+            return self.pwm
 
     def body_twist(self):
         """(body FRD linear velocity [m/s], body FRD angular velocity [rad/s], sim time [s]) of the latest
@@ -177,9 +189,17 @@ class PhysicsServer:
                     delay = wall0 + state.t / self.rtf - time.monotonic()
                     if delay > 0:
                         time.sleep(delay)
+                    elif delay < -self.MAX_LAG_S:
+                        wall0 -= delay
+                        self.stalls += 1
+                        if self.stalls <= 5 or self.stalls % 100 == 0:
+                            log.warning("physics: %.0f ms behind the wall clock at sim t %.2f s, re-anchored "
+                                        "(stall %d)", -1e3 * delay, state.t, self.stalls)
                 pose = self._body_pose(state)
                 with self.lock:
-                    self.state, self.cmd, self._pose = state, cmd, pose
+                    self.state, self.cmd, self._pose, self.pwm = state, cmd, pose, pwm
+                if self.on_step is not None:
+                    self.on_step(state, pwm, pose)
                 self.sock.sendto(self._frame(state, cmd), addr)
                 self.packets += 1
                 self.steps += n

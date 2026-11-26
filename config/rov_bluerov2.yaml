@@ -10,21 +10,24 @@
 #               only network access this session had was the ArduPilot clone). Check against the paper.
 #   GUESS       an estimate. Nothing published behind it. These are listed in docs/ros_hil.md M8a.
 #
-# SOURCES (none of these documents could be opened in this session - every row drawn from them is UNVERIFIED):
+# SOURCES:
 #   [BENZON22]  von Benzon, Sorensen, Uth, Jouffroy, Liniger, Pedersen, "An Open-Source Benchmark Simulator:
-#               Control of a BlueROV2 Underwater Robot", J. Mar. Sci. Eng. 10(5):636, 2022. The BlueROV2
-#               Fossen coefficient set in wide use; it in turn draws on [WU18].
+#               Control of a BlueROV2 Underwater Robot", J. Mar. Sci. Eng. 10(12):1898, 2022,
+#               doi:10.3390/jmse10121898 (CC BY 4.0). OPENED 2026-11-25 (M11): every row tagged V [BENZON22]
+#               below was checked against its Table A1, which is for the BlueROV2 in HEAVY configuration
+#               (section 4.1: "built with eight T200 thrusters"; Table 5: 0.46 x 0.38 x 0.58 m).
+#   [AP457]     ArduPilot tag ArduSub-4.5.7 (commit 30257f01): libraries/AP_Motors/AP_Motors6DOF.cpp
+#               (SUB_FRAME_VECTORED_6DOF factor table) and libraries/SITL/SIM_Submarine.cpp (Thruster:
+#               linear = (forward, lateral, -throttle)), OPENED 2026-11-25. tests/rov/test_motor_map.py pins
+#               the table.
 #   [WU18]      Wu, "Towards Linear-Parameter-Varying Control of an Underwater Vehicle", MSc thesis, 2018.
 #   [T200]      Blue Robotics T200 thruster product page and "T200 Public Performance Data" (10-20 V).
 #   [BR2]       Blue Robotics BlueROV2 / BlueROV2 Heavy specifications.
 #
-# KNOWN APPROXIMATION, stated once here and repeated in the docs: the hydrodynamic identification
-# ([BENZON22]/[WU18]: inertia, added mass, damping) is for the STANDARD BlueROV2 hull. This file pairs it
-# with the HEAVY thruster layout, because the frame choice is forced by the dataset (section 6.3 of
-# docs/ros_hil.md, and the hover pitch computed in M8a step 1: the v0.2 views need +22 to +45 deg nose-down,
-# which a 6-thruster Vectored frame cannot hold). The Heavy's two extra thrusters and payload skid add mass,
-# volume and drag that the published set does not contain. mass_kg, volume and the damping rows are therefore
-# the first things to re-measure; see the GUESS list in docs/ros_hil.md.
+# CORRECTION (M11, 2026-11-25): earlier revisions said the identification was for the STANDARD hull. Opening
+# [BENZON22] shows Table A1 is the HEAVY: mass and volume measured, inertia and CB from CAD, damping from pool
+# tests, added mass from Eidsvik's method on the Heavy's dimensions. So body, added mass and damping below are
+# the Heavy's own published set; config/rov_bluerov2_vectored.yaml (standard hull) is the one that borrows.
 
 model: BlueROV2 Heavy
 frame: vectored_6dof            # ArduSub FRAME_CONFIG 2. V: the decision in docs/ros_hil.md 6.3
@@ -33,29 +36,32 @@ body:
   # Mass and buoyancy. The BlueROV2 is designed slightly POSITIVELY buoyant so it surfaces on power loss, and
   # the published pair below says +2.0 N: a zero-thrust vehicle rises. M8a step 1 test (a) measures that drift
   # rather than asserting a hover.
-  mass_kg: 11.5                 # UNVERIFIED [BENZON22]/[BR2]. The Heavy is nearer 13.5 kg; raising this
-                                #   without raising buoyancy_n changes the vehicle from +2.0 N to -17.6 N.
-  weight_n: 112.8               # UNVERIFIED [BENZON22]. = mass_kg * 9.80665 to 0.1 %; a test asserts that.
-  buoyancy_n: 114.8             # UNVERIFIED [BENZON22]. Given as a FORCE, not rho*g*V: the published figure is
-                                #   at fresh water. config/tank.yaml has salinity_psu 35 (rho ~ 1026), which
-                                #   would add ~2.6 % = +3.0 N if computed from the volume. Known limitation.
-  volume_m3: 0.011702           # informational only (= buoyancy_n / (1000 * 9.80665)); nothing reads it.
+  mass_kg: 13.5                 # V [BENZON22] Table A1, "Experimental".
+  weight_n: 132.39              # = mass_kg * 9.80665 (a test asserts it to 0.1 %).
+  buoyancy_n: 134.39            # = rho g V + trim. rho g V = 1000 * 9.80665 * 0.0134 = 131.41 N (V [BENZON22],
+                                #   volume "Experimental", fresh water) would make the vehicle 0.98 N NEGATIVE.
+                                #   Blue Robotics ballasts the vehicle slightly positive, so +2.98 N of trim
+                                #   (GUESS: foam/ballast) restores the +2.0 N net the earlier revisions carried.
+                                #   Given as a FORCE: config/tank.yaml's salinity_psu 35 is not applied.
+  volume_m3: 0.0134             # V [BENZON22]; informational only, nothing reads it.
+  hull_height_m: 0.254          # V [BR2]: 457 x 575 x 254 mm. Read only by the partial-submersion surface model
+                                #   (uw.rov.dynamics make_vehicle(surface_model=True), the M11 pool).
   r_g_frd_m: [0.0, 0.0, 0.0]    # V by definition: the body origin IS the centre of gravity, so M_RB is
                                 #   diagonal and the weight makes no moment.
-  r_b_frd_m: [0.0, 0.0, -0.01]  # UNVERIFIED [BENZON22]: centre of buoyancy 1 cm ABOVE the CG (z down, so
+  r_b_frd_m: [0.0, 0.0, -0.01]  # V [BENZON22] ("CAD"): centre of buoyancy 1 cm ABOVE the CG (z down, so
                                 #   negative). This single number sets the whole roll/pitch restoring stiffness
-                                #   (buoyancy_n * 0.01 = 1.148 N m/rad) and hence the righting period.
-  inertia_frd_kg_m2: [0.26, 0.23, 0.37]     # UNVERIFIED [BENZON22]/[WU18]: Ix, Iy, Iz about the CG.
-  inertia_products_kg_m2: [0.0, 0.0, 0.0]   # UNVERIFIED: Ixy, Ixz, Iyz taken as zero by the same sources.
+                                #   (buoyancy_n * 0.01 = 1.344 N m/rad) and hence the righting period.
+  inertia_frd_kg_m2: [0.26, 0.23, 0.37]     # V [BENZON22] ("CAD"): Ix, Iy, Iz about the CG.
+  inertia_products_kg_m2: [0.0, 0.0, 0.0]   # V [BENZON22]: not given, i.e. taken as zero.
 
 # Added mass, Fossen's notation: M_A = -diag(X_udot ... N_rdot), so these are NEGATIVE.
 added_mass:
-  X_udot: -6.36                 # UNVERIFIED [BENZON22]
-  Y_vdot: -7.12                 # UNVERIFIED [BENZON22]
-  Z_wdot: -18.68                # UNVERIFIED [BENZON22]
-  K_pdot: -0.189                # UNVERIFIED [BENZON22]
-  M_qdot: -0.135                # UNVERIFIED [BENZON22]
-  N_rdot: -0.222                # UNVERIFIED [BENZON22]
+  X_udot: -6.36                 # V [BENZON22]
+  Y_vdot: -7.12                 # V [BENZON22]
+  Z_wdot: -18.68                # V [BENZON22]
+  K_pdot: -0.189                # V [BENZON22]
+  M_qdot: -0.135                # V [BENZON22]
+  N_rdot: -0.222                # V [BENZON22]
 
 # Linear damping: D_lin = -diag(...), NEGATIVE coefficients.
 # NOTE the three zeros. The published set gives no linear damping in sway, roll or yaw, so free decay in those
@@ -63,23 +69,23 @@ added_mass:
 # tail is long. A real vehicle has some linear damping there. Step 1 test (b) reports a 50 %-decay time for
 # every DOF instead of an exponential time constant, for exactly this reason.
 damping_linear:
-  X_u: -13.7                    # UNVERIFIED [BENZON22]
-  Y_v: 0.0                      # UNVERIFIED [BENZON22] - published as zero
-  Z_w: -33.0                    # UNVERIFIED [BENZON22]
-  K_p: 0.0                      # UNVERIFIED [BENZON22] - published as zero
-  M_q: -0.8                     # UNVERIFIED [BENZON22]
-  N_r: 0.0                      # UNVERIFIED [BENZON22] - published as zero
+  X_u: -13.7                    # V [BENZON22]
+  Y_v: 0.0                      # V [BENZON22] - published as zero
+  Z_w: -33.0                    # V [BENZON22]
+  K_p: 0.0                      # V [BENZON22] - published as zero
+  M_q: -0.8                     # V [BENZON22]
+  N_r: 0.0                      # V [BENZON22] - published as zero
 
 # Quadratic damping: D_quad = -diag(...) * |nu|, NEGATIVE coefficients.
 damping_quadratic:
-  X_uu: -141.0                  # UNVERIFIED [BENZON22]. Dominates the surge terminal velocity: with the T200
+  X_uu: -141.0                  # V [BENZON22]. Dominates the surge terminal velocity: with the T200
                                 #   maxima below it gives ~0.97 m/s, against [BR2]'s "up to 1.5 m/s". Step 1
                                 #   test (c) reports both; this coefficient is the suspect, not the thrust.
-  Y_vv: -217.0                  # UNVERIFIED [BENZON22]
-  Z_ww: -190.0                  # UNVERIFIED [BENZON22]
-  K_pp: -1.19                   # UNVERIFIED [BENZON22]
-  M_qq: -0.47                   # UNVERIFIED [BENZON22]
-  N_rr: -1.50                   # UNVERIFIED [BENZON22]
+  Y_vv: -217.0                  # V [BENZON22]
+  Z_ww: -190.0                  # V [BENZON22]
+  K_pp: -1.19                   # V [BENZON22]
+  M_qq: -0.47                   # V [BENZON22]
+  N_rr: -1.50                   # V [BENZON22]
 
 # ----------------------------------------------------------------------------------------- thrusters
 #
@@ -87,37 +93,44 @@ damping_quadratic:
 # thrust pushes the body. The 6x8 allocation matrix is built from the geometry - column i is
 # [axis_i ; r_i x axis_i] - and never written out by hand, so a geometry edit cannot disagree with it.
 #
-# The horizontal four are angled 45 deg INWARD (not outward): that is what gives the published yaw arm of
-# 0.1888 m from the +-(0.156, 0.111) mounting points, and uw/rov/dynamics.py asserts the arm comes out at that
-# value. The layout below is exactly decoupled: surge, sway, heave, roll, pitch and yaw each have a thrust
-# combination that excites nothing else (tests/rov/test_dynamics.py checks all six).
+# CHANNELS AND SIGNS ARE ARDUSUB'S (verified 2026-11-25 against [AP457]; tests/rov/test_motor_map.py pins it).
+# Channel c is ArduSub motor c+1 (SERVOn_FUNCTION default: SERVOn = motor n), i.e. JSON pwm[c]. `axis_frd` is
+# the direction a POSITIVE output (PWM > 1500) pushes the body, with SITL's convention: SIM_Submarine gives
+# each motor linear = (forward, lateral, -climb) of its AP_Motors6DOF factors, so
+#   - the four horizontals push along (forward, lateral)/sqrt2 of their factors: the two FRONT motors push
+#     backwards for a positive output (forward factor -1), the two rear ones forwards;
+#   - the four verticals have climb factor -1, so a positive output pushes DOWN (+z in FRD) and a climb demand
+#     drives them below 1500 us.
+# Each motor sits on the corner whose roll/pitch/yaw moment has its factor's sign. Earlier revisions had the
+# two front horizontals and all four verticals reversed (the [BENZON22] thrust-direction convention, not
+# ArduSub's): stick up would have driven the vehicle down. MOTn_DIRECTION must stay 1 in SITL for this to hold.
 #
-# WHICH PWM CHANNEL IS WHICH THRUSTER IS NOT SETTLED HERE. The channel -> thruster map and the sign of each
-# channel come from ArduSub's own frame definition (AP_Motors6DOF.cpp, MOTOR_FRAME_VECTORED_6DOF) and
-# SERVOn_FUNCTION, read from the pinned ArduPilot checkout in M8a step 2. The `channel:` fields below are
-# placeholders in mounting order and are NOT to be trusted until step 2 overwrites them.
+# The 45-deg layout reproduces the published yaw arm 0.1888 m from the +-(0.156, 0.111) mounting points, and
+# uw/rov/dynamics.py asserts the arm comes out at that value. Surge, sway, heave, roll, pitch and yaw each
+# have a thrust combination (the factor column of AP_Motors6DOF) that excites nothing else.
 thrusters:
   count: 8
   positions_source: >
-    UNVERIFIED [BR2]/[BENZON22]: horizontal at +-(0.156, 0.111) m, vertical at +-(0.120, 0.218) m. The
-    horizontal pair reproduces the published yaw arm 0.1888 m and the vertical pair the published roll arm
-    0.218 m and pitch arm 0.120 m, which is why these four numbers are believed; the z offsets are GUESS.
+    V [BENZON22] Table A1 ("CAD"): horizontal at +-(0.156, 0.111) m, vertical at +-(0.120, 0.218) m. The
+    horizontal pair reproduces the yaw arm 0.1888 m, the vertical pair the roll arm 0.218 m and pitch arm
+    0.120 m.
   list:
-    # horizontal, vectored, axes 45 deg inward in the xy plane
-    - {name: fore_starboard, channel: 0, position_frd_m: [ 0.156,  0.111, 0.0], axis_frd: [ 0.70711, -0.70711, 0.0]}
-    - {name: fore_port,      channel: 1, position_frd_m: [ 0.156, -0.111, 0.0], axis_frd: [ 0.70711,  0.70711, 0.0]}
+    # horizontal, vectored, 45 deg; axis = where a positive output pushes ([AP457] factors, SITL convention)
+    - {name: fore_starboard, channel: 0, position_frd_m: [ 0.156,  0.111, 0.0], axis_frd: [-0.70711,  0.70711, 0.0]}
+    - {name: fore_port,      channel: 1, position_frd_m: [ 0.156, -0.111, 0.0], axis_frd: [-0.70711, -0.70711, 0.0]}
     - {name: aft_starboard,  channel: 2, position_frd_m: [-0.156,  0.111, 0.0], axis_frd: [ 0.70711,  0.70711, 0.0]}
     - {name: aft_port,       channel: 3, position_frd_m: [-0.156, -0.111, 0.0], axis_frd: [ 0.70711, -0.70711, 0.0]}
-    # vertical: positive thrust pushes the body UP, i.e. along -z in FRD
-    - {name: vert_fore_starboard, channel: 4, position_frd_m: [ 0.120,  0.218, 0.0], axis_frd: [0.0, 0.0, -1.0]}
-    - {name: vert_fore_port,      channel: 5, position_frd_m: [ 0.120, -0.218, 0.0], axis_frd: [0.0, 0.0, -1.0]}
-    - {name: vert_aft_starboard,  channel: 6, position_frd_m: [-0.120,  0.218, 0.0], axis_frd: [0.0, 0.0, -1.0]}
-    - {name: vert_aft_port,       channel: 7, position_frd_m: [-0.120, -0.218, 0.0], axis_frd: [0.0, 0.0, -1.0]}
+    # vertical: a positive output pushes the body DOWN (+z in FRD); climb factor -1
+    - {name: vert_fore_starboard, channel: 4, position_frd_m: [ 0.120,  0.218, 0.0], axis_frd: [0.0, 0.0, 1.0]}
+    - {name: vert_fore_port,      channel: 5, position_frd_m: [ 0.120, -0.218, 0.0], axis_frd: [0.0, 0.0, 1.0]}
+    - {name: vert_aft_starboard,  channel: 6, position_frd_m: [-0.120,  0.218, 0.0], axis_frd: [0.0, 0.0, 1.0]}
+    - {name: vert_aft_port,       channel: 7, position_frd_m: [-0.120, -0.218, 0.0], axis_frd: [0.0, 0.0, 1.0]}
   z_offset_note: >
-    Every z offset is 0.0 (GUESS), i.e. all eight thrust lines pass through the CG height. The published
-    allocation matrices carry zeros in the roll and pitch rows for the horizontal thrusters, which implies
-    exactly this. A non-zero z would couple surge into pitch and sway into roll; worth one measurement off the
-    CAD, because it is the difference between a vehicle that pitches when it accelerates and one that does not.
+    Every z offset is 0.0, i.e. all eight thrust lines pass through the CG height. [BENZON22] Table A1 puts the
+    horizontal four at z = +0.085 m (below the CG, "CAD"). That is NOT adopted: with its own 1 cm CB offset the
+    vehicle's maximum righting moment is 1.34 N m, while full surge below the CG would pitch it with 0.085 * 86 N
+    = 7.3 N m and tumble it open loop, which a real Heavy in MANUAL does not do. One of the two published numbers
+    is off for a ballasted vehicle; measure the CG height (and hence both) before adopting either.
 
 # T200 thrust vs command. The two maxima are the datasheet headline figures at 16 V; the SHAPE between zero
 # and full is a power law, which is the GUESS. Replacing it with the published CSV means filling `table` -
@@ -136,9 +149,11 @@ t200:
                                 #   it gives 0.379 of full thrust, against roughly 0.38 read off the published
                                 #   chart - which is why 1.4 and not 2.0 (0.25) or 1.0 (0.5).
   table: []                     # optional [[u, newtons], ...], u in [-1, 1], monotone: overrides curve_exponent
-  tau_s: 0.1                    # GUESS: first-order thruster lag (command -> delivered thrust). Sets how fast
-                                #   the autopilot can act; the fastest time constant in the model, and what
-                                #   fixes the integrator step at 1/400 s rather than something larger.
+  tau_s: 0.02                   # V [BENZON22] eq. 19: the identified thruster response K(s) = (6136 s + 108700)
+                                #   / (s^3 + 89 s^2 + 9258 s + 108700) reaches 63 % of a step at 20 ms (its zero
+                                #   at -17.7 nearly cancels the -13.2 pole), so the first-order lag is 0.02 s
+                                #   (was 0.1, a GUESS). Eight 2.5 ms steps per time constant: RK4 is far inside
+                                #   stability.
 
 integrator:
   rate_hz: 400.0                # V: ArduSub MAIN_LOOP_RATE is 400 Hz (docs/ros_hil.md 3.2, ArduSub/config.h),

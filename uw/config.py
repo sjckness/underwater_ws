@@ -23,6 +23,7 @@ import yaml
 
 WS = os.environ.get("UW_WS", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_CONFIG = os.path.join(WS, "config", "tank.yaml")
+POOL_CONFIG = os.path.join(WS, "config", "pool", "pool.yaml")     # M11: `uw pool`, its profiles in config/pool/profiles
 DEFAULT_PROFILE = "linus"
 
 
@@ -160,8 +161,9 @@ def add_args(add_argument: Callable[..., Any]) -> None:
                  help="override one value, e.g. --set leak.flow_lpm=30; repeatable")
 
 
-def from_args(args: Any) -> dict:
-    return load(overrides=args.overrides, profile=args.profile, presets=args.preset)
+def from_args(args: Any, path: str = DEFAULT_CONFIG) -> dict:
+    """The config of ``path`` (default config/tank.yaml; ``POOL_CONFIG`` for the pool) with the parsed options."""
+    return load(path, overrides=args.overrides, profile=args.profile, presets=args.preset)
 
 
 def sonar_mode(cfg: dict) -> dict:

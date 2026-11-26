@@ -4,6 +4,10 @@
 # so the body, added mass and damping are the published STANDARD-hull set ([BENZON22]) - which is what they were
 # identified on. The "known approximation" paragraph below (Heavy layout on the standard hull) no longer applies.
 #
+# CORRECTION (M11, 2026-11-25): [BENZON22] was opened since, and its Table A1 is the HEAVY's (13.5 kg). The
+# body, added mass and damping below are therefore the Heavy's set (with the older 11.5 kg mass) applied to the
+# standard hull, not the other way round; rov_bluerov2.yaml now carries the verified Heavy values.
+#
 # Original header of rov_bluerov2.yaml follows:
 # BlueROV2 Heavy (Vectored_6DOF, 8 thrusters): the M8a vehicle, docs/ros_hil.md section 6.3.
 #
@@ -94,15 +98,8 @@ damping_quadratic:
 # thrust pushes the body. The 6x8 allocation matrix is built from the geometry - column i is
 # [axis_i ; r_i x axis_i] - and never written out by hand, so a geometry edit cannot disagree with it.
 #
-# The horizontal four are angled 45 deg INWARD (not outward): that is what gives the published yaw arm of
-# 0.1888 m from the +-(0.156, 0.111) mounting points, and uw/rov/dynamics.py asserts the arm comes out at that
-# value. The layout below is exactly decoupled: surge, sway, heave, roll, pitch and yaw each have a thrust
-# combination that excites nothing else (tests/rov/test_dynamics.py checks all six).
-#
-# WHICH PWM CHANNEL IS WHICH THRUSTER IS NOT SETTLED HERE. The channel -> thruster map and the sign of each
-# channel come from ArduSub's own frame definition (AP_Motors6DOF.cpp, MOTOR_FRAME_VECTORED_6DOF) and
-# SERVOn_FUNCTION, read from the pinned ArduPilot checkout in M8a step 2. The `channel:` fields below are
-# placeholders in mounting order and are NOT to be trusted until step 2 overwrites them.
+# The 45-deg layout gives the published yaw arm 0.1888 m from the +-(0.156, 0.111) mounting points. The
+# channel -> thruster map and each axis's sign are ArduSub's own (channels_source below).
 thrusters:
   count: 6
   positions_source: >
@@ -110,22 +107,22 @@ thrusters:
     (0, +-0.218) m: GUESS, mid-length on the sides with the Heavy's published roll arm 0.218 m (no pitch arm:
     the standard BlueROV2 has no vertical pair fore/aft, so pitch is passive). z offsets GUESS 0.
   channels_source: >
-    UNVERIFIED (written from memory of ArduPilot AP_Motors6DOF.cpp, SUB_FRAME_VECTORED; no checkout was available
-    to open): motor factors (roll, pitch, yaw, climb, forward, lateral) MOT_1 (0,0,+1,0,-1,+1), MOT_2
-    (0,0,-1,0,-1,-1), MOT_3 (0,0,-1,0,+1,+1), MOT_4 (0,0,+1,0,+1,-1), MOT_5 (+1,0,0,-1,0,0), MOT_6 (-1,0,0,-1,0,0);
-    MOT_n -> SERVOn (SERVOn_FUNCTION default) -> JSON pwm[n-1]. Each horizontal axis below IS (forward, lateral)/sqrt2
-    of its motor, and its corner is the one whose yaw moment has the motor's yaw sign: that lands every motor on the
-    45-deg-inward geometry of rov_bluerov2.yaml, a consistency check, not a verification. MOT_5/6 roll signs put
-    MOT_5 on PORT. Verify against the pinned checkout (and MOTn_DIRECTION) before closed-loop flight.
+    V [AP457] (ArduSub-4.5.7 AP_Motors6DOF.cpp SUB_FRAME_VECTORED and SIM_Submarine.cpp, opened 2026-11-25;
+    pinned by tests/rov/test_motor_map.py): motor factors (roll, pitch, yaw, climb, forward, lateral) MOT_1
+    (0,0,+1,0,-1,+1), MOT_2 (0,0,-1,0,-1,-1), MOT_3 (0,0,-1,0,+1,+1), MOT_4 (0,0,+1,0,+1,-1), MOT_5
+    (+1,0,0,-1,0,0), MOT_6 (-1,0,0,-1,0,0); MOT_n -> SERVOn -> JSON pwm[n-1]. SITL's convention: a positive
+    output pushes along (forward, lateral, -climb), so the verticals push DOWN for PWM > 1500, and MOT_5 (roll
+    +1, pushing down) is on STARBOARD. Earlier revisions had both verticals reversed AND swapped sides, which
+    kept roll right but made a climb demand push the vehicle down.
   list:
-    # horizontal, vectored, axes 45 deg inward in the xy plane; axis = positive-thrust direction
+    # horizontal, vectored, 45 deg; axis = where a positive output pushes
     - {name: fore_starboard, channel: 0, position_frd_m: [ 0.156,  0.111, 0.0], axis_frd: [-0.70711,  0.70711, 0.0]}
     - {name: fore_port,      channel: 1, position_frd_m: [ 0.156, -0.111, 0.0], axis_frd: [-0.70711, -0.70711, 0.0]}
     - {name: aft_starboard,  channel: 2, position_frd_m: [-0.156,  0.111, 0.0], axis_frd: [ 0.70711,  0.70711, 0.0]}
     - {name: aft_port,       channel: 3, position_frd_m: [-0.156, -0.111, 0.0], axis_frd: [ 0.70711, -0.70711, 0.0]}
-    # vertical: positive thrust pushes the body UP, i.e. along -z in FRD (climb factor -1, ArduSub's z down)
-    - {name: vert_port,      channel: 4, position_frd_m: [ 0.0,   -0.218, 0.0], axis_frd: [0.0, 0.0, -1.0]}
-    - {name: vert_starboard, channel: 5, position_frd_m: [ 0.0,    0.218, 0.0], axis_frd: [0.0, 0.0, -1.0]}
+    # vertical: a positive output pushes the body DOWN (+z in FRD); climb factor -1
+    - {name: vert_starboard, channel: 4, position_frd_m: [ 0.0,    0.218, 0.0], axis_frd: [0.0, 0.0, 1.0]}
+    - {name: vert_port,      channel: 5, position_frd_m: [ 0.0,   -0.218, 0.0], axis_frd: [0.0, 0.0, 1.0]}
   z_offset_note: >
     Every z offset is 0.0 (GUESS), i.e. all six thrust lines pass through the CG height. The published
     allocation matrices carry zeros in the roll and pitch rows for the horizontal thrusters, which implies

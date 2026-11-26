@@ -1,0 +1,12 @@
+# Pool hardware profile "workstation": the Work machine (24 GB GPU, Windows native). Same keys as linus.yaml.
+profile:
+  name: workstation
+camera:
+  resolution: [1280, 720]
+  rate_hz: 30.0
+render:
+  dlss: true
+  refraction_bounces: 1
+  reflections: true
+stream:
+  encoder: libx264

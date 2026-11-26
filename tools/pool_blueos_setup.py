@@ -1,0 +1,105 @@
+"""M11: configure a BlueOS for the simulated pool vehicle, once, through its REST API. Standard library only, so it
+runs anywhere (linus, Work's Windows Python, WSL).
+
+    python3 tools/pool_blueos_setup.py --blueos http://localhost --rtsp rtsp://<sim host>:8654/rov
+
+1. Autopilot board "Manual" (BlueOS >= 1.5.0-beta.3): BlueOS runs no autopilot of its own and takes MAVLink from its
+   master endpoint, by default udpin 0.0.0.0:14551, where the pool's ArduSub SITL sends (docker/pool/compose.yaml,
+   MAVLINK_OUT=udpclient:<BlueOS IPv4>:14551). Checked against BlueOS 1.5.0-beta.43 on 2026-11-25.
+2. A "Redirect" video stream in the camera manager, pulling the Isaac camera from mediamtx over RTSP; Cockpit then
+   gets it over WebRTC like a real camera. An existing stream with the same name is replaced.
+
+Cockpit itself is a BlueOS extension (Extensions -> Cockpit -> Install) or the desktop app; docs/pool.md.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+STREAM_NAME = "Isaac ROV camera"
+
+
+def call(method: str, url: str, body=None, timeout: float = 10.0):
+    data = None if body is None else json.dumps(body).encode()
+    req = urllib.request.Request(url, data=data, method=method,
+                                 headers={"Content-Type": "application/json"} if data is not None else {})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        raw = r.read()
+    try:
+        return json.loads(raw) if raw else None
+    except json.JSONDecodeError:
+        return raw.decode(errors="replace")
+
+
+def wait_up(blueos: str, timeout_s: float) -> None:
+    t_end = time.monotonic() + timeout_s
+    while True:
+        try:
+            call("GET", f"{blueos}/ardupilot-manager/v1.0/available_boards", timeout=3.0)
+            return
+        except (urllib.error.URLError, OSError):
+            if time.monotonic() > t_end:
+                raise SystemExit(f"BlueOS not reachable at {blueos} (is the blueos service up?)")
+            time.sleep(2.0)
+
+
+def set_manual_board(blueos: str, endpoint_port: int) -> None:
+    ap = f"{blueos}/ardupilot-manager/v1.0"
+    boards = call("GET", f"{ap}/available_boards")
+    manual = next((b for b in boards if b.get("platform") == "Manual"), None)
+    if manual is None:
+        raise SystemExit(f"this BlueOS offers no 'Manual' board ({[b.get('name') for b in boards]}): it needs "
+                         "1.5.0-beta.3 or later (docker/pool/compose.yaml pins one)")
+    master = call("GET", f"{ap}/endpoints/manual_board_master_endpoint")
+    want = {**master, "connection_type": "udpin", "place": "0.0.0.0", "argument": int(endpoint_port)}
+    if (master["connection_type"], master["place"], int(master["argument"])) != ("udpin", "0.0.0.0", endpoint_port):
+        call("POST", f"{ap}/endpoints/manual_board_master_endpoint", want)
+        print(f"  master endpoint set to udpin 0.0.0.0:{endpoint_port}")
+    current = call("GET", f"{ap}/board")
+    if not current or current.get("platform") != "Manual":
+        call("POST", f"{ap}/board", manual, timeout=60.0)
+        print("  board set to Manual")
+    print(f"  autopilot: board Manual, MAVLink in on UDP {endpoint_port}")
+
+
+def set_stream(blueos: str, rtsp: str) -> None:
+    cm = f"{blueos}/mavlink-camera-manager"
+    for s in call("GET", f"{cm}/streams") or []:
+        if s["video_and_stream"]["name"] == STREAM_NAME:
+            call("DELETE", f"{cm}/delete_stream?name={urllib.parse.quote(STREAM_NAME)}")
+            print(f"  removed the old '{STREAM_NAME}' stream")
+    call("POST", f"{cm}/streams", {
+        "name": STREAM_NAME, "source": "Redirect",
+        "stream_information": {"endpoints": [rtsp], "configuration": {"type": "redirect"},
+                               "extended_configuration": {"thermal": False, "disable_mavlink": False,
+                                                          "disable_zenoh": False, "disable_lazy": False,
+                                                          "disable_recording": True, "disable_thumbnails": False}}})
+    st = [s for s in call("GET", f"{cm}/streams") if s["video_and_stream"]["name"] == STREAM_NAME]
+    if not st:
+        raise SystemExit("the camera manager did not keep the stream")
+    print(f"  video: '{STREAM_NAME}' <- {rtsp} ({st[0]['state']}{', ' + st[0]['error'] if st[0]['error'] else ''})")
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--blueos", default="http://localhost", help="BlueOS base URL (default %(default)s)")
+    ap.add_argument("--rtsp", required=True, help="the pool camera, e.g. rtsp://100.89.193.76:8654/rov")
+    ap.add_argument("--mavlink-port", type=int, default=14551, help="Manual board master endpoint, UDP")
+    ap.add_argument("--wait", type=float, default=120.0, help="seconds to wait for BlueOS to come up")
+    args = ap.parse_args(argv)
+    blueos = args.blueos.rstrip("/")
+    print(f"BlueOS {blueos}:")
+    wait_up(blueos, args.wait)
+    set_manual_board(blueos, args.mavlink_port)
+    set_stream(blueos, args.rtsp)
+    print(f"done. Open {blueos} (BlueOS) and Cockpit; the vehicle appears once SITL sends to UDP {args.mavlink_port}.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

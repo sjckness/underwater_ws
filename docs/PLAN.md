@@ -11,6 +11,11 @@
 > is the step to watch.** M4 (camera underwater model) is unscheduled behind it.
 > Order of work: "Where this session stopped".
 > Runs on **linus** for now.
+>
+> **2026-11-25: M11, the piloted test pool, is built** (`docs/pool.md`): a BlueROV2 Heavy in a 10 x 10 x 5 m tank,
+> flown through ArduSub SITL, BlueOS and Cockpit with a gamepad; 30 fps on linus. Its first step corrected the
+> vehicle files' thruster map (6 of 8 Heavy thrusters were reversed against ArduSub) and an RK4 attitude stall,
+> which the room9 HIL path shares (`docs/ros_hil.md` §6.3). BlueOS in WSL2 on Work and Cockpit are not yet tried.
 
 ## Changes in this revision (2026-10-26)
 1. **Bubble scattering**: at 750 kHz (λ ≈ 2 mm) bubbles of 1–3 mm have ka ≈ 3–10, i.e. the transition regime, not ka≫1. Replace `TS = 20 log(a/2)` and `σ_ext = 2πa²` with a high-frequency fluid-sphere model (Anderson, via the Thuraisingham / Ainslie–Leighton approximations), valid across ka. Resonance (Minnaert, a ≈ 4 µm at 750 kHz) is irrelevant for the size range and is dropped.
@@ -234,6 +239,26 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
     swept through a uniform sand patch (no visible seam in the image, no step in the statistics).
   - **Scene tiling**: the seafloor and its structure as tiles generated and cached per tile, so a survey can run
     beyond one tank-sized box, with the scatterer and facet caches keyed per tile.
+- **M11 Piloted test pool** (built 2026-11-25, `docs/pool.md`): a BlueROV2 Heavy in a 10 x 10 x 5 m test tank, flown
+  the way the real vehicle is: ArduSub SITL 4.5.7 (Heavy, `docker/ardusub_sitl/params/pool.parm`), BlueOS 1.5 beta on
+  its "Manual" board, Cockpit with a Bluetooth gamepad. No bubbles and no sonar: camera and dynamics only.
+  1. **The vehicle, checked against ArduSub itself**: thruster axes and channels from `AP_Motors6DOF` and
+     `SIM_Submarine` (pinned by `tests/rov/test_motor_map.py`); the Heavy's body and hydrodynamics from [BENZON22]
+     Table A1, now opened and found to be the Heavy's own measured set; thruster lag from its eq. 19; partial
+     submersion at the surface; the RK4 quaternion stall at heading 180 deg fixed.
+  2. **Physics in its own process** (`uw/rov/physics_proc.py`), lockstep with SITL and paced to the wall clock, read
+     by the render loop through shared memory: real time for the pilot whatever the renderer does.
+  3. **The scene and the camera** (`uw/pool_scene.py`, `uw/camera_uw.py`, `uw/video.py`, `uw/pool.py`): tiled tank,
+     free surface, hall lights, the Heavy (Blue Robotics' BlueSim mesh) with tilt and Lumens driven by ArduSub's
+     outputs; the water as a post-process from the distance annotator (the first piece of M4's `rtx_post`);
+     H.264 over RTSP (mediamtx) into BlueOS's camera manager.
+  4. **Measured on linus**: 30 fps at 1280 x 720 (DLSS, one refraction bounce, reflections off), 7 ms a frame,
+     2.4 GB VRAM; physics 400 packets/s with no stalls; `tools/pool_smoke.py` 12/12 (every axis, ALT_HOLD, depth
+     against the baro, lights, tilt). BlueOS 1.5.0-beta.43 verified in isolation (Manual board, MAVLink to
+     mavlink2rest, the Redirect stream decoded).
+  5. **Open**: BlueOS in WSL2 (mirrored networking) and Cockpit's WebRTC and gamepad on Work; the all-on-Work variant;
+     ALT_HOLD limit-cycles by 5-17 cm (T200 dead band against +2 N of buoyancy); next natural steps are an emulated
+     Water Linked A50 for BlueOS's DVL extension (POSHOLD), and MAVLink from BlueOS to the Thor for M8b.
 - **M10 Baseline leak detector on v0.2**: the dataset exists, so the detector that justifies it comes next; it is
   also what tells us which labels and which v0.3 changes matter.
   - **Baseline**: single-frame segmentation on `mask_geom` (the geometric label, free of sidelobe leakage) from the

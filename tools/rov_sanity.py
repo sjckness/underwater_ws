@@ -28,13 +28,15 @@ from uw.rov import frames as F            # noqa: E402
 
 WL, TANK, SAND = 2.9, (3.0, 3.0, 3.0), 0.3
 AXES = ("surge", "sway", "heave", "roll", "pitch", "yaw")
+# The factor columns of ArduSub's SUB_FRAME_VECTORED_6DOF (tests/rov/test_motor_map.py): the mixer's output for a
+# pure demand, in channel order. Heave is a climb (upward) demand.
 CMD = {
-    "surge": np.array([1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0]),
-    "sway": np.array([-1.0, 1.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0]),
-    "heave": np.array([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]),
+    "surge": np.array([-1.0, -1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0]),
+    "sway": np.array([1.0, -1.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0]),
+    "heave": np.array([0.0, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, -1.0]),
     "roll": np.array([0.0, 0.0, 0.0, 0.0, 1.0, -1.0, 1.0, -1.0]),
-    "pitch": np.array([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, -1.0, -1.0]),
-    "yaw": np.array([1.0, -1.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0]),
+    "pitch": np.array([0.0, 0.0, 0.0, 0.0, -1.0, -1.0, 1.0, 1.0]),
+    "yaw": np.array([1.0, -1.0, -1.0, 1.0, 0.0, 0.0, 0.0, 0.0]),
 }
 ZERO = np.zeros(8)
 
@@ -188,9 +190,10 @@ def report(out: Path) -> dict:
               f"{w_c:12.2e} {w_c / abs(a_c[i]):9.1e}  {leak}")
         coup[name] = (float(a_g[i]), w_g, float(a_c[i]), w_c)
     res["coupling"] = coup
-    print("  The geometry is exactly decoupled. The command is not, because the T200 gives 51.5 N forward and")
-    print("  40.2 N in reverse: a mixed-sign pattern leaves 2 x 11.3 N unbalanced. ArduSub's closed loop is")
-    print("  what removes it; nothing in the model should be 'corrected' for it.")
+    print("  The geometry is exactly decoupled. The roll and pitch commands are not, because the T200 gives 51.5 N")
+    print("  forward and 40.2 N in reverse: the verticals leave 2 x 11.3 N of heave unbalanced. The horizontal")
+    print("  patterns cancel it between their diagonal pairs. ArduSub's closed loop is what removes the rest;")
+    print("  nothing in the model should be 'corrected' for it.")
 
     # ---- (e) restoring
     print(f"\n{line}\n(e) RESTORING: released from 20 deg (buoyancy neutralised, bound off)\n{line}")

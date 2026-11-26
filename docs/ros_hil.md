@@ -494,6 +494,19 @@ views would not be comparable to the dataset.
 Read `SERVOn_FUNCTION` to find which `pwm[i]` is which thruster rather than assuming `pwm[0..5]` (**V**).
 `MOT_FV_CPLNG_K` is an autopilot-side output limit — its effect arrives in the PWM, nothing to replicate.
 
+> **Correction (M11, 2026-11-25): the channel map and the thrust signs are now ArduSub's own.** Checked against
+> ArduSub-4.5.7 (`AP_Motors6DOF.cpp` and `SIM_Submarine.cpp`, where a positive output pushes along
+> `(forward, lateral, −climb)` of the motor's factors), the vehicle files had **the two front horizontals and every
+> vertical reversed** in the Heavy, and in the six-thruster file both verticals reversed *and* on swapped sides,
+> which kept roll right but not heave. The verticals' climb factor is −1, so a climb demand drives them **below**
+> 1500 µs: with the old files "stick up" pushed the vehicle down and ALT_HOLD would have diverged. This affects the
+> room9 HIL path as much as the M11 pool. `tests/rov/test_motor_map.py` now pins the factor tables and checks every
+> thruster's wrench signs and every pilot demand end to end through the PWM. SITL's `MOTn_DIRECTION` must stay 1.
+>
+> Two more fixes from the same pass: the Heavy's body and hydrodynamics are [BENZON22] Table A1, which turned out
+> to be the **Heavy's** own measured set (13.5 kg, ∇ 0.0134 m³, now V); and the RK4 stages no longer canonicalise
+> the quaternion to w ≥ 0, which had frozen the heading of a level vehicle turning through 180° NED (south).
+
 ### 6.4 The JSON/UDP interface
 
 Loopback, SITL listening on **UDP 9002** and replying to the source of what it received (**V**).
