@@ -1,0 +1,9 @@
+# The detector's Python, a venv apart from the system's (Ultralytics brings torch with CUDA, ~5 GB):
+#   python3 -m venv ~/.cache/uw_yolo/venv && ~/.cache/uw_yolo/venv/bin/pip install -r ros/yolo_detector/requirements.txt
+# or point UW_YOLO_PYTHON at an existing one (linus: /HDD2T/dev_ws/py_venv/bin/python, which has all but clip).
+# Tested with ultralytics 8.4.6, torch 2.7.1+cu126, opencv-python 4.11.0, numpy 1.26.4, Python 3.12 (linus, 2026-11-26).
+ultralytics==8.4.6
+numpy<2               # ROS 2 Jazzy's rclpy and message modules are built against numpy 1.26
+opencv-python<4.12    # 4.12 requires numpy 2
+lap>=0.5.12           # --track (ByteTrack); Ultralytics would otherwise pip-install it at the first track
+git+https://github.com/ultralytics/CLIP.git   # --prompts (YOLOE text prompts) only

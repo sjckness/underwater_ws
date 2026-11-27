@@ -212,6 +212,43 @@ Sul ROV vero la velocità del suono si imposta dalla pagina web dell'A50; qui co
 - i materiali acustici della piscina;
 - dove va montato il DVL sul ROV vero.
 
+## Riconoscimento con YOLO
+
+`ros/yolo_detector` fa girare un modello Ultralytics sulla camera di bordo, sull'host con ROS 2 Jazzy. Legge lo stesso stream H.264 che BlueOS passa a Cockpit (`rtsp://127.0.0.1:8654/rov`), quindi:
+- la simulazione non cambia e non le serve ROS;
+- il detector vede gli artefatti dell'encoder e il ritardo della rete, come sul ROV vero;
+- sul ROV vero cambia solo `--source` (lo stream RTSP di BlueOS).
+
+**Il Python.** Serve un Python 3.12 con Ultralytics e torch CUDA, separato da quello di sistema: `ros/yolo_detector/requirements.txt`.
+- Su linus c'è già: `export UW_YOLO_PYTHON=/HDD2T/dev_ws/py_venv/bin/python`.
+- Altrove: `python3 -m venv ~/.cache/uw_yolo/venv && ~/.cache/uw_yolo/venv/bin/pip install -r ros/yolo_detector/requirements.txt` (circa 5 GB, per torch). `run.sh` lo usa da solo.
+- numpy resta sotto la 2: rclpy di Jazzy è compilato con numpy 1.26.
+
+**Avvio**, con `uw pool` già partito:
+```bash
+ros/yolo_detector/run.sh                                                # COCO yolo26n, topic ROS sul dominio 73
+ros/yolo_detector/run.sh --video-out rtsp://127.0.0.1:8654/rov_yolo     # + l'overlay nel browser: http://localhost:8889/rov_yolo
+ros/yolo_detector/run.sh --track --publish-camera                       # id di tracking, e la camera come topic ROS
+ros/yolo_detector/run.sh --no-ros --source video.mp4 --video-out out.mp4   # offline, senza ROS: ogni fotogramma
+```
+- **Topic** (dominio `UW_ROS_DOMAIN_ID`, default 73): `/rov1/perception/camera/detections` (`vision_msgs/Detection2DArray`: box in pixel, `class_id` = nome della classe, `id` = id di tracking con `--track`) e `/rov1/perception/camera/overlay` (l'immagine annotata, per `rqt_image_view`).
+- **In Cockpit** (non provato): in BlueOS aggiungi `rtsp://172.31.250.1:8654/rov_yolo` come secondo stream "Redirect", come quello della camera.
+- **Il modello:** `--model` accetta un percorso o un nome. Un nome viene cercato in `assets/models/` (fuori da git), dove Ultralytics lo scarica la prima volta. Vanno bene `.pt`, `.onnx` e `.engine`, nei task detect, segment e pose.
+- **Le installazioni automatiche di Ultralytics sono spente:** un pacchetto che manca è un errore, non un `pip install` a metà corsa.
+- Tutte le opzioni: `ros/yolo_detector/run.sh --help`.
+
+**Cosa riconosce.** I modelli COCO (`yolo26n.pt`, il default) in piscina **non trovano niente**: non c'è nessun oggetto COCO (provato su tutti gli snapshot). Le strade sono due:
+- **Prompt di testo, senza addestramento:** `--model yoloe-26s-seg.pt --prompts "pipe,concrete block,checkerboard,ladder"`. Serve il CLIP di Ultralytics: `$UW_YOLO_PYTHON -m pip install git+https://github.com/ultralytics/CLIP.git` (non ancora installato nel venv di linus, quindi non provato). Il modello YOLOE "prompt-free" (`-pf`) sulla piscina dà solo etichette a caso.
+- **Un modello addestrato sulla piscina:** le etichette le dà la simulazione (i box 2-D di Replicator) e poi si fa un fine-tuning di YOLO. Non ancora fatto.
+
+**Misurato** (2026-11-26, linus, RTX 3080 secondo `nvidia-smi`, accanto a `uw pool --preset turbid` in esecuzione):
+
+| Cosa | Valore |
+|---|---|
+| Frame elaborati | 30 fps su 30 (stream della vasca) |
+| Inferenza `yolo26n` 1280×720 → 640 | 13–15 ms |
+| Latenza dalla decodifica alla pubblicazione | 22–24 ms (non comprende encoder e stream della vasca) |
+
 ## Porte
 
 | Dove | Porta | Cosa |

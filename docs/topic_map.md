@@ -186,6 +186,8 @@ TF edge — different information, so it earns its own topic then.
 | `/rov1/perception/bubbles/leak_estimate` | `geometry_msgs/PoseWithCovarianceStamped` | `leak_detector` | mission | R | `map` | ≤ 1 Hz | no |
 | `/rov1/perception/bubbles/flow_estimate` | `geometry_msgs/Vector3Stamped` (x = L/min, y = σ, z unused) | `leak_detector` | mission, evaluator | R | `rov1/sonar_fls` | ≤ 1 Hz | no |
 | `/rov1/perception/debug/overlay` | `sensor_msgs/CompressedImage` (jpeg) | `leak_detector` | operator only | S | `rov1/sonar_fls` | ≤ 2 Hz, **off by default** | no |
+| `/rov1/perception/camera/detections` | `vision_msgs/Detection2DArray` (pixel boxes, `class_id` = class name, `id` = track id) | `yolo_detector` (**V** `ros/yolo_detector`, 2026-11-26) | mission, rosbag2 | R | `rov1/camera_front_optical` | per camera frame | no |
+| `/rov1/perception/camera/overlay` | `sensor_msgs/Image` bgr8 | `yolo_detector` | operator only | S | `rov1/camera_front_optical` | per camera frame (`--overlay-hz`) | no |
 
 Two deliberately ugly choices, both because **a custom message package is blocked on three build targets at
 once** — Isaac's bundled Jazzy `rclpy` (Python 3.11, no `/opt/ros`), host Jazzy (3.12) and the Jetsons' arm64

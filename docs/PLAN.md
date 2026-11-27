@@ -278,7 +278,14 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
      (`hil/win/pool/README.md`). The host-network extension was checked on linus: `pool_smoke.py --dvl` 18/18.
      SITL's baro noise is now a Bar30's (`SIM_BARn_RND` 0.005): the default +-0.2 m made ALT_HOLD limit-cycle by
      5-17 cm (it was blamed on the T200 dead band) and once put the boot calibration 0.5 m off; now 1 cm.
-  8. **Open**: the Work run itself (mirrored loopback for the lockstep UDP and the A50's TCP, docker's bridge under
+  8. **YOLO on the onboard camera** (2026-11-26, `ros/yolo_detector`): a host ROS 2 node that reads the H.264
+     stream BlueOS relays, so on the real vehicle only the URL changes. Any Ultralytics model goes in;
+     `vision_msgs/Detection2DArray` and an annotated overlay come out, the overlay as a ROS topic or back into
+     mediamtx for the browser and Cockpit. On linus beside the running pool: 30 fps, yolo26n 13-15 ms, 22-24 ms
+     from decode to publication. COCO models find nothing in the pool, which holds no COCO object. Next: a
+     pool-object model trained on the 2-D boxes the sim can render for free (Replicator), or YOLOE text prompts as a
+     start with no training (needs Ultralytics' CLIP, not yet installed on linus).
+  9. **Open**: the Work run itself (mirrored loopback for the lockstep UDP and the A50's TCP, docker's bridge under
      mirrored networking, Cockpit's WebRTC and the gamepad there); the A50's report rate against altitude (only
      2-15 Hz is published); validation against logs of the real vehicle in a real pool; MAVLink from BlueOS to the
      Thor for M8b.

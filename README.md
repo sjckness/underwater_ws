@@ -146,6 +146,12 @@ Camera, vehicle dynamics and a DVL: no bubbles, no sonar. Operator guide, ports 
   device itself (Water Linked's JSON protocol on TCP 16171 and its HTTP API) from the physics process, so BlueOS's
   unmodified Water Linked DVL extension feeds ArduSub VISION_POSITION_DELTA: POSHOLD works as on the real vehicle.
 - Config: `config/pool/pool.yaml` with its own profiles (`config/pool/profiles/`), `--set` as for the tank.
+- **YOLO on the camera** (`ros/yolo_detector`, host ROS 2 + a Python with Ultralytics): reads the same H.264
+  stream BlueOS relays (`rtsp://127.0.0.1:8654/rov`), runs an Ultralytics model and publishes
+  `vision_msgs/Detection2DArray` on `/rov1/perception/camera/detections` and an annotated
+  `/rov1/perception/camera/overlay`; `--video-out rtsp://127.0.0.1:8654/rov_yolo` puts the overlay in mediamtx
+  (browser: `http://localhost:8889/rov_yolo`). On the real BlueROV2 only the source URL changes. Setup and options:
+  docs/pool.md, "Riconoscimento con YOLO".
 
 ## Datasets (sweeps)
 
