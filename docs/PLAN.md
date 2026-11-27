@@ -289,6 +289,53 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
      mirrored networking, Cockpit's WebRTC and the gamepad there); the A50's report rate against altitude (only
      2-15 Hz is published); validation against logs of the real vehicle in a real pool; MAVLink from BlueOS to the
      Thor for M8b.
+- **M12 Pool test bench** (from 2026-11-27, on branch `m11-yolo`): the M11 pool becomes a bench for station keeping.
+  Goals: COCO objects YOLO recognises out of the box; a parametric water current changeable at runtime; a 50 x 25 x 5
+  m pool; the cost of every component visible in Foxglove and Cockpit; ROS 2 next to BlueOS as on the vehicle's
+  computer (MAVROS, camera topic, YOLO as a colcon package); and a 2 x 2 comparison, {ArduSub POSHOLD, a ROS station
+  keeper} x {DVL A50, Nortek Nucleus1000}, over a grid of currents. Phases: P1 current, P2 runtime control channel,
+  P3 pool size, P4 COCO props, P5 Nucleus1000, P6 ROS container, P7 cost monitor, P8 station keeper, P9 bench.
+  1. **Water current** (P1, `uw/rov/current.py`): Fossen's (2021, 10.3) irrotational current in `Vehicle._deriv`:
+     added mass and damping on the velocity relative to the water, the rigid body on the ground velocity (the state
+     and the position integration are unchanged), plus `M_A nu_c_dot` (the current seen from the rotating body)
+     and the Froude-Krylov force of an accelerating flow. Uniform, 1/7-power, linear or tabulated depth profile;
+     gusts on speed and direction as a fixed random spectrum (deterministic per seed); smoothstep ramps for runtime
+     changes (`Vehicle.set_current`, thread-safe, applied at the next step in sim time). Config `current:`, presets
+     light / strong / gusty. Still water is bit-identical to the model before (a golden written by the old code).
+     Cost: +50-100 us on a ~250 us step.
+  2. **Runtime control channel** (P2, `uw/rov/simctl.py`, `tools/simctl.py`): TCP 9020 in the physics process,
+     newline-delimited JSON (`uwsim/1`), stdlib only: hello, set_current (ramped), get_state and a stream of the true
+     state (<= 50 Hz), horizontal reposition (applied by the physics thread between packets; depth, attitude and
+     so the EKF untouched), a device's own set_config (the A50's acoustic_enabled for dropouts), stats with the
+     step time p50/p95/max. Listens on `physics.control.bind` (linus adds the docker bridge's 172.31.250.1 for the
+     ROS container; an absent address is skipped). `pool_smoke.py --dvl --current S` turns a current on while
+     POSHOLD holds.
+  3. **Pool size** (P3): `pool.size` is now 50 x 25 x 5 m by default (`--preset pool10` for the M11 tank). Props and
+     COCO objects are placed as fractions of L and W, the hall lights as one every `lights.ceiling.spacing_m`; start,
+     far plane and layout live in the size preset. Measured on linus: 29.92 fps for both, render p95 8.30 against
+     8.16 ms, VRAM +0.1 GB (3.1 GB): the render costs per pixel, not per square metre. Rule met (fps >= 29.5,
+     render p95 <= 1.25x, VRAM <= 4 GB), hence the new default.
+  4. **COCO objects** (P4): eight textured models (`config/pool/objects.yaml`: a scuba diver, a canoe, a bicycle, a
+     monobloc chair, a water bottle, a suitcase, a daypack, a football; Objaverse at a pinned revision and Poly
+     Haven, CC-BY-4.0 / CC0, sha256-pinned) fetched and converted by `tools/fetch_props.py` (Kit's asset converter,
+     then a wrapper USD: Z up, metres, scaled to the catalogue size, origin at the bottom centre, BLEND materials
+     forced opaque). Each carries its COCO class as a semantic label and a box or sphere for the DVL. `uw pool
+     --views NAME` renders every object from 2-8 m with Replicator's 2-D boxes; `tools/eval_views.py` scores a
+     model. yolo26m, side views, lamps on: person 19/20, bicycle 20/20, chair 20/20, suitcase 18/20, bottle 11/18
+     (to 4 m), ball 13/17 (to 4 m), boat 9/20 (the canoe reads as a surfboard), backpack 0/20 (read as a suitcase);
+     yolo26n is much weaker (the diver becomes a bird). Turbid water limits recognition to 3-4 m, murky to 2 m.
+     Next: fine-tune on the Replicator boxes, the backpack and the boat first.
+  5. **Nortek Nucleus1000** (P5, `uw/rov/nucleus.py`): emulated at the protocol level from the source of Nortek's own
+     clients (driver 1.7.0/1.7.8, BlueOS extension 2.0.11, ROS 2 node) and the manual N3015-033: TCP 9000 with the
+     password prompt, ASCII and NMEA commands (GETALL as the manual's 15 lines), TCP 9002 data only; AHRS 0xD2,
+     bottom track 0xB4 (128 bytes), altimeter 0xAA (44), INS 0xDC, checksums seeded 0xB58C (pinned by the manual's
+     sample packet). `uw/rov/dvl.py` now takes N beams with per-beam tilt and `min_good` (the A50's reports are
+     bit-identical to before, a golden pins them); the physics process hosts A50 and/or Nucleus (presets nucleus,
+     both_dvl). Nortek's unmodified parser reads every packet (a test), the unmodified driver connects, starts and
+     reads, and the unmodified BlueOS extension (compose profile `nucleus`, through dvl-gateway, which now also
+     answers its cable_guy `info.connected`) feeds ArduSub VISION_POSITION_DELTA, VISION_POSITION_ESTIMATE and
+     DISTANCE_SENSOR with Nortek's EKF parameters (`nucleus.parm`: yaw from external navigation).
+     `pool_smoke.py --dvl --current 0.3`: 19/19 with either DVL.
 - **M10 Baseline leak detector on v0.2**: the dataset exists, so the detector that justifies it comes next; it is
   also what tells us which labels and which v0.3 changes matter.
   - **Baseline**: single-frame segmentation on `mask_geom` (the geometric label, free of sidelobe leakage) from the

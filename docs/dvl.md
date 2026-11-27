@@ -299,3 +299,29 @@ Everything is `dvl:` in `config/tank.yaml`, with a VERIFIED/UNVERIFIED tag per v
 The mount is in ArduPilot body FRD, like the thruster positions in
 `config/rov_bluerov2_vectored.yaml`, and deliberately not in the size presets — it belongs to the
 vehicle, not to the room. `uw.rov.dvl.params_from_config` refuses a value outside the datasheet.
+
+## The Nortek Nucleus1000 (M12)
+
+A second instrument for the pool's station-keeping comparison, emulated like the A50: `uw/rov/nucleus.py`, config
+`nucleus:` in `config/pool/pool.yaml`, presets `nucleus` (instead of the A50) and `both_dvl`. The beams are this
+file's model with three beams (`beams.azimuths_deg` of length 3, `beams.min_good: 3`); `uw/rov/dvl.py` takes any
+N >= 3 beams and a tilt per beam, and the A50's reports did not change by a bit (`tests/rov/data/a50_reports_golden.json`).
+
+What the emulator implements is what Nortek's own software uses, read from its source (NortekSupport/nucleus_driver
+at 27239bc, PyPI nucleus-driver 1.7.0 and 1.7.8, the image nortekgroup/blueos_nucleus:2.0.11, which pins 1.7.0) and
+from the manual "Nucleus Operations and Integration" N3015-033:
+
+| Part | What | Verified by |
+|---|---|---|
+| TCP 9000 | `Please enter password:\r\n`, then the password (`nortek`), then `Welcome to Nortek...`; one client | the driver's login code; the unmodified driver connects |
+| TCP 9002 | data only, no login, input ignored, up to two clients | manual §3.6 |
+| Commands | `OK\r\n` / `ERROR\r\n`; NMEA `$PNOR,...*CS` when asked in NMEA; GETALL = the manual §7.38 lines; MEASUREMENT mode takes only STOP, TRIG, UPDATEPOS | the manual's checksums (`tests/rov/test_nucleus.py`); the driver parses ID and firmware |
+| Header | 0xA5, size 10, id, family 0x20, data size, data and header checksums: seed 0xB58C, little-endian words, odd byte << 8 | the manual's §11.2 sample AHRS packet, byte for byte |
+| 0xD2 AHRS | version 2, offset 36: roll, pitch, heading, quaternion, body -> NED matrix, depth | Nortek's parser (1.7.0) |
+| 0xB4 bottom track | 128 bytes (1.7.0 rejects 124): beam velocities, distances, FOMs, XYZ velocity and FOM, status bits 9-14 | Nortek's parser |
+| 0xAA altimeter | 44 bytes, with the quality word at 40 the manual omits (the parser needs >= 42) | Nortek's parser |
+| 0xDC INS | version 2: the AHRS block, then position NED, velocities, lat/lon (valid once SETMISSION/UPDATEPOS gave an origin) | Nortek's parser; the extension sends it as VISION_POSITION_ESTIMATE |
+
+Not modelled: water track, current profiles, the IMU and magnetometer packets (nobody asks for them by default),
+field calibration (accepted, nothing changes), the device's web page. UNVERIFIED and marked so in the config: the
+beam layout (three beams 120 deg apart at 25 deg), noise, scale and the AHRS errors.

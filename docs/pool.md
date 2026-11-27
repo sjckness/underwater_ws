@@ -1,18 +1,21 @@
 # M11 — La vasca prove: BlueROV2 Heavy pilotato con BlueOS, Cockpit e gamepad
 
-Una vasca 10 × 10 × 5 m in Isaac Sim con un BlueROV2 Heavy che si pilota **come quello vero**:
+Una vasca 50 × 25 m con 5 m d'acqua (dal 2026-11-27; la 10 × 10 × 5 m di M11 con `--preset pool10`) in Isaac Sim, con un BlueROV2 Heavy che si pilota **come quello vero**:
 - gamepad Bluetooth sul PC;
 - Cockpit e BlueOS aperti nel browser;
 - ArduSub che comanda gli otto motori.
 
 Isaac fa solo la fisica del veicolo e la camera di bordo, più un DVL Water Linked A50 emulato che alimenta ArduSub attraverso la vera estensione DVL di BlueOS (POSHOLD come sul ROV vero). Niente bolle, niente sonar.
 
+In acqua ci sono otto oggetti che un YOLO COCO riconosce (un sub, una canoa, una bici, una sedia, una bottiglia, una valigia, uno zaino, un pallone) e si può accendere una corrente, anche dal vivo.
+
 Questo file è la guida operativa. Il resto è nel codice:
 - l'app: `uw/pool.py`, `uw/pool_scene.py`, `uw/camera_uw.py`, `uw/video.py`;
 - la fisica: `uw/rov/physics_proc.py`;
 - il DVL: `uw/rov/a50.py` (il dispositivo in rete), `uw/rov/dvl.py` (fasci, rumore, aggancio al fondo), `uw/pool_geometry.py` (cosa colpiscono i fasci);
 - lo stack: `docker/pool/compose.yaml`;
-- la configurazione: `config/pool/`.
+- la configurazione: `config/pool/` (gli oggetti in `config/pool/objects.yaml`);
+- la corrente e il canale di controllo: `uw/rov/current.py`, `uw/rov/simctl.py`, `tools/simctl.py`.
 
 ## Come è fatto
 
@@ -147,6 +150,90 @@ Con `--dvl` (estensione DVL attiva e configurata) verifica anche: l'EKF ha la ve
 
 Per provare SITL senza GPU c'è la fisica da sola: `python -m uw py -m uw.rov.physics_proc` (il ROV è invisibile ma vola, e il DVL emulato c'è anche qui).
 
+## Dimensioni della vasca
+
+`pool.size` in `config/pool/pool.yaml`: **50 × 25 m** con 5 m d'acqua, la pianta di una vasca olimpica con la profondità di una vasca da tuffi.
+- `--preset pool10` riporta la 10 × 10 m di M11, con i suoi oggetti dove erano.
+- Seguono la dimensione da soli: pareti, fondo, griglia, superficie, scaletta (2 m dalla parete x = L), DVL e limite morbido della fisica. Le luci del soffitto sono una ogni `lights.ceiling.spacing_m` (5 m: 2 × 2 nella piccola, 10 × 5 nella grande). Gli oggetti sono messi in frazioni di L e W.
+- Non seguono la dimensione, quindi stanno nel preset: partenza del ROV, piano lontano della camera, disposizione degli oggetti COCO.
+- In entrambe il ROV parte a galla vicino alla parete y = 0, a metà lunghezza, rivolto verso la parete opposta. Gli oggetti sono davanti, tra 3 e 15 m.
+
+**Costo misurato** (2026-11-27, linus, RTX 3080, 150 s di `uw pool` dalla partenza, profilo `linus`):
+
+| | 10 × 10 | 50 × 25 |
+|---|---|---|
+| Stream | 29,92 fps | 29,92 fps |
+| Render, media / p95 | 7,27 / 8,16 ms | 7,39 / 8,30 ms |
+| Post-processing dell'acqua | 1,55 ms | 1,56 ms |
+| VRAM del processo, picco | 3,02 GB | 3,12 GB |
+| Stalli della fisica | 0 | 0 |
+
+Il render costa per pixel, non per metro quadro. La vasca grande aggiunge solo 46 luci rettangolari e qualche quad, quindi è diventata la default.
+
+## Oggetti COCO
+
+Otto oggetti che hanno senso sott'acqua e che un YOLO addestrato su COCO conosce. Il catalogo è `config/pool/objects.yaml`: per ogni oggetto la classe COCO, le dimensioni reali, il materiale acustico e la sorgente del modello 3-D. La disposizione è `pool.objects`.
+
+| id | classe COCO | modello | licenza |
+|---|---|---|---|
+| `diver` | person | "Deep Diver", sub con muta, bombola e pinne, in posa di nuoto, a 0,5 m dal fondo | CC-BY-4.0, Miguelangelo Rosario |
+| `canoe` | boat | "Canoe", canoa in legno, 3,65 m | CC-BY-4.0, BoatUS Foundation |
+| `bicycle` | bicycle | "Bike", bici da città con cestino | CC-BY-4.0, krichwow |
+| `chair` | chair | "Plastic Monobloc Chair 01", la sedia bianca da bordo piscina | CC0, Kuutti Siitonen (Poly Haven) |
+| `bottle` | bottle | "Water Bottle", bottiglia d'acqua da 1,5 l | CC-BY-4.0, Microsoft |
+| `suitcase` | suitcase | "Luggage", trolley nero con la maniglia alzata | CC-BY-4.0, KoteTheCat |
+| `daypack` | backpack | "Backpack", zainetto grigio | CC-BY-4.0, typhomnt |
+| `ball` | sports ball | "Soccer Ball", pallone bianco e nero | CC-BY-4.0, typhomnt |
+
+Nel catalogo ci sono anche `rowboat` (una barca a remi) e `backpack` (uno zaino tattico, da fotogrammetria): provati, YOLO li riconosce peggio.
+
+**Preparazione (una volta):**
+
+```bash
+python -m uw py tools/fetch_props.py          # scarica, controlla lo sha256, converte in USD (Kit), scala e centra
+python3 tools/fetch_props.py --list           # cosa c'è, con le licenze
+```
+
+- I file vanno in `assets/props/<id>/<id>.usd`, fuori da git per licenza e dimensione. `assets/props/ATTRIBUTION.md` ha i crediti chiesti da CC-BY.
+- Le sorgenti sono fissate: Objaverse a una revisione di Hugging Face, Poly Haven con lo sha256 di ogni file.
+- Il modello è scalato in modo uniforme sulla dimensione più grande del catalogo e messo con l'origine al centro della base.
+- I materiali glTF trasparenti ("BLEND") diventano opachi: la bici altrimenti spariva.
+- **Senza i modelli** la vasca mostra al loro posto un parallelepipedo (o una sfera) delle stesse misure.
+
+**Il DVL li vede**: il catalogo dà a ogni oggetto un solido (box ruotato o sfera) delle sue misure, nella stessa lista di scaletta e props (`uw/pool_geometry.py`). I materiali acustici sono `plastic`, `steel`, `neoprene`, `fabric`.
+
+**Ogni oggetto ha la sua etichetta semantica** (la classe COCO), quindi Replicator ne dà i box 2-D: la base per misurare un detector, o per addestrarne uno.
+
+### Quanto li vede YOLO
+
+`uw pool --views NOME` non fa partire né la fisica né lo stream. Mette la camera davanti a ogni oggetto, a 2, 3, 4, 6 e 8 m da quattro direzioni, e scrive i fotogrammi con l'acqua applicata, più i box veri di Replicator. Poi `tools/eval_views.py` fa girare il modello e conta i colpi: classe giusta, IoU ≥ 0,5 con il box vero.
+
+```bash
+python -m uw pool --views lit --view-height -0.2 --view-lights 1.0 [--preset turbid]   # camera a 20 cm sotto la cima dell'oggetto, luci accese
+$UW_YOLO_PYTHON tools/eval_views.py lit --model yolo26m.pt                              # tabella per classe e distanza
+```
+
+**Misurato** (2026-11-27, linus): `yolo26m`, conf 0,25, camera di fianco con le Lumen accese. Colpi su viste a 2 / 3 / 4 / 6 / 8 m (4 viste per distanza).
+
+| Classe | Acqua limpida | `--preset turbid` (visibilità 5,8 m) | `--preset murky` (2,5 m) |
+|---|---|---|---|
+| person (il sub) | 4 4 4 4 3 | 4 4 2 0 0 | 2 0 0 0 0 |
+| bicycle | 4 4 4 4 4 | 4 4 4 0 0 | 4 0 0 0 0 |
+| chair | 4 4 4 4 4 | 4 4 4 0 0 | 4 0 0 0 0 |
+| suitcase | 4 4 4 4 2 | 4 4 2 0 0 | 2 0 0 0 0 |
+| bottle | 3 4 4 0 0 | 4 3 1 0 0 | 2 0 0 0 0 |
+| sports ball | 4 4 3 1 1 | 4 4 0 0 0 | 0 0 0 0 0 |
+| boat (la canoa) | 2 2 1 1 3 | 1 0 0 0 0 | 0 0 0 0 0 |
+| backpack | 0 0 0 0 0 (preso per *suitcase*) | 0 | 0 |
+
+Cosa se ne ricava:
+- **Il modello conta più delle luci.** In acqua limpida `yolo26n` (il default del detector) trova bici e sedia sempre, il sub una volta su due (lo scambia per un *bird*), e il resto poco: valigia 3/20, bottiglia 1/18. `yolo26m` porta sub, valigia, bottiglia e pallone ai livelli della tabella. Per la vasca usa `--model yolo26m.pt` (`assets/models/`).
+- **Meglio di lato che dall'alto.** Con la camera 1 m sopra l'oggetto, cioè guardando in giù di 20–30°, la canoa e la bottiglia quasi spariscono. I dataset COCO sono foto prese all'altezza degli occhi.
+- **Le Lumen aiutano poco**: +1 colpo sulla canoa, +2 sul pallone.
+- **La torbidità decide la distanza.** Con l'acqua torbida si riconosce fino a 3–4 m, con quella molto torbida solo a 2 m. Oltre la visibilità non si vede niente, come sul ROV vero.
+- **La canoa** viene letta spesso come *surfboard*, e la barca a remi come *airplane*.
+- **Lo zaino non lo prende mai** (nessuno dei due modelli): è il candidato per un fine-tuning sui box di Replicator.
+
 ## Torbidità
 
 Un solo parametro, `water.turbidity_per_m` (b_p, in 1/m): il coefficiente di diffusione delle particelle sospese, uguale nei tre canali, perché particelle molto più grandi della lunghezza d'onda diffondono tutti i colori allo stesso modo (`uw/camera_uw.py`).
@@ -164,6 +251,77 @@ La visibilità è ln(50)/β_d nel verde, il canale che arriva più lontano: dove
 Con acqua torbida, dalla superficie guardando dritto non si vede niente: il fondo è a quasi 5 m. Scendi o inclina la camera verso il basso.
 
 Cosa non c'è: le lampade del ROV illuminano le particelle subito davanti alla camera, ed è l'effetto più tipico dell'acqua torbida (i "coni" e la neve). Serve il percorso della luce, che un post-processing non ha.
+
+## Corrente
+
+L'acqua può muoversi: una corrente orizzontale, uguale in tutta la vasca in x e y, che entra solo nella dinamica del veicolo (`uw/rov/current.py`, `uw/rov/dynamics.py`). Non si vede nell'immagine: niente particelle che scorrono.
+
+**Il modello.** È quello di Fossen (2021, §10.3) per una corrente irrotazionale:
+- massa aggiunta e smorzamento vedono la velocità **rispetto all'acqua**;
+- massa e inerzia del corpo rigido vedono quella **rispetto al fondo**, che è anche quella da cui si integra la posizione.
+
+Quindi, senza spinta, il ROV finisce per muoversi con l'acqua. Il DVL (bottom track) misura la velocità rispetto al fondo e vede la deriva, come quello vero. Ci sono due termini in più, che contano solo quando il ROV ruota o la corrente cambia:
+- la corrente vista dal corpo che gira;
+- la spinta dell'acqua che accelera (Froude-Krylov).
+
+Senza il primo, un ROV fermo nell'acqua che ruota verrebbe "lanciato" fuori dalla sua particella d'acqua.
+
+**I parametri** (`current:` in `config/pool/pool.yaml`):
+
+| Chiave | Cosa |
+|---|---|
+| `speed_mps` | velocità in superficie [m/s]; 0 = acqua ferma (il default) |
+| `direction_deg` | **verso dove** scorre l'acqua, azimut ENU della vasca: 0 = +x, 90 = +y (come la prua di `vehicle.start`) |
+| `profile` | `uniform`; `power` (legge 1/7 dal fondo, `power_exponent`); `linear` (`bottom_factor` sul fondo); `table` (`[[profondità, fattore], ...]`). Il fattore vale sempre 1 in superficie |
+| `gust.sigma_mps`, `gust.dir_sigma_deg`, `gust.time_s` | raffiche su velocità e direzione: uno spettro casuale fisso (sei sinusoidi), deterministico per un dato `seed` |
+
+**Preset** (gruppo `current`, si combinano con quelli dell'acqua):
+
+```bash
+python -m uw pool --preset light                  # 0,10 m/s verso +y, uniforme
+python -m uw pool --preset strong --preset turbid  # 0,40 m/s verso +x
+python -m uw pool --preset gusty                   # 0,25 ± 0,08 m/s verso +x, ± 15°, profilo 1/7
+python -m uw pool --set current.speed_mps=0.3 --set current.direction_deg=45
+```
+
+La corrente vale anche per la fisica da sola (`python -m uw py -m uw.rov.physics_proc --preset strong`), che la scrive nella riga di log ogni 2 s ("water … m/s").
+
+**A simulazione avviata** si cambia con il canale di controllo, senza riavviare niente (vedi sotto). Il passaggio dal vecchio valore al nuovo è una rampa smoothstep di `--ramp` secondi, contati nel tempo simulato.
+
+## Canale di controllo (`simctl`)
+
+Il processo della fisica (`uw pool`, oppure `uw.rov.physics_proc` da solo) ascolta su **TCP 9020**. Il protocollo è `uwsim/1`: JSON una riga per richiesta, solo stdlib (`uw/rov/simctl.py`, client `uw/rov/simctl_client.py`).
+- **Su linus** ascolta su `127.0.0.1` e sul bridge docker `172.31.250.1`, da dove lo raggiunge il container ROS.
+- **Sulla Work** ascolta solo sul loopback, che WSL vede in modalità mirrored.
+
+```bash
+python3 tools/simctl.py hello                                   # versione, vasca, corrente, dispositivi, SITL vivo?
+python3 tools/simctl.py current --speed 0.3 --dir 90 --ramp 3   # corrente dal vivo
+python3 tools/simctl.py still --ramp 2                          # acqua ferma
+python3 tools/simctl.py stream --rate 5                         # posizione vera, velocità sul fondo e dell'acqua
+python3 tools/simctl.py reposition 5 5                          # sposta il ROV in orizzontale
+python3 tools/simctl.py device a50 acoustic_enabled=false       # spegne il ping dell'A50 (dropout)
+python3 tools/simctl.py stats                                   # tempo di passo p50/p95/max, pacchetti, stalli
+```
+
+- **`reposition` è solo orizzontale.** Profondità e assetto restano, velocità e spinte vanno a zero, così baro, bussola, giroscopi e DVL non vedono niente e l'EKF di ArduSub non se ne accorge. Il target di POSHOLD però è in coordinate EKF: riposiziona in ALT_HOLD, non in POSHOLD.
+- **Niente cambio di DVL, vasca o veicolo a runtime.** Cambierebbero porte, estensioni e parametri di ArduSub: per quelli si riavviano fisica e SITL insieme.
+- `pool_smoke.py --dvl --current 0.3 [--current-dir 0]` usa il canale per accendere la corrente mentre POSHOLD tiene il posto.
+
+**Misurato** (linus): con uno stream a 50 Hz aperto per 10 minuti la fisica tiene 400 pacchetti/s, nessuno stallo, tempo di passo p50 0,33 ms, p95 0,41 ms, max 1,3 ms.
+
+**Senza corrente il modello è identico bit per bit a prima.** Lo verifica `tests/rov/test_current.py` con un golden scritto dal codice precedente.
+
+**Costo:** circa 50 µs a passo in più (100 con raffiche e profilo), su 250. A 400 Hz sono 2–4 % di un core.
+
+**Misurato** (2026-11-27, linus, fisica da sola + SITL + estensione DVL; la corrente accesa dal vivo con `simctl`):
+
+| Cosa | Valore |
+|---|---|
+| ROV disarmato in superficie, corrente 0,20 m/s verso +y | deriva a 0,200 m/s, in direzione +y |
+| `pool_smoke.py --dvl` con acqua ferma | 18/18 (identico a prima) |
+| POSHOLD (A50), corrente 0,30 m/s di traverso accesa in 3 s | picco 12,6 cm, poi entro 2,0 cm dal punto negli ultimi 10 s su 30 |
+| Lo stesso, 10 s dopo aver fermato l'acqua | 13,7 cm dal punto: l'integratore di POSHOLD spinge ancora contro la corrente che non c'è più |
 
 ## Il DVL
 
@@ -212,6 +370,51 @@ Sul ROV vero la velocità del suono si imposta dalla pagina web dell'A50; qui co
 - i materiali acustici della piscina;
 - dove va montato il DVL sul ROV vero.
 
+## Nucleus1000
+
+Il secondo DVL del confronto: un Nortek Nucleus1000 (DVL a tre fasci, AHRS e INS nello stesso strumento) emulato nel processo della fisica come l'A50 (`uw/rov/nucleus.py`). Lo leggono, senza modifiche, i tre client di Nortek:
+- il driver Python `nucleus_driver` (1.7.0 e 1.7.8);
+- l'estensione BlueOS `nortekgroup/blueos_nucleus:2.0.11`;
+- il nodo ROS 2.
+
+**Come è fatto.** È ricavato dal sorgente di quei client e dal manuale N3015-033; dettagli in `docs/dvl.md`.
+- **Rete:** TCP 9000 con password (`nortek`), comandi ASCII o NMEA, un client alla volta; TCP 9002 solo dati.
+- **Pacchetti:** AHRS 0xD2 a 20 Hz, bottom track 0xB4 e altimetro 0xAA sulla frequenza di trigger (8 Hz, un ping su quattro all'altimetro), INS 0xDC a 10 Hz.
+- **Fasci:** il modello di `uw/rov/dvl.py`, con tre fasci a 25° e tutti e tre necessari (config `nucleus:`; valori UNVERIFIED dove il datasheet non li dà).
+- **AHRS:** l'assetto vero con rumore e un errore di prua lento.
+- **INS:** integra la velocità sul fondo con l'assetto dell'AHRS, come lo strumento.
+
+**Avvio** (al posto dell'A50, scenario C):
+
+```bash
+docker compose -f docker/pool/compose.yaml stop dvl                       # l'estensione Water Linked
+SITL_PARAM_FILES=/opt/ardupilot/default_params/sub-6dof.parm,/params/pool.parm,/params/nucleus.parm SITL_WIPE=1 \
+  BLUEOS_HOST=172.31.250.2 docker compose -f docker/pool/compose.yaml up -d --force-recreate sitl
+BLUEOS_HOST=172.31.250.2 docker compose -f docker/pool/compose.yaml --profile blueos-local --profile nucleus up -d nucleus
+python3 -m uw pool --preset nucleus           # oppure la fisica da sola: python3 -m uw.rov.physics_proc --preset nucleus
+python3 tools/pool_blueos_setup.py --blueos http://127.0.0.1:28080 --rtsp rtsp://172.31.250.1:8654/rov --nucleus http://172.31.250.7
+```
+
+- **L'estensione di Nortek** si collega e parte da sola: compose le scrive `autoconnect` e `autostart`. La sua pagina è `http://172.31.250.7`.
+  - Raggiunge BlueOS attraverso `dvl-gateway`, come l'estensione Water Linked. Il gateway ora risponde anche al controllo `info.connected` di cable_guy che lei fa.
+  - Manda ad ArduSub `VISION_POSITION_DELTA` (circa 6 Hz), `VISION_POSITION_ESTIMATE` (10 Hz, dall'INS) e `DISTANCE_SENSOR`.
+- **`nucleus.parm`** è la configurazione che il README di Nortek chiede all'operatore: posizione, velocità **e prua** dalla navigazione esterna (`EK3_SRC1_YAW 6`), la bussola come seconda sorgente di prua. Per questo SITL va riavviato con `WIPE=1`.
+- **Per tornare all'A50:** fermare `nucleus`, ricreare `sitl` con i parametri di default e `SITL_WIPE=1`, poi rilanciare `dvl`.
+- `--preset both_dvl` mette sul ROV entrambi i DVL, ciascuno con le sue porte e i suoi errori. Una sola estensione però deve alimentare ArduSub.
+
+**Misurato** (2026-11-27, linus, fisica da sola + SITL + estensione Nortek, `pool_smoke.py --dvl --current 0.3`): **19/19**.
+
+| Cosa | A50 | Nucleus1000 |
+|---|---|---|
+| Prua di ArduSub contro quella vera | +0,8° | +0,1° |
+| POSHOLD fermo per 10 s | 5,9 cm | 0,8 cm |
+| Dopo 1 m di stick, tenuta per 8 s | 4,9 cm | 2,0 cm |
+| Navigazione stimata dopo ~1,1 m | 9,6 cm | 8,5 cm |
+| POSHOLD con 0,30 m/s di traverso: picco | 12,6 cm | 14,9 cm |
+| Lo stesso, negli ultimi 10 s su 30 | entro 2,0 cm | entro 9,8 cm |
+
+Una prova per DVL: il confronto vero lo farà il banco (P9), con le ripetizioni.
+
 ## Riconoscimento con YOLO
 
 `ros/yolo_detector` fa girare un modello Ultralytics sulla camera di bordo, sull'host con ROS 2 Jazzy. Legge lo stesso stream H.264 che BlueOS passa a Cockpit (`rtsp://127.0.0.1:8654/rov`), quindi:
@@ -237,7 +440,7 @@ ros/yolo_detector/run.sh --no-ros --source video.mp4 --video-out out.mp4   # off
 - **Le installazioni automatiche di Ultralytics sono spente:** un pacchetto che manca è un errore, non un `pip install` a metà corsa.
 - Tutte le opzioni: `ros/yolo_detector/run.sh --help`.
 
-**Cosa riconosce.** I modelli COCO (`yolo26n.pt`, il default) in piscina **non trovano niente**: non c'è nessun oggetto COCO (provato su tutti gli snapshot). Le strade sono due:
+**Cosa riconosce.** Dal 2026-11-27 in vasca ci sono gli oggetti COCO: vedi "Oggetti COCO" sopra, con le misure per classe. In breve: con `--model yolo26m.pt` sei classi su otto si riconoscono bene in acqua limpida: fino a 4 m bottiglia e pallone, fino a 8 m sub, bici, sedia e valigia. La canoa si riconosce a fatica, lo zaino mai. Sulla vasca nuda (pipe, blocco, scacchiera, scaletta) un modello COCO non trova niente. Per quella le strade sono due:
 - **Prompt di testo, senza addestramento:** `--model yoloe-26s-seg.pt --prompts "pipe,concrete block,checkerboard,ladder"`. Serve il CLIP di Ultralytics: `$UW_YOLO_PYTHON -m pip install git+https://github.com/ultralytics/CLIP.git` (non ancora installato nel venv di linus, quindi non provato). Il modello YOLOE "prompt-free" (`-pf`) sulla piscina dà solo etichette a caso.
 - **Un modello addestrato sulla piscina:** le etichette le dà la simulazione (i box 2-D di Replicator) e poi si fa un fine-tuning di YOLO. Non ancora fatto.
 
@@ -260,6 +463,9 @@ ros/yolo_detector/run.sh --no-ros --source video.mp4 --video-out out.mp4   # off
 | linus, scenario C | 172.31.250.3:80 | `dvl-gateway`: la pagina dell'estensione DVL |
 | Work, scenario B | TCP 9001 | la pagina dell'estensione DVL (`dvl-host`) |
 | macchina sim | TCP 127.0.0.1:9997 | API di mediamtx: la camera sta pubblicando? (`stack.sh status`) |
+| macchina sim | TCP 9020 | canale di controllo della simulazione (`tools/simctl.py`): loopback, e su linus anche 172.31.250.1 |
+| macchina sim | TCP 9000, TCP 9002 | il Nucleus1000 emulato (`--preset nucleus`): comandi con password, solo dati |
+| linus | 172.31.250.7:80 | la pagina dell'estensione Nortek (profilo `nucleus`) |
 | BlueOS | UDP 14551 | MAVLink da SITL (master della board Manual) |
 | BlueOS | TCP 80, 6020, 6021; UDP 3478 + WebRTC | UI, camera manager, segnalazione e media WebRTC per Cockpit |
 | BlueOS | UDP 14550 | "GCS Server Link" di BlueOS: un QGC si collega qui |
@@ -293,6 +499,7 @@ Sulla Work restano accesi (profilo `workstation`).
 - pareti e fondo come limite morbido;
 - camera con tilt e luci comandati da ArduSub;
 - l'acqua sull'immagine: attenuazione e luce diffusa per canale, in funzione della distanza, con la torbidità regolabile.
+- la corrente d'acqua nella dinamica (Fossen, velocità relativa all'acqua), con profilo in profondità e raffiche.
 
 **Non simulato:**
 - collisioni con scaletta e oggetti;

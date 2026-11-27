@@ -126,7 +126,7 @@ colcon (`ros2 run sonar_relay relay`).
 
 ## The test pool (`python -m uw pool`, M11)
 
-A 10 x 10 x 5 m tiled test tank with a BlueROV2 Heavy (Blue Robotics' own model, fetched once by
+A 50 x 25 x 5 m tiled test pool (M12; `--preset pool10` for M11's 10 x 10 m) with a BlueROV2 Heavy (Blue Robotics' own model, fetched once by
 `python -m uw py tools/fetch_bluerov2.py`), piloted exactly like the real vehicle: ArduSub SITL 4.5.7 runs the
 autopilot, BlueOS (1.5 beta, "Manual" board) and Cockpit are the operator interface, a Bluetooth gamepad flies it.
 Camera, vehicle dynamics and a DVL: no bubbles, no sonar. Operator guide, ports and measurements: [docs/pool.md](docs/pool.md).
@@ -146,6 +146,12 @@ Camera, vehicle dynamics and a DVL: no bubbles, no sonar. Operator guide, ports 
   device itself (Water Linked's JSON protocol on TCP 16171 and its HTTP API) from the physics process, so BlueOS's
   unmodified Water Linked DVL extension feeds ArduSub VISION_POSITION_DELTA: POSHOLD works as on the real vehicle.
 - Config: `config/pool/pool.yaml` with its own profiles (`config/pool/profiles/`), `--set` as for the tank.
+- **COCO objects** (M12, `config/pool/objects.yaml`, `tools/fetch_props.py`): a diver, a canoe, a bicycle, a chair, a
+  bottle, a suitcase, a backpack and a football (CC0 / CC-BY models, fetched once), each with its COCO label for
+  Replicator's 2-D boxes and a solid for the DVL. `uw pool --views NAME` + `tools/eval_views.py` measure a detector.
+- **Water current** (M12, `uw/rov/current.py`): Fossen's relative-velocity model, uniform or with a depth profile and
+  gusts; config `current:` or presets light / strong / gusty, and changeable live through the control channel
+  (`uw/rov/simctl.py`, TCP 9020, `tools/simctl.py`: current, true state, reposition, DVL on/off, step timing).
 - **YOLO on the camera** (`ros/yolo_detector`, host ROS 2 + a Python with Ultralytics): reads the same H.264
   stream BlueOS relays (`rtsp://127.0.0.1:8654/rov`), runs an Ultralytics model and publishes
   `vision_msgs/Detection2DArray` on `/rov1/perception/camera/detections` and an annotated
