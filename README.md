@@ -184,6 +184,9 @@ A 50 x 25 x 5 m tiled test pool (M12; `--preset pool10` for M11's 10 x 10 m) wit
 autopilot, BlueOS (1.5 beta, "Manual" board) and Cockpit are the operator interface, a Bluetooth gamepad flies it.
 Camera, vehicle dynamics and a DVL: no bubbles, no sonar. Operator guide, ports and measurements: [docs/pool.md](docs/pool.md).
 
+On the Work machine (Windows) it is one command from the repo root: **`pool.bat`** (checks, the one-time WSL/Docker
+setup, the 3-D models, Cockpit, then the pool; `pool.bat --check` only reports). [deploy/hil/windows/pool/README.md](deploy/hil/windows/pool/README.md).
+
 - **Physics** (`vehicles/common/physics_proc.py`): the Fossen model of `vehicles/common/dynamics.py` (von Benzon 2022, the Heavy's
   measured set) in its own process, lockstep with SITL over the JSON backend (UDP 9002) and paced to the wall
   clock, with partial-submersion buoyancy at the surface. The render loop reads pose, camera tilt and lights from

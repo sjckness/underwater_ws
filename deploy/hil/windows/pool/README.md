@@ -6,6 +6,26 @@ Tutta la simulazione M11 sulla Work, senza Thor e senza hardware: Isaac, la fisi
 
 **Regola.** Sulla Work non si fa commit: solo `git pull`. Se per far funzionare qualcosa serve cambiare un file, lo si cambia in locale e si prova. Poi si annotano la modifica (`git diff`) e il motivo in `output/pool/work_notes.md`, che non va in git, e si porta tutto su linus (vedi §6).
 
+## 0. Il modo veloce: `pool.bat`
+
+Dalla radice del repo, doppio clic su **`pool.bat`** (o da CMD `pool.bat`, `pool.bat --gui`). Fa da solo tutto quello che c'è nei §2 e §3, e ogni passo solo se serve, così dalla seconda volta parte subito:
+
+1. **Fine riga:** i file che WSL legge devono avere LF. Se il checkout è pulito, li riscrive.
+2. **WSL 2 e `.wslconfig`:** aggiunge solo le chiavi di `wslconfig.example` che mancano, tenendo una copia `.wslconfig.bak`, poi fa `wsl --shutdown`. Si ferma se trova `networkingMode` impostato diverso da `mirrored`, perché vale per tutte le distro e la scelta è tua.
+3. **La distro Ubuntu-24.04:** se manca la installa, e ti chiede utente e password Linux.
+4. **Docker e systemd in WSL:** lancia `setup_blueos_wsl.sh` (la prima volta `sudo` chiede la password) e riavvia la distro quando lo script lo chiede.
+5. **Le porte di Windows:** controlla 80 e 8000 per BlueOS, e quelle di Isaac. Se una è occupata ti dice da chi, senza chiudere niente.
+6. **I modelli 3-D:** il ROV e gli oggetti COCO. La prima volta servono rete e qualche minuto.
+7. **Cockpit:** apre l'app desktop se la trova (in `%LOCALAPPDATA%\Programs\Cockpit`, o nel percorso di `UW_COCKPIT`), altrimenti BlueOS nel browser.
+8. **`run_pool.bat`** con le opzioni che restano: stack su, SITL nuovo, BlueOS e DVL configurati in background, Isaac.
+
+- **`pool.bat --check`** dice cosa manca senza cambiare niente.
+- **`--no-props`** salta i modelli degli oggetti (al loro posto restano dei box).
+- **`--no-cockpit`** non apre Cockpit.
+- In Cockpit l'indirizzo del veicolo va impostato una volta sola: `127.0.0.1` (*Settings → General*).
+
+**Non ancora provato sulla Work.** Se un passo si ferma, il messaggio dice cosa fare. I §2–§5 restano la strada a mano e la guida ai problemi, e le note vanno in `output/pool/work_notes.md` (§6).
+
 ## 1. Come è messo
 
 ```

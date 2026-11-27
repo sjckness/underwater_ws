@@ -77,10 +77,11 @@ python3 sim/tools/pool_blueos_setup.py --blueos http://localhost --rtsp rtsp://<
 Isaac e la fisica nativi su Windows; SITL, mediamtx, BlueOS e l'estensione DVL in WSL2 (profilo `work`). Guida completa: [deploy/hil/windows/pool/README.md](../deploy/hil/windows/pool/README.md).
 
 ```bat
-deploy\hil\windows\pool\run_pool.bat --gui
+pool.bat                  :: dalla radice del repo: controlli, installazione la prima volta, modelli, Cockpit, poi la vasca
+pool.bat --gui            :: con la finestra di Isaac;  pool.bat --check dice solo cosa manca
 ```
 
-Fa tutto lui:
+`pool.bat` (M12) fa da solo l'installazione della guida (WSL, Docker, modelli 3-D, Cockpit) e poi chiama `deploy\hil\windows\pool\run_pool.bat`. Quello si può usare anche da solo e fa tutto lui:
 - porta su lo stack in WSL (`deploy/hil/windows/pool/stack.sh up`);
 - riavvia SITL;
 - configura BlueOS e il DVL in background, appena il veicolo c'è;

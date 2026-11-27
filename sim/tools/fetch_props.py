@@ -217,7 +217,7 @@ def main(argv=None) -> int:
             shutil.copyfile(path, model)
         else:
             if app is None:
-                from uw.app import create_app
+                from sim.app import create_app
                 app = create_app(gui=False)
                 from isaacsim.core.utils.extensions import enable_extension
                 enable_extension("omni.kit.asset_converter")
