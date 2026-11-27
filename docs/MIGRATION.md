@@ -231,3 +231,17 @@ Prima di spostare qualsiasi cosa (`e245944`, worktree pulito su linus, RTX 3080)
 
 Criterio usato in ogni fase: **stessi risultati della baseline, test per test** (nessun test nuovo rotto, nessuno
 sparito), oltre a `colcon build` verde.
+
+## 9. Aggiunto dopo lo spostamento (Fase 3)
+
+| Percorso | Cosa |
+|---|---|
+| `vehicles/common/schema.py`, `vehicles/README.md` | schema di `vehicle.yaml` (unità, `null` ammessi); `body.hull_size_m` nuovo (prima costante in `sim/pool_scene.py`) |
+| `vehicles/momorov/README.md` | segnaposto: `sjckness/momoROV` è vuoto |
+| `tests/rov/test_vehicle_yaml.py`, `tests/rov/golden_vehicle_dynamics.json` | dinamica dai file spostati = dinamica a `e245944` |
+| `robot/bluerov2/` | accesso, regole, `VERSIONS.md`, parametri, BlueOS, checklist, `logs/INDEX.md` |
+| `ros/src/rov_bringup/` | MAVROS in sola lettura + profilo di registrazione MCAP `light` |
+| `deploy/docker/Dockerfile.rov`, `compose.rov-sim.yaml` | immagine dell'estensione con i nostri pacchetti; ambiente di prova su linus |
+| `deploy/targets/*.example` | `rov`, `rov-sim`, `thor`, `work`, `linus` |
+| `uw/image.py`, `deploy.py`, `smoke.py`, `logs.py`, `remote.py`, `targets.py`, `sysid/` | i comandi `uw image|deploy|smoke|logs|sysid` |
+| `docs/ARCHITECTURE.md` | struttura, macchine, ciclo, dati, versioni ROS, ambiente di prova |
