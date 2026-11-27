@@ -1,0 +1,21 @@
+{
+  "identifier": "itskalvik.ros2",
+  "name": "ROS2",
+  "docker": "itskalvik/blueos-ros2",
+  "tag": "0.1.0",
+  "source": "https://github.com/bluerobotics/BlueOS-Extensions-Repository/blob/master/repos/itskalvik/ros2/metadata.json (read 2026-11-27)",
+  "permissions": {
+    "NetworkMode": "host",
+    "HostConfig": {
+      "Privileged": true,
+      "Binds": [
+        "/dev:/dev:rw",
+        "/usr/blueos/extensions/ros2/:/root/persistent_ws/:rw"
+      ],
+      "CpuQuota": 200000,
+      "CpuPeriod": 100000,
+      "Memory": 1097152000
+    },
+    "Env": []
+  }
+}
