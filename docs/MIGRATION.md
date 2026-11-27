@@ -178,8 +178,11 @@ Dopo `git pull --ff-only` il codice è a posto; i file **fuori da git** no. Per 
       `python deploy\hil\dds_profile.py … --out deploy\hil\dds\fastdds_hil.xml`.
 - [ ] `assets\bluerov2_heavy\` → `vehicles\bluerov2_heavy\assets\` (oppure rilancia
       `python vehicles\bluerov2_heavy\fetch_bluerov2.py`).
-- [ ] `output\hil\*.bat` (copie locali di `run_room9.bat`, `hil_env.bat`, `record_all.bat`): da buttare e
-      rilanciare dal repo: `deploy\hil\windows\run_room9.bat`, `deploy\hil\thor\m8a\hil_env.bat`.
+- [ ] `output\hil\` (copie locali dell'HIL): `run_room9.bat` e `record_all.bat` vecchi chiamano `tools\…`, che non
+      c'è più. Ricopiali da `deploy\hil\windows\` (ora trovano la radice del repo sia da lì sia da `output\hil\`)
+      oppure lanciali direttamente da `deploy\hil\windows\`. `hil_env.bat` e `fastdds_win.xml` in `output\hil\`
+      restano come sono (`run_room9.bat` li chiama da lì, come prima); le sorgenti sono
+      `deploy\hil\thor\m8a\hil_env.bat` e `deploy\hil\windows\fastdds_win.xml`.
 - [ ] Collegamenti o comandi salvati che puntano a `hil\win\…`, `tools\…`, `docker\ardusub_sitl\run.bat`,
       `setup_native.py`: aggiornali con la tabella §3.3.
 - [ ] WSL (piscina tutto-su-Work): `bash deploy/hil/windows/pool/stack.sh …`.

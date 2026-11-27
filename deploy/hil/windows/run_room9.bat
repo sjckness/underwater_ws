@@ -1,12 +1,16 @@
 @echo off
 rem room9 + ArduSub physics on UDP 127.0.0.1:9002 (vehicles/common/physics_udp.py), ROS sink on the HIL domain.
-rem Run from anywhere: cmd /c output\hil\run_room9.bat
+rem Run from anywhere: cmd /c deploy\hil\windows\run_room9.bat (or a copy in output\hil\, as before)
 rem Before: stop sim\tools\stub_physics.py (port 9002). After Isaac prints "physics: listening": deploy\docker\ardusub_sitl\run.bat
 rem Only session variables: nothing system-wide, no network or firewall change.
 rem Log: output\hil\run.log (the previous one is kept as run_prev.log). Close with Ctrl+C or Invio at the end.
 
 setlocal
-for %%I in ("%~dp0..\..\..") do set "UW_WS=%%~fI\"
+rem the repo root: three levels up from deploy\hil\windows\, or two from a copy in output\hil\
+set "UW_WS="
+for %%I in ("%~dp0..\..\..") do if exist "%%~fI\uw\__main__.py" set "UW_WS=%%~fI\"
+if not defined UW_WS for %%I in ("%~dp0..\..") do if exist "%%~fI\uw\__main__.py" set "UW_WS=%%~fI\"
+if not defined UW_WS (echo [run_room9] cannot find the repo root above %~dp0 & exit /b 1)
 cd /d "%UW_WS%"
 
 rem --- uw.bat: native mode ---

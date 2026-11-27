@@ -7,7 +7,11 @@ rem and exit_code.txt; a failed run does not stop the next. Exit code of this sc
 rem Environment: uw.bat's variables only (no ROS: --sink file, no SITL). Nothing system-wide is changed.
 
 setlocal EnableDelayedExpansion
-for %%I in ("%~dp0..\..\..") do set "UW_WS=%%~fI\"
+rem the repo root: three levels up from deploy\hil\windows\, or two from a copy in output\hil\
+set "UW_WS="
+for %%I in ("%~dp0..\..\..") do if exist "%%~fI\uw\__main__.py" set "UW_WS=%%~fI\"
+if not defined UW_WS for %%I in ("%~dp0..\..") do if exist "%%~fI\uw\__main__.py" set "UW_WS=%%~fI\"
+if not defined UW_WS (echo [record_all] cannot find the repo root above %~dp0 & exit /b 1)
 cd /d "%UW_WS%"
 
 set "ISAAC_ENV=F:\envs\isaac"
