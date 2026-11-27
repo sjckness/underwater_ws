@@ -51,6 +51,7 @@ body:
                                 #   at fresh water. sim/config/tank.yaml has salinity_psu 35 (rho ~ 1026), which
                                 #   would add ~2.6 % = +3.0 N if computed from the volume. Known limitation.
   volume_m3: 0.011702           # informational only (= buoyancy_n / (1000 * 9.80665)); nothing reads it.
+  hull_size_m: null             # TODO: the standard hull's size ([BR2]); only the pool scene's stand-in box reads it
   r_g_frd_m: [0.0, 0.0, 0.0]    # V by definition: the body origin IS the centre of gravity, so M_RB is
                                 #   diagonal and the weight makes no moment.
   r_b_frd_m: [0.0, 0.0, -0.01]  # UNVERIFIED [BENZON22]: centre of buoyancy 1 cm ABOVE the CG (z down, so

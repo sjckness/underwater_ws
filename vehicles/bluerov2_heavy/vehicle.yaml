@@ -46,6 +46,9 @@ body:
   volume_m3: 0.0134             # V [BENZON22]; informational only, nothing reads it.
   hull_height_m: 0.254          # V [BR2]: 457 x 575 x 254 mm. Read only by the partial-submersion surface model
                                 #   (vehicles.common.dynamics make_vehicle(surface_model=True), the M11 pool).
+  hull_size_m: [0.457, 0.575, 0.254]   # V [BR2]: length x width x height, the same 457 x 575 x 254 mm. Read
+                                #   only by the pool scene, as the stand-in box when the 3D asset is missing
+                                #   (it was a constant in sim/pool_scene.py until the restructure).
   r_g_frd_m: [0.0, 0.0, 0.0]    # V by definition: the body origin IS the centre of gravity, so M_RB is
                                 #   diagonal and the weight makes no moment.
   r_b_frd_m: [0.0, 0.0, -0.01]  # V [BENZON22] ("CAD"): centre of buoyancy 1 cm ABOVE the CG (z down, so

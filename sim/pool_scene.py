@@ -282,6 +282,13 @@ def _hall_lights(stage, cfg: dict) -> None:
         UsdLux.DomeLight.Define(stage, f"{WORLD}/dome").CreateIntensityAttr(float(get(cfg, "lights.dome")))
 
 
+def hull_size(cfg: dict):
+    """body.hull_size_m of the pool's vehicle file (``vehicle.params``): the stand-in box when the asset is missing."""
+    from vehicles.common import schema
+    size = schema.load(Path(WS) / str(get(cfg, "vehicle.params")))["body"].get("hull_size_m")
+    return tuple(float(x) for x in size) if size is not None else None
+
+
 def _vehicle(stage, cfg: dict):
     """The ROV under ROV: the referenced asset (or a box of the Heavy's size), the tilt xform, the Lumens."""
     _xform(stage, ROV)
@@ -291,8 +298,10 @@ def _vehicle(stage, cfg: dict):
         body.GetPrim().GetReferences().AddReference(str(asset))
         found = str(asset)
     else:
-        box = _box(stage, f"{ROV}/body", (0.0, 0.0, 0.0), (0.457, 0.575, 0.254))
-        _bind(box, _surface(stage, f"{LOOKS}/rov_box", (0.02, 0.2, 0.6), 0.5))
+        size = hull_size(cfg)
+        if size is not None:            # vehicle.yaml body.hull_size_m: null (unknown) leaves the body empty
+            box = _box(stage, f"{ROV}/body", (0.0, 0.0, 0.0), size)
+            _bind(box, _surface(stage, f"{LOOKS}/rov_box", (0.02, 0.2, 0.6), 0.5))
         found = None
     _xform(stage, TILT, pos=get(cfg, "vehicle.camera.position_body"))
     lt = get(cfg, "vehicle.lights")

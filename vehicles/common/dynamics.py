@@ -52,7 +52,7 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from . import frames
+from . import frames, schema
 
 log = logging.getLogger(__name__)
 
@@ -231,6 +231,9 @@ def _vec(d: dict, key: str, n: int = 3) -> np.ndarray:
 def load_params(path: str | Path | None = None) -> Params:
     """Read ``vehicles/bluerov2_heavy/vehicle.yaml`` (or ``path``) into a ``Params``, checking it for consistency.
 
+    First against the schema (``vehicles/common/schema.py``: every key present and typed, SI units, ``null`` only
+    where the schema allows it), then for physical consistency.
+
     Checks that raise rather than producing a quietly wrong vehicle: the body origin must be the CG, the
     thrust axes must be unit, ``M`` must be positive definite, the damping coefficients must be
     non-positive as Fossen's notation requires, and ``weight_n`` must agree with ``mass_kg * g`` to 1 %.
@@ -241,6 +244,9 @@ def load_params(path: str | Path | None = None) -> Params:
     cfg = yaml.safe_load(path.read_text())
     if not isinstance(cfg, dict):
         raise VehicleError(f"{path}: expected a mapping at top level")
+    problems = schema.validate(cfg)
+    if problems:
+        raise VehicleError(f"{path} does not match vehicles/common/schema.py: " + "; ".join(problems))
 
     body = cfg["body"]
     mass = float(body["mass_kg"])
