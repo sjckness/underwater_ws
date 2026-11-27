@@ -5,6 +5,7 @@ says armed or not. The target is local, in tmp_path, with a fake `docker` that o
 """
 import json
 import os
+import shutil
 import stat
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -76,6 +77,10 @@ esac
     return log
 
 
+#: the copy steps use rsync, a host tool: the Isaac container has none (these tests then run in uw test's host stage)
+needs_rsync = pytest.mark.skipif(shutil.which("rsync") is None, reason="rsync is a host tool (uw test: host stage)")
+
+
 def target(tmp_path, url, **kw):
     t = {"name": "t", "kind": "rov", "transport": "local", "host": "localhost", "blueos_url": url, "docker": "docker",
          "sudo": "", "persistent_host": str(tmp_path / "persist"), "persistent_container": "/root/persistent_ws",
@@ -121,6 +126,7 @@ def test_an_armed_vehicle_stops_the_deploy_before_anything_changes(blueos, fake_
     assert not fake_docker.exists() or "restart" not in fake_docker.read_text()
 
 
+@needs_rsync
 def test_deploy_copies_builds_and_restarts_only_the_extension(blueos, fake_docker, tmp_path, monkeypatch):
     monkeypatch.setattr(targets, "update_local", lambda name, values: tmp_path / "t.local")
     assert deploy.deploy_rov(target(tmp_path, blueos.url), args(discover=True)) == 0
@@ -131,6 +137,7 @@ def test_deploy_copies_builds_and_restarts_only_the_extension(blueos, fake_docke
     assert restarts == ["restart extension-itskalvikblueosros2010"], "never blueos-core"
 
 
+@needs_rsync
 def test_dry_run_changes_nothing(blueos, fake_docker, tmp_path):
     assert deploy.deploy_rov(target(tmp_path, blueos.url, container="extension-x"), args(dry_run=True)) == 0
     assert not (tmp_path / "persist" / "ros2_ws").exists()
@@ -145,6 +152,7 @@ def test_discover_needs_exactly_one_extension(fake_docker, tmp_path):
 
 
 # ------------------------------------------------------------------------------------------------ logs
+@needs_rsync
 def test_logs_pull_copies_never_overwrites_and_indexes_once(tmp_path):
     (tmp_path / "pi_bin").mkdir()
     (tmp_path / "pi_bin" / "00000001.BIN").write_bytes(b"\xa3\x95" + b"x" * 100)
