@@ -1,12 +1,12 @@
 # Validation
 
 What the models were checked against, the numbers, and where they disagree. Differences are recorded here and
-turned into config changes, not code hacks. Reproduce: `pytest` (host), `scripts/uw.sh test` (GPU),
-`scripts/uw.sh py tools/plume_preview.py` (writes `output/plume_preview/<preset>/stats.json`).
+turned into config changes, not code hacks. Reproduce: `pytest` (host), `uw.sh test` (GPU),
+`uw.sh py physics/tools/plume_preview.py` (writes `output/plume_preview/<preset>/stats.json`).
 
 ## M1: water, leak, bubbles, plume (2026-10-26, profile `linus`, default config)
 
-### Water and gas (`uw/water.py`, `tests/test_water.py`)
+### Water and gas (`physics/water.py`, `tests/test_water.py`)
 
 | Quantity (15 °C, 35 psu, surface) | Model | Reference | Difference |
 |---|---|---|---|
@@ -55,7 +55,7 @@ The jet dominates only the first few centimetres. The tank plume is a buoyant pl
 remark that at 3 m depth "the plume is dominated by the near-source jet" does not hold for this leak. The `basin`
 preset (3.6 m column) does not reach the far field either.
 
-### Plume against the literature (`tools/plume_preview.py`, `profiles.png`)
+### Plume against the literature (`physics/tools/plume_preview.py`, `profiles.png`)
 
 References, as plotted:
 1. **MTT pure plume** (Morton, Taylor & Turner 1956), Gaussian form, B = g Q_gas at the source, no slip:
@@ -108,7 +108,7 @@ path instability), so it is not a measured turbulence intensity.
 Target: bubble core ratio λ = b_bubbles / b_liquid = **0.80–0.85 at 1–2 m** above the source, from Milgram (1983),
 J. Fluid Mech. 133, 345–376 (0.8–0.9), as quoted by Bordoloi et al. (2019, arXiv:1907.08315, sec. 3.1). Measured as
 the gas-volume-weighted RMS horizontal distance of the bubbles from their centroid, pooled over 60 snapshots in a
-15 s window after the 12 s warm-up (`tools/plume_preview.py`; for a Gaussian void fraction exp(−r²/b²) the RMS
+15 s window after the 12 s warm-up (`physics/tools/plume_preview.py`; for a Gaussian void fraction exp(−r²/b²) the RMS
 distance is b).
 
 Sweep (λ at 1 / 1.5 / 2 m; run-to-run noise about ±0.01):
@@ -159,7 +159,7 @@ Both pipe presets, 12 s warm-up + 20 s:
 - The plume reaches the surface, and no bubble is above it.
 - `plume.flow_field: lbm` raises NotImplementedError naming M6.
 
-### Acoustic scatterers (`uw/geometry.py`, `tests/test_geometry.py`)
+### Acoustic scatterers (`physics/geometry.py`, `tests/test_geometry.py`)
 
 Adaptive spacing: max(2 mm, √(R Δθ Δr / 9)), i.e. about 3 × 3 scatterers per resolution cell once that is coarser
 than 2 mm (from about 0.5 m at 1° and 4 mm); walls at least 4 mm. Each point carries the area it stands for, so
@@ -176,7 +176,7 @@ Fixed 2 mm spacing in the basin would need about 16.5 M points.
 
 ## M2: bubble scattering and the sonar (2026-10-26, profile `linus`, LF mode)
 
-### Bubble scattering (`uw/scattering.py`, `tests/test_scattering.py`)
+### Bubble scattering (`physics/scattering.py`, `tests/test_scattering.py`)
 
 Reference: Anderson (1950) modal series for a fluid sphere, gas in water (methane at 1.27 bar, 15 °C:
 g = ρ_gas/ρ_w = 8.3·10⁻⁴, h = c_gas/c_w = 0.294). At 750 kHz the bubbles have ka = 1.6–16.
@@ -200,7 +200,7 @@ Limits:
 
 The drafts had no TS or σ_ext formulas to remove; the plan's note referred to an earlier draft.
 
-### Sonar model (`uw/sonar.py`, `tests/gpu/test_sonar.py`)
+### Sonar model (`physics/sonar.py`, `tests/gpu/test_sonar.py`)
 
 | Check | Measured | Expected |
 |---|---|---|
@@ -219,7 +219,7 @@ The drafts had no TS or σ_ext formulas to remove; the plan's note referred to a
 - **Speckle test region:** |bearing| < 25°. Beyond about 32° the side walls are in the window and the contrast
   rises to 1.2 (bright lines, not under-sampled speckle).
 
-### Parameters VERIFIED and UNVERIFIED (`config/tank.yaml`, sonar section)
+### Parameters VERIFIED and UNVERIFIED (`sim/config/tank.yaml`, sonar section)
 
 VERIFIED against the datasheet (Blueprint Subsea, "Oculus M Series Datasheet EN", M750d; confirmed 2026-10-26):
 
@@ -258,7 +258,7 @@ Assumed (not datasheet values):
 | Speckle dynamics | 0.1 rad, 2 s | Tests use 0. |
 | Display window | 0–80 dB above the noise floor | Display gain only. |
 
-### Performance (linus, RTX 5050, warm kernel cache; `tools/sonar_preview.py`, `python -m uw sonar-only`)
+### Performance (linus, RTX 5050, warm kernel cache; `physics/tools/sonar_preview.py`, `python -m uw sonar-only`)
 
 | | scatterers | plume-box paths | static precompute | sonar ping, mean (max) | bubble step per ping | peak VRAM |
 |---|---|---|---|---|---|---|
@@ -273,7 +273,7 @@ Assumed (not datasheet values):
   Fidelity was not reduced.
 - **Possible fixes**, not done: skip plume-box paths whose amplitude is far below the noise floor, or march the
   extinction at one sample per voxel instead of two.
-- **First run after a change to `uw/sonar.py`:** Warp recompiles the kernels (about 15–35 s).
+- **First run after a change to `physics/sonar.py`:** Warp recompiles the kernels (about 15–35 s).
 - **Datasets:** writing a ping (compressed npz + 3 PNGs) takes about 100 ms on the CPU. The 200-ping smoke dataset
   took 30 s.
 
@@ -291,7 +291,7 @@ Assumed (not datasheet values):
   its surface-path ghosts, in the plume's own shadow, out to 3.4 m. That is consistent with the definition, but a
   stricter label (e.g. also above the noise floor + x dB) may suit detector training better.
 
-### Real-data comparison (skeleton, `tools/compare_real.py`, on our 200-ping smoke dataset)
+### Real-data comparison (skeleton, `physics/tools/compare_real.py`, on our 200-ping smoke dataset)
 
 Superseded by "Real data: public sonar datasets" below, where the same statistics are run against real recordings; this table is what the measures read on our own data before any existed.
 
@@ -395,7 +395,7 @@ The tank has 1.04 M coherent facets: 224k per wall and 147k on the pipe.
 
 **Kernel cache.** Warp cached PTX, so the CUDA driver re-compiled the large sonar module in every new process
 (40 s; HOME is ephemeral in the container). Warp now emits cubin, cached in `~/.cache/uw_warp`, and the driver's
-JIT cache is kept in `~/.cache/uw_cuda`. The first run after a change to `uw/sonar.py` compiles once (about
+JIT cache is kept in `~/.cache/uw_cuda`. The first run after a change to `physics/sonar.py` compiles once (about
 100 s); after that a precompute takes 0.2 s.
 
 **Tank plume-region floor.** The facets added 3.5 M plume-region paths (ping 84 ms). `plume_path_floor_db` for
@@ -441,7 +441,7 @@ Previews in `output/sonar_preview/exposed{,+roll45,+roll90}/`:
 - **90°:** a long streak across the bearings, from the plume's base (1.7 m, +3°) to its top (2.5 m, −62°). In the
   fan view this is an arc to the left.
 
-### Ping video (`tools/sonar_preview.py --video 50`)
+### Ping video (`physics/tools/sonar_preview.py --video 50`)
 
 H.264 (libx264 `-preset veryfast`, via a pinned `imageio-ffmpeg` in `~/.cache/uw_pydeps`), fan view, 10 Hz:
 `output/sonar_preview/{exposed,buried}{,+roll90}/plume.mp4`. Statistics of the plume region (every pixel the
@@ -510,7 +510,7 @@ viewport refreshes at 20).
 
 ### Performance and GPU memory
 
-VRAM: peak used memory of the `uw` process, `nvidia-smi` (`tools/gpu_mem.py`, host side). Timings from
+VRAM: peak used memory of the `uw` process, `nvidia-smi` (`sim/tools/gpu_mem.py`, host side). Timings from
 `--stats-file`, means over the run (ping = `Sonar.ping` incl. waiting for the queued bubble substeps).
 
 | mode | VRAM | real-time factor | ping mean / max | other stages per 100 ms of sim time |
@@ -531,7 +531,7 @@ Topics, rates and the relay: `output/m3/ros_topics.txt` (not in git) has the `ro
 RTF 0.75–0.79, the sonar topics arrive at 6.7–6.8 Hz wall clock (10 Hz in sim time), `/clock` at 40 Hz (60 in sim
 time). The big images (`/oculus/polar_db` 1.8 MB, `/camera/image_raw` 2.7 MB, the relay's `/oculus/sonar_image`)
 measure 5.0–5.8 Hz: `ros2 topic hz` (Python) does not keep up with deserialising them. Twelve `ros2 topic hz`
-processes at once slowed the sim to RTF 0.5 (CPU). `ros/sonar_relay` republished 283 pings in 45 s as
+processes at once slowed the sim to RTF 0.5 (CPU). `ros/src/sonar_relay` republished 283 pings in 45 s as
 ProjectedSonarImage (frame `oculus_projected`, 512 beam directions, ranges, 750 kHz, 1506.7 m/s); `/oculus/meta`,
 `/tf_static` (4 frames) and `/sim/leak` arrive latched.
 
@@ -583,7 +583,7 @@ integrated sidelobe energy beyond 10° is −19.9 dB in both. Kept as is; the tw
 sidelobe level, the sand's backscatter near normal incidence) are in the Known gaps. The same leakage of the plume
 column makes the roll-90° plume label an annulus across all beams at 1.5–2.4 m.
 
-**Videos** (`tools/sonar_preview.py --video 50`; fan in metres, pose in the title, the plume_direct label's outline,
+**Videos** (`physics/tools/sonar_preview.py --video 50`; fan in metres, pose in the title, the plume_direct label's outline,
 a side view of the tank with the sonar and its field of view):
 `output/sonar_preview/{exposed,exposed+roll90,exposed+pitch30,exposed+pitch45}/plume.mp4`.
 
@@ -646,7 +646,7 @@ real time (before: real time at 1.0 with little margin).
 
 ## M3.5: mobile sonar, kinematic trajectories (2026-10-26)
 
-`sonar.pose_source`: fixed | trajectory | ros (uw/pose.py). Trajectories are waypoints with a speed per segment,
+`sonar.pose_source`: fixed | trajectory | ros (sim/pose.py). Trajectories are waypoints with a speed per segment,
 interpolated by a monotone cubic (no overshoot into the walls at the lawnmower's corners), timed so that the mean
 speed is the configured one; presets approach (towards the leak), lawnmower, orbit (around the leak, looking at it),
 hover (Ornstein-Uhlenbeck drift of position and yaw). `pitch: track` keeps the sonar's axis on the leak.
@@ -683,7 +683,7 @@ Ping time with a moving sonar (40 pings, `sonar-only`, exposed pipe; linus):
 At 0.15 m/s (1.5 cm per ping) and with a 2 cm drift the pose moves beyond 5 mm nearly every ping: on_motion only
 pays for stop-and-go motion. Both are inside the mobile budget (no limit on linus: offline datasets).
 
-Videos (`tools/sonar_preview.py --video`, tank exposed, static cache none; side and top views with the current fan
+Videos (`physics/tools/sonar_preview.py --video`, tank exposed, static cache none; side and top views with the current fan
 and the path): `output/sonar_preview/exposed+approach+none/plume.mp4` (59 pings, 0.15 m/s, 1.5 → 0.6 m from the
 leak) and `output/sonar_preview/exposed+orbit+none/plume.mp4` (209 pings, one orbit of radius 1 m at 0.3 m/s). In
 the orbit the pipe sweeps through the fan, the walls and corners swing around, the plume stays at the fan's centre.
@@ -706,7 +706,7 @@ scattering dominates at ka 12 (> 30x backscatter), nearly isotropic at ka 0.05. 
 dominates); the all-paths label grows 46 % at roll 0° (4929 → 7216 pixels: the wall ghosts of the plume), 1 % at
 roll 90°; the direct-path label is unchanged.
 
-**Surface boil.** uw/surface.py: the bubble simulation counts bursts per 1 cm surface cell around where the plume
+**Surface boil.** physics/surface.py: the bubble simulation counts bursts per 1 cm surface cell around where the plume
 surfaces (integer atomics: deterministic). Per ping each cell gets a smoothed burst rate (0.3 s), a disturbed share
 f = 1 − exp(−rate / 20 000 m⁻²s⁻¹), and a point scatterer jittered in the cell (new phase every ping) with the
 Kirchhoff backscatter of a rough pressure-release surface (rms slope 0.3 per axis; the static scene's convention).
@@ -718,7 +718,7 @@ adds 0.1 dB of plume-caused energy with the fan vertical. Its parameters are ass
 
 ### Leaks for sweeps
 
-Leak presets (config/presets/leak): pinhole 0.1–5 L/min (d50 2 mm), crack 5–50 (3 mm), rupture 50–500 (5 mm, pool
+Leak presets (sim/config/presets/leak): pinhole 0.1–5 L/min (d50 2 mm), crack 5–50 (3 mm), rupture 50–500 (5 mm, pool
 400 k). Source `flow_jet`: the set flow (at the hole's pressure) with the jet of the hole that gives it at the pipe
 pressure (mass flow ∝ hole area: 0.06 mm for 0.1 L/min, 4.4 mm for 500 L/min at 3 bar g). Time profiles: constant,
 ramp (0 → full over ramp_s, from the first ping), intermittent (on for duty of each period). Checks: emitted gas
@@ -726,7 +726,7 @@ ramp (0 → full over ramp_s, from the first ping), intermittent (on for duty of
 
 ### Sweep tooling
 
-`tools/sweep.py` samples scenarios from `config/sweeps/v0.1.yaml` (deterministic for its seed), assigns splits by
+`ml/tools/sweep.py` samples scenarios from `ml/sweeps/v0.1.yaml` (deterministic for its seed), assigns splits by
 scenario (largest remainder per stratum: kind / pipe preset / flow decade), and generates them with worker
 containers that claim scenarios with an O_EXCL file, write them through the flat FileSink and mark them DONE or
 FAILED. The orchestrator pauses (stops its workers) for f1tenth runs, a PAUSE file, or less than 27 GB free on /;
@@ -741,7 +741,7 @@ exponents without a dot as numbers.
 
 ### First generation: v0.1 (linus, 2026-10-26)
 
-`python3 tools/sweep.py run` (config/sweeps/v0.1.yaml, physics git 2ac4675), 2 workers, data on the HDD
+`python3 ml/tools/sweep.py run` (ml/sweeps/v0.1.yaml, physics git 2ac4675), 2 workers, data on the HDD
 (`/HDD2T/underwater_data/v0.1`; / kept at 31 GB free):
 
 | | |
@@ -753,7 +753,7 @@ exponents without a dot as numbers.
 | time | 71 min wall clock, 4.2 pings/s; 2.32 h of worker time, 15–90 s per scenario (scene and scatterer sampling dominate: 12–20 s tank, about 60 s basin) |
 | ping | 31 ms fixed, 183 ms moving (static scene recomputed every ping) |
 
-Sanity check (`tools/dataset_stats.py`; `stats/report.md`, `overview.png`, `examples.png` in the dataset):
+Sanity check (`ml/tools/dataset_stats.py`; `stats/report.md`, `overview.png`, `examples.png` in the dataset):
 - Image checks on 1000 random pings: no NaN outside the blind zone, no empty or saturated images (0.08 % of pixels at
   255 on average), no label pixels in negative or distractor scenarios.
 - **The leak is often out of the main beam.** 45 of the 236 leak scenarios (19 %) never have a bubble in a cell's
@@ -771,11 +771,11 @@ Sanity check (`tools/dataset_stats.py`; `stats/report.md`, `overview.png`, `exam
 
 ### Second generation: v0.2 (linus, 2026-10-26/27)
 
-`config/sweeps/v0.2.yaml` at git 6893055, `/HDD2T/underwater_data/datasets/v0.2`, 22:33–00:10 (97 min). Changes
+`ml/sweeps/v0.2.yaml` at git 6893055, `/HDD2T/underwater_data/datasets/v0.2`, 22:33–00:10 (97 min). Changes
 from v0.1: 80 % of the fixed views aimed at the leak, the sonar pole on any of the four walls with the leak 1–2.5 m
 (tank) or 2.5–7 m (basin) away, 25 % distractors, three views of each fixed scene (30 pings each), a common-noise
 stripe at bearing 0 in half the scenarios, no zlib (`recorder.compress=false`, `png_level=0`).
-`tools/dataset_stats.py` on both datasets (1000 random pings image-checked each, seed 1):
+`ml/tools/dataset_stats.py` on both datasets (1000 random pings image-checked each, seed 1):
 
 | | v0.1 | v0.2 |
 |---|---|---|
@@ -866,7 +866,7 @@ basin/fixed, 12 basin/mobile) and each scenario's manifest `bytes`: **216.6 → 
 Re-encoding the masks as 1-bit PNG on top of that saves under 1 % (100.19 against 101.11 MB on `s0077`) and is not
 worth the format change.
 
-**The pass as run** (`tools/recompress.py`, started 2026-10-28 10:20, single-threaded under `nice -n 10 ionice -c3`;
+**The pass as run** (`ml/tools/recompress.py`, started 2026-10-28 10:20, single-threaded under `nice -n 10 ionice -c3`;
 log `/HDD2T/underwater_data/datasets/v0.2_recompress.log`). It finished at 22:54 the same day: **400/400 scenarios,
 0 failures, 216.5 → 58.4 GB (201.7 → 54.4 GiB), 3.71x, 6.02 → 1.62 MB per ping, 158 GB freed** (`/HDD2T` went from
 281 to 136 GB used). The *size* projection held and was slightly beaten; the *time* projection was wrong by about
@@ -882,7 +882,7 @@ That is ~113 s per scenario over the real mix, so **~13 h single-threaded for al
 and the process sits at **95 % of one core: the pass is CPU-bound, not disk-bound at 35–50 min**. The projection timed
 the *encoder* alone, into an in-memory buffer. The pass does far more than encode, deliberately: it decodes every
 original, encodes into `<root>/.recompress/<id>`, then re-decodes **both** copies twice — once comparing the npz
-arrays and the PNG pixels raw, once comparing what `uw.dataset.load_ping` returns from each — and replaces a
+arrays and the PNG pixels raw, once comparing what `ml.dataset.load_ping` returns from each — and replaces a
 scenario's files only if all of that matches. Roughly five decodes and one encode per ping, in place of one encode:
 that is the whole factor. The verification is the right trade for rewriting 216 GB in place; what was missing is that
 nobody measured *it*, only the encoding it protects.
@@ -893,7 +893,7 @@ cheaper than changing the tool while it rewrites the dataset, and `/HDD2T` had 1
 urgent.
 
 It beat the 3.47x projection because the npz side gains more than the PNG side loses: PNGs go through
-`uw.sinks.write_png` (single IDAT, filter 0, so `read_png` keeps the fast path the loader uses in training) rather
+`sim.sinks.write_png` (single IDAT, filter 0, so `read_png` keeps the fast path the loader uses in training) rather
 than Pillow, which would compress them 5.66x instead of 4.85x but cost that path.
 
 **After the pass**, checked independently of the per-scenario verification: the loader still sees all 36 000 pings
@@ -905,7 +905,7 @@ design — `recompress.json` and the per-scenario `RECOMPRESSED` markers are whe
 
 Conclusion for the recorder: keep `compress=false` / `png_level=0` while a sweep is running, since the measurement
 that motivated them stands (zlib was 63 of ~100 ms per write), and recompress afterwards as a separate pass
-(`tools/recompress.py`).
+(`ml/tools/recompress.py`).
 
 ## Real data: public sonar datasets (2026-10-26)
 
@@ -919,7 +919,7 @@ Two public datasets were downloaded and compared with the sim. Nothing here is c
 | DeeperSense basin-1 (Zenodo [7728089](https://doi.org/10.5281/zenodo.7728089)) | Tritech Gemini 720i | Cartesian fan, grayscale JPEG 2896 × 1448 | CC BY 4.0 |
 | DeeperSense basin-2 (same record) | Oculus M1200d, 2 MHz, 80° × 12° | Cartesian fan, inferno-mapped PNG 512 × 512 | CC BY 4.0 |
 
-`tools/compare_real.py` grew two loaders (`uatd`, `fan`) beside `uw`; `tools/deepersense_index.py` indexes the
+`physics/tools/compare_real.py` grew two loaders (`uatd`, `fan`) beside `uw`; `physics/tools/deepersense_index.py` indexes the
 metadatabase. Our sonar is an M750d (LF 750 kHz, HF 1.2 MHz); the M1200d is 1.2 / 2.1 MHz and the Gemini 1200ik is
 1.2 / 0.72 MHz, so only the HF end overlaps, and only statistics that do not depend on the absolute level or on
 the maker's TVG are compared at all.
@@ -1076,7 +1076,7 @@ narrowed to the wall image paths alone.
 
 ### `KeyError: 'rms_slope'` with the coherent term off (fixed 2026-10-28)
 
-`uw/sonar.py` reads `rms_slope` for every material when it uploads the scatterers, but
+`physics/sonar.py` reads `rms_slope` for every material when it uploads the scatterers, but
 `geometry.surface_materials` derived it only inside `if m.get("coherent")`, so `materials.<m>.coherent=false`
 crashed the run after 8.8 s — which is what blocked the comparison above on 2026-10-26. The slope is a property of
 the surface (√2 h / correlation length of its Gaussian profile), while `coherent` only selects whether the
@@ -1182,9 +1182,9 @@ Range settings and class counts match to within a few per cent as well (balls 19
 332). It is one pool drawn in two halves, so calibrating on one and verifying on the other would be verifying
 on the training data. The XML carries no timestamp or sequence id, so sessions have to be derived.
 
-**What the split is instead** (`tools/real_holdout.py`, written once to `output/compare_real/holdout.json`).
+**What the split is instead** (`physics/tools/real_holdout.py`, written once to `output/compare_real/holdout.json`).
 Frames are grouped by single-linkage on the same similarity, and whole groups are assigned, stratified by
-range setting and frequency — the by-scenario rule `tools/sweep.py` already applies to the simulated sweep,
+range setting and frequency — the by-scenario rule `ml/tools/sweep.py` already applies to the simulated sweep,
 for the same reason. The guarantee is structural: at threshold *T* no pair in two different groups can exceed
 *T*, so assigning whole groups bounds cross-half similarity by *T*.
 
@@ -1360,20 +1360,20 @@ and a near-range or level-vs-range statistic pooled over the corpus averages ove
 
 ### `generator_version`
 
-`config_hash` hashes the resolved config, so a change to the maths in `uw/sonar.py` is invisible to it and
+`config_hash` hashes the resolved config, so a change to the maths in `physics/sonar.py` is invisible to it and
 only the repository-wide git hash moves — too coarse to tell a dataset made by a different sonar model from
-one made by the same model with a tidier docstring. So `uw/sonar.py` now declares `SONAR_MODEL_VERSION`
+one made by the same model with a tidier docstring. So `physics/sonar.py` now declares `SONAR_MODEL_VERSION`
 (`m750d-1`, bumped when a change alters what a ping contains, not for refactors), and
 `recorder.generator_version` composes `<model>/<git>/<config hash>` into every ping's JSON and every
 scenario manifest. Joined with `/`, because `git_version` appends `+dirty` and a `+`-joined string could not
-be split back into three fields. `tools/sweep.py` now reuses `uw.recorder.git_version` instead of its own
+be split back into three fields. `ml/tools/sweep.py` now reuses `sim.recorder.git_version` instead of its own
 copy: two implementations could disagree about whether the tree is dirty, and then a dataset's manifest and
-its own pings would claim different provenance. `uw.dataset` warns — does not refuse — when one split's
+its own pings would claim different provenance. `ml.dataset` warns — does not refuse — when one split's
 scenarios carry more than one version, reading one ping per scenario.
 
-A guard test (`tests/test_module_boundaries.py`) pins the separation the sonar work depends on: `uw/sonar.py`
-and `uw/scattering.py` import no `bubbles` and no `plume`, in either direction, checked by reading the import
-statements rather than by importing the modules — `uw/sonar.py` needs warp and torch and cannot be imported
+A guard test (`tests/test_module_boundaries.py`) pins the separation the sonar work depends on: `physics/sonar.py`
+and `physics/scattering.py` import no `bubbles` and no `plume`, in either direction, checked by reading the import
+statements rather than by importing the modules — `physics/sonar.py` needs warp and torch and cannot be imported
 on the host at all, and a static check also catches an import added inside a function, which is where an
 accidental dependency shows up first.
 

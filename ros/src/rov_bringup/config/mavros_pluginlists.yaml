@@ -1,0 +1,25 @@
+# MAVROS plugins for the real ROV: telemetry only, by construction.
+#
+# Everything is denied, then only the plugins that READ the vehicle are allowed back (MAVROS loads a plugin that
+# matches the allowlist even when the denylist matches it too). Left out on purpose: `command` (arming, mode,
+# reboot services), `param` (set/pull services), every `setpoint_*`, `manual_control`, `waypoint`, `rallypoint`,
+# `geofence`, `ftp`, `actuator_control`. Nothing in this package can arm the vehicle or change a parameter.
+#
+# `rc_io` is the one plugin with a write path: it would send RC_CHANNELS_OVERRIDE if someone published on
+# `rc/override`. It is here for `rc/out` (SERVO_OUTPUT_RAW: the PWM ArduSub sends to the eight motors), which the
+# sysid needs. Nothing in this repo publishes `rc/override`; `uw smoke rov` fails if anything does.
+#
+# Expected at start: `VER: command plugin service call failed!` and `switched to default capabilities` from
+# sys_status - it asks for AUTOPILOT_VERSION through the `command` plugin, which is not loaded. Harmless.
+/**:
+  ros__parameters:
+    plugin_denylist: ["*"]
+    plugin_allowlist:
+      - sys_status        # state (armed, mode), battery, heartbeat in
+      - sys_time          # TIMESYNC / SYSTEM_TIME: aligns the FCU clock with the Pi, needed to line up .BIN and bag
+      - imu               # imu/data, imu/data_raw, imu/mag, imu/static_pressure, imu/temperature_baro
+      - global_position   # global_position/rel_alt and friends (needs the EKF origin)
+      - local_position    # local_position/pose, odom (EKF, needs the origin)
+      - vfr_hud           # heading, climb, throttle
+      - rc_io             # rc/in, rc/out (motor PWM)
+      - altitude          # mavros_extras: altitude (relative/local), the depth as the topic map lists it

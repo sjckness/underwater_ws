@@ -10,7 +10,9 @@ import pytest
 
 wp = pytest.importorskip("warp", reason="Warp tests run in the container: python -m uw test")
 
-from uw import config, geometry, pose, recorder, sonar  # noqa: E402
+from uw import config  # noqa: E402
+from physics import geometry, sonar  # noqa: E402
+from sim import pose, recorder  # noqa: E402
 
 QUIET = ["sonar.receiver_noise=false", "sonar.reverberation=false", "sonar.ringdown=false",
          "sonar.speckle_sigma_rad=0", "sonar.multipath=[]"]

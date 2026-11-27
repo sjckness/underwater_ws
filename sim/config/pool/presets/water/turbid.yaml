@@ -1,0 +1,5 @@
+# Water preset "turbid" for the pool (python -m uw pool --preset turbid): a dark target fades at about 5.8 m, the far
+# wall (8-10 m) is gone, the near one and the floor are still clear. Particles only scatter, so the colour shifts from
+# the clear pool's blue towards turbidity_veil's greenish grey (sim/camera_uw.py).
+water:
+  turbidity_per_m: 0.6

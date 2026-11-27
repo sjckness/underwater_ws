@@ -1,0 +1,171 @@
+# The pool's COCO objects (M12 P4): things a stock COCO detector (YOLO yolo26n) knows, that make sense on the floor
+# of a pool or floating in it. Placed by pool.objects in sim/config/pool/pool.yaml (or a size preset); the 3-D models are
+# fetched and converted by sim/tools/fetch_props.py into assets/props/<id>/<id>.usd (not in git: third-party licences).
+#
+# Per object:
+#   coco      the COCO class name YOLO should report (also the prim's semantic label, for Replicator's boxes)
+#   size_m    [length x, width y, height z] of the object as placed, in metres: the model is scaled uniformly so its
+#             largest dimension matches the largest of these, and the DVL's beams hit a box (or a sphere) of this size
+#             (physics/pool_geometry.py). The fetch step prints the model's real extent: keep the two close
+#   shape     box | sphere: the DVL's stand-in solid, and what is drawn while the model is not fetched
+#   material  acoustic role (acoustics.materials in pool.yaml)
+#   source    url (pinned: an Objaverse revision, or Poly Haven files checked by hash), sha256, include (other files
+#             of a glTF: relative path -> url, sha256), licence (SPDX), author, title, page; up: the model's up axis
+#             (glTF: Y); rotate_deg: [x, y, z] in the model's own axes, so that its length ends up along +x
+#
+# Sources chosen 2026-11-27 (Objaverse at allenai/objaverse revision 5566370; Poly Haven API md5 checked): realistic,
+# textured, CC0 or CC-BY 4.0, downloadable without an account.
+objects:
+  diver:
+    coco: person
+    size_m: [1.80, 1.66, 1.06]    # a scuba diver in a swimming pose, length head to fins along x
+    shape: box
+    material: neoprene
+    source:
+      url: https://huggingface.co/datasets/allenai/objaverse/resolve/556637099bf4fa79ea7b239d0d9c328b8a2e9ac8/glbs/000-005/a429a832e99641c4ad1d0bdd74d70fde.glb
+      sha256: e993f8e860febaabf530156467830a2e7dd3d405abde97dd88e69da198dd9d0f
+      license: CC-BY-4.0
+      author: Miguelangelo Rosario
+      title: Deep Diver
+      page: https://sketchfab.com/3d-models/a429a832e99641c4ad1d0bdd74d70fde
+      up: Y
+      rotate_deg: [0.0, 90.0, 0.0]
+  canoe:
+    coco: boat
+    size_m: [3.65, 0.71, 0.51]
+    shape: box
+    material: plastic
+    source:
+      url: https://huggingface.co/datasets/allenai/objaverse/resolve/556637099bf4fa79ea7b239d0d9c328b8a2e9ac8/glbs/000-141/b2e32f87f5cc4d728404a62d6000f9ae.glb
+      sha256: eace3be87d856b764f09b4bc1987b75b4f01cd525fb6565ed2fe19ae32d3e13a
+      license: CC-BY-4.0
+      author: BoatUS Foundation
+      title: Canoe
+      page: https://sketchfab.com/3d-models/b2e32f87f5cc4d728404a62d6000f9ae
+      up: Y
+      rotate_deg: [0.0, 90.0, 0.0]
+  bicycle:
+    coco: bicycle
+    size_m: [1.99, 0.61, 1.20]    # a city bike with a basket, standing (as Objaverse has it: real size)
+    shape: box
+    material: steel
+    source:
+      url: https://huggingface.co/datasets/allenai/objaverse/resolve/556637099bf4fa79ea7b239d0d9c328b8a2e9ac8/glbs/000-152/f256203558c24ea09385a861b917c75a.glb
+      sha256: 5fd18c5582c35dfa330f1e53f20553732ce75a65af3b630bb01d6bb963fc9326
+      license: CC-BY-4.0
+      author: krichwow
+      title: Bike
+      page: https://sketchfab.com/3d-models/f256203558c24ea09385a861b917c75a
+      up: Y
+      rotate_deg: [0.0, 90.0, 0.0]
+  chair:
+    coco: chair
+    size_m: [0.64, 0.63, 0.88]    # the white plastic monobloc chair of every pool deck
+    shape: box
+    material: plastic
+    source:
+      url: https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/plastic_monobloc_chair_01/plastic_monobloc_chair_01_1k.gltf
+      sha256: 899bf148139ab8d1718c25ec06112a652631f9476b5aaeeacb9eb1da9b7f1d3a
+      include:
+        plastic_monobloc_chair_01.bin:
+          url: https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/plastic_monobloc_chair_01/plastic_monobloc_chair_01.bin
+          sha256: db5c778488d01d7e7d3409e2cda53ee8f6dd523a327c080000d549dd0f83b375
+        textures/plastic_monobloc_chair_01_arm_1k.jpg:
+          url: https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/plastic_monobloc_chair_01/plastic_monobloc_chair_01_arm_1k.jpg
+          sha256: 78a67659a19a9df9efc0ef71789de0c949a727db62ade4c4c8887cd2c803c1a2
+        textures/plastic_monobloc_chair_01_diff_1k.jpg:
+          url: https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/plastic_monobloc_chair_01/plastic_monobloc_chair_01_diff_1k.jpg
+          sha256: fdd1255a02bf684cfcff2eae75c0e3eea0db1fb5ecbfbd8c4f9beab8fd83ff6c
+        textures/plastic_monobloc_chair_01_nor_gl_1k.jpg:
+          url: https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/plastic_monobloc_chair_01/plastic_monobloc_chair_01_nor_gl_1k.jpg
+          sha256: 9ffa876b37d72ae1c0aed84d4dc1f62c956c844b3efec1f786f9080c10f63c9e
+      license: CC0-1.0
+      author: Kuutti Siitonen
+      title: Plastic Monobloc Chair 01
+      page: https://polyhaven.com/a/plastic_monobloc_chair_01
+      up: Y
+      rotate_deg: [0.0, 0.0, 0.0]
+  bottle:
+    coco: bottle
+    size_m: [0.11, 0.11, 0.37]    # a 1.5 l plastic water bottle, standing
+    shape: box
+    material: plastic
+    source:
+      url: https://huggingface.co/datasets/allenai/objaverse/resolve/556637099bf4fa79ea7b239d0d9c328b8a2e9ac8/glbs/000-069/c002e2aa017d49ae8e6dbd295cca3914.glb
+      sha256: a26f0fc750a722685af2e4d0f5f6cc26cb2e92b1fc90990a0cff92bc6dab89f0
+      license: CC-BY-4.0
+      author: Microsoft
+      title: Water Bottle
+      page: https://sketchfab.com/3d-models/c002e2aa017d49ae8e6dbd295cca3914
+      up: Y
+      rotate_deg: [0.0, 0.0, 0.0]
+  suitcase:
+    coco: suitcase
+    size_m: [0.43, 0.26, 1.00]    # a black wheeled suitcase, its handle pulled out (1 m to the grip)
+    shape: box
+    material: plastic
+    source:
+      url: https://huggingface.co/datasets/allenai/objaverse/resolve/556637099bf4fa79ea7b239d0d9c328b8a2e9ac8/glbs/000-004/cd4dba634164441f850f42933885ea71.glb
+      sha256: 9622433f4e970e04a18ca4dff7e05e88af1a8e9c65a8e95d85e2425a4b78644b
+      license: CC-BY-4.0
+      author: KoteTheCat
+      title: Week 15 - Luggage Bake V2
+      page: https://sketchfab.com/3d-models/cd4dba634164441f850f42933885ea71
+      up: Y
+      rotate_deg: [0.0, 90.0, 0.0]
+  backpack:
+    coco: backpack
+    size_m: [0.49, 0.34, 0.55]    # a grey tactical rucksack (a photogrammetry scan)
+    shape: box
+    material: fabric
+    source:
+      url: https://huggingface.co/datasets/allenai/objaverse/resolve/556637099bf4fa79ea7b239d0d9c328b8a2e9ac8/glbs/000-018/9fa2da2c42234b58896e8d23393cac24.glb
+      sha256: 0d0932c9bb48092f1659bdaa88d505650976990ab52226da133febcfb5d37080
+      license: CC-BY-4.0
+      author: Liam3D
+      title: Military Tactical Backpack
+      page: https://sketchfab.com/3d-models/9fa2da2c42234b58896e8d23393cac24
+      up: Y
+      rotate_deg: [0.0, 0.0, 0.0]
+  ball:
+    coco: sports ball
+    size_m: [0.22, 0.22, 0.22]    # a black and white football
+    shape: sphere
+    material: plastic
+    source:
+      url: https://huggingface.co/datasets/allenai/objaverse/resolve/556637099bf4fa79ea7b239d0d9c328b8a2e9ac8/glbs/000-041/46c91864ef384158b0078e20bdbfe3e9.glb
+      sha256: 968fd72a1b7f0433d8ca040d1fd7ab464098730f8bff4b7655939c7b4af0d58e
+      license: CC-BY-4.0
+      author: typhomnt
+      title: Soccer Ball
+      page: https://sketchfab.com/3d-models/46c91864ef384158b0078e20bdbfe3e9
+      up: Y
+      rotate_deg: [0.0, 0.0, 0.0]
+  rowboat:
+    coco: boat
+    size_m: [3.60, 1.40, 0.70]    # an old wooden rowing boat with an oar (the canoe reads as a surfboard to YOLO)
+    shape: box
+    material: plastic
+    source:
+      url: https://huggingface.co/datasets/allenai/objaverse/resolve/556637099bf4fa79ea7b239d0d9c328b8a2e9ac8/glbs/000-083/9922d5678af84adeb1c9b479856446ca.glb
+      sha256: e0f3b6e4a91994270d564aa8d9d98575f6ee737b744b9e9624d76a9c81db8758
+      license: CC-BY-4.0
+      author: TooManyDemons
+      title: Old Rowboat
+      page: https://sketchfab.com/3d-models/9922d5678af84adeb1c9b479856446ca
+      up: Y
+      rotate_deg: [0.0, 0.0, 0.0]
+  daypack:
+    coco: backpack
+    size_m: [0.30, 0.24, 0.48]    # a plain grey daypack (the tactical rucksack scan is never seen as a backpack)
+    shape: box
+    material: fabric
+    source:
+      url: https://huggingface.co/datasets/allenai/objaverse/resolve/556637099bf4fa79ea7b239d0d9c328b8a2e9ac8/glbs/000-035/5655596f9efe47deb09df57a79b44e04.glb
+      sha256: 63e56bdaee773747365761cbd65ae4426485bf045ba9778f4c99a08b27af64bd
+      license: CC-BY-4.0
+      author: typhomnt
+      title: Backpack
+      page: https://sketchfab.com/3d-models/5655596f9efe47deb09df57a79b44e04
+      up: Y
+      rotate_deg: [0.0, 0.0, 0.0]

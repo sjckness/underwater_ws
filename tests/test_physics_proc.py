@@ -1,4 +1,4 @@
-"""uw/rov/physics_proc.py: the physics server in its own process, read through shared memory (host, numpy only).
+"""vehicles/common/physics_proc.py: the physics server in its own process, read through shared memory (host, numpy only).
 
 A fake SITL client speaks the JSON protocol to the child, as in tests/test_physics_udp.py.
 """
@@ -14,8 +14,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from uw import config  # noqa: E402
-from uw.physics_udp import MAGIC_16  # noqa: E402
-from uw.rov.physics_proc import PhysicsProcess, make_pool_server  # noqa: E402
+from vehicles.common.physics_udp import MAGIC_16  # noqa: E402
+from vehicles.common.physics_proc import PhysicsProcess, make_pool_server  # noqa: E402
 
 
 @pytest.fixture
@@ -24,7 +24,8 @@ def cfg():
     c["physics"]["port"] = 0           # ephemeral: never collides with a real SITL on 9002
     c["physics"]["rtf"] = 0.0          # unpaced
     c["dvl"]["device"].update(bind="127.0.0.1", tcp_port=0, http_port=0)    # the emulated A50, likewise
-    return c
+    c["physics"]["control"].update(port=0, bind=["127.0.0.1"])              # and the control channel (a running
+    return c                                                                 #   pool holds 9020)
 
 
 def servo(pwm, frame=0):
@@ -88,7 +89,7 @@ def test_a_busy_port_fails_the_start_with_a_clear_error(cfg):
 
 
 def test_the_child_runs_the_a50_and_reports_it(cfg):
-    """The emulated DVL lives in the child (uw/rov/a50.py): reachable on its ports, counted in the shared record."""
+    """The emulated DVL lives in the child (vehicles/common/a50.py): reachable on its ports, counted in the shared record."""
     import json
     import urllib.request
     proc = PhysicsProcess(cfg).start()

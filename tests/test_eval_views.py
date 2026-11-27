@@ -1,4 +1,4 @@
-"""tools/eval_views.py and uw.pool.view_poses (M12 P4): the scoring and the camera poses, without Kit or a model."""
+"""sim/tools/eval_views.py and sim.pool.view_poses (M12 P4): the scoring and the camera poses, without Kit or a model."""
 import math
 import sys
 from pathlib import Path
@@ -8,7 +8,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
-sys.path.insert(0, str(REPO / "tools"))
+sys.path.insert(0, str(REPO / "sim" / "tools"))
 
 import eval_views as ev  # noqa: E402
 from uw import config  # noqa: E402
@@ -32,8 +32,8 @@ def test_a_view_is_a_hit_a_miss_or_not_visible():
 
 
 def test_the_view_poses_aim_the_camera_at_each_object():
-    from uw import pool_geometry
-    from uw.pool import view_poses
+    from physics import pool_geometry
+    from sim.pool import view_poses
     cfg = config.load(config.POOL_CONFIG)
     cam_off = np.asarray(cfg["vehicle"]["camera"]["position_body"], float)
     objs = {pl["name"]: pl for pl, _ in pool_geometry.placed_objects(cfg)}

@@ -1,0 +1,265 @@
+# M11 "vasca prove": a BlueROV2 Heavy flown through ArduSub SITL, BlueOS and Cockpit with a gamepad, in a deep test
+# tank. Camera and vehicle dynamics only: no bubbles, no sonar. Plan: docs/pool.md.
+#
+# The base config of `python -m uw pool` and of `vehicles.common.physics_proc`, layered like sim/config/tank.yaml (uw/config.py):
+# this file, then profiles/<name>.yaml (--profile, default linus), then --set (existing keys only).
+#
+# Frames: tank/ENU, origin at a floor corner, x and y along two walls, z up; the body is FLU.
+# vehicles/common/frames.py is the only converter to ArduPilot's NED/FRD.
+seed: 0
+
+scene:
+  name: pool50x25                 # --preset pool10: the M11 10 x 10 m tank (sim/config/pool/presets/size/)
+
+pool:
+  size: [50.0, 25.0, 5.5]         # inner length x width x wall height [m]: an Olympic pool's plan with 5 m of water
+                                  #   everywhere. M12, 2026-11-27: on linus it costs the same as the 10 x 10 tank (30 fps,
+                                  #   render p95 8.3 against 8.2 ms, VRAM +0.1 GB; docs/pool.md). --preset pool10
+  water_level: 5.0                # free surface, above the floor [m]
+  tile_m: 0.25                    # tile pitch on the walls and the floor
+  tile_color: [0.70, 0.78, 0.78]  # linear RGB
+  grout_color: [0.30, 0.34, 0.34]
+  floor_grid_m: 1.0               # a dark line on the floor every metre: a reference for the pilot
+  grid_color: [0.05, 0.06, 0.08]
+  depth_marks_m: 0.5              # depth marks on the y = 0 wall, every depth_marks_m from the surface
+  ladder: true                    # a stainless ladder on the y = 0 wall
+  props:                          # on the floor (physics/pool_geometry.py): `at` = [x, y] as fractions of L and W, so the
+                                  #   layout follows pool.size; sizes in metres; [] or false = none
+    - {name: block, kind: box, at: [0.44, 0.24], z: 0.10, size: [0.4, 0.2, 0.2], role: block}      # concrete
+    - {name: pipe, kind: cylinder, at: [0.56, 0.26], z: 0.15, radius: 0.15, length: 1.5, axis: X, role: pipe}
+    - {name: board, kind: board, at: [0.50, 0.40], size: 0.6, role: board}   # a checkerboard 8.5 m ahead of the start
+  objects_catalog: sim/config/pool/objects.yaml   # the COCO objects: class, size, material, 3-D model (sim/tools/fetch_props.py)
+  objects:                        # placed objects: {id, at: [fx, fy] fractions of L and W, yaw_deg, z (of the bottom,
+                                  #   above the floor), name}; the catalogue's size is also the DVL's solid. Without the
+                                  #   fetched model (sim/tools/fetch_props.py), a stand-in box or sphere of that size.
+                                  #   Here: within 3-15 m of the start, in front of it
+    - {id: ball, at: [0.48, 0.18]}
+    - {id: bottle, at: [0.53, 0.20], yaw_deg: 40}
+    - {id: chair, at: [0.42, 0.32], yaw_deg: 200}
+    - {id: daypack, at: [0.47, 0.48], yaw_deg: 30}
+    - {id: suitcase, at: [0.58, 0.38], yaw_deg: -20}
+    - {id: bicycle, at: [0.63, 0.50], yaw_deg: 70}
+    - {id: canoe, at: [0.38, 0.56], yaw_deg: 15}
+    - {id: diver, at: [0.54, 0.64], z: 0.5, yaw_deg: 110}     # swimming half a metre above the floor
+
+water:
+  temperature_c: 27.0            # an indoor pool. Sets the speed of sound the DVL sees (physics/water.py). GUESS
+  salinity_psu: 0.0              # fresh water
+  surface: true                   # the free surface as a dielectric plane (ior 1.333): total internal reflection
+                                  #   and the Snell window seen from below. Casts no shadow.
+  # Underwater look, applied to the rendered frame (sim/camera_uw.py) with the per-pixel distance d [m]:
+  #   I = J exp(-beta_d d) + b_inf (1 - exp(-beta_b d))
+  # GUESS, clear fresh pool water: pure-water absorption is ~0.35 / 0.06 / 0.015 1/m at 650 / 550 / 450 nm,
+  # plus a little scattering. Red is gone after a few metres, blue-green carries the far wall.
+  # Tuned by eye on 2026-11-25 renders (output/pool/snapshots) towards a lit indoor pool: blue-cyan, the far wall
+  # (8 m) still readable.
+  beta_d: [0.40, 0.075, 0.05]     # direct-signal attenuation, R G B [1/m]
+  beta_b: [0.36, 0.065, 0.045]    # backscatter, R G B [1/m]
+  b_inf: [0.035, 0.16, 0.22]      # veiling light at infinite distance, linear RGB (scaled by water.b_inf_gain)
+  b_inf_gain: 1.0
+  turbidity_per_m: 0.0            # suspended particles: an extra scattering coefficient b_p [1/m], flat in R, G, B. It
+                                  #   adds to beta_d and beta_b and pulls the veiling light towards turbidity_veil
+                                  #   (sim/camera_uw.py). 0 = the clear pool above. Presets: --preset turbid (0.6) or
+                                  #   murky (1.5); or --set water.turbidity_per_m=X. A dark target stays visible to about
+                                  #   3.9 / (beta_d green + b_p): 52 m clear, 5.8 m turbid, 2.5 m murky
+  turbidity_veil: [0.10, 0.12, 0.09]  # the veiling light of water so full of particles that they alone count: the
+                                  #   lit particle cloud, linear RGB (greenish grey: silt and algae). GUESS, by eye
+
+current:                          # the water's motion, in the vehicle dynamics only (vehicles/common/current.py, Fossen 2021
+                                  #   10.3): horizontal, uniform in x and y. Presets: --preset light | strong | gusty
+                                  #   (sim/config/pool/presets/current/); while running: the control channel (P2)
+  speed_mps: 0.0                  # at the surface; 0 = still water
+  direction_deg: 0.0              # ENU azimuth the water flows TOWARDS: 0 = +x, 90 = +y (as vehicle.start's heading)
+  profile: uniform                # uniform | power (1/7 law above the floor) | linear | table, all 1 at the surface
+  power_exponent: 0.142857
+  bottom_factor: 0.5              # linear: the factor at the floor
+  table: []                       # table: [[depth_m, factor], ...], increasing depths
+  gust:                           # a fixed random spectrum on speed and direction (deterministic for a seed)
+    sigma_mps: 0.0
+    time_s: 20.0                  # correlation time, order of magnitude
+    dir_sigma_deg: 0.0
+
+lights:
+  ceiling:                        # rect lights above the water (an indoor test hall), facing down
+    height_m: 2.5                 # above the free surface
+    spacing_m: 5.0                # one light every spacing_m along x and y (10 x 10 m: 2 x 2), evenly spread
+    size_m: [1.2, 0.6]
+    intensity: 20000.0            # luminance [nits]; with the dome, set by eye for a lit hall
+    color: [1.0, 0.98, 0.94]
+  dome: 150.0                     # room fill; 0 = none
+
+vehicle:
+  params: vehicles/bluerov2_heavy/vehicle.yaml                    # BlueROV2 Heavy, FRAME_CONFIG 2 (8 x T200)
+  asset: vehicles/bluerov2_heavy/assets/bluerov2_heavy.usd     # vehicles/bluerov2_heavy/fetch_bluerov2.py; if missing, a box of the hull size
+  start: [25.0, 1.5, 4.88, 90.0]  # CG x, y, z [m] and heading [deg, ENU: 0 = +x, 90 = +y]: floating at the
+                                  #   surface near the y = 0 wall at mid-length, facing the far one
+  home: null                      # SITL home [x, y] on the surface; null = the start point
+  camera:                         # the Low-Light HD USB camera behind the front dome, on its tilt servo
+    position_body: [0.15, 0.0, 0.05]   # FLU from the CG [m]: the centre of the front dome in the BlueSim mesh
+                                       #   (dome tip at x 0.211, radius ~0.065, axis at z ~0.05)
+    tilt_servo: 9                 # ArduSub SERVOn driving the tilt (pool.parm: SERVO9_FUNCTION 7, mount pitch)
+    tilt_range_deg: [-45.0, 45.0] # at PWM 1100 / 1900 (sub.parm MNT1_PITCH_MIN / MAX)
+  lights:                         # Lumen lights (the Heavy's four), dimmed by ArduSub's lights 1 output
+    servo: 10                     # pool.parm: SERVO10_FUNCTION 181 (lights 1), PWM 1100 (off) .. 1900 (full)
+    cone_deg: 135.0               # Lumen beam angle (full)
+    radius_m: 0.02
+    intensity: 310000.0           # sphere luminance at full PWM [nits]: 1500 lm over 135 deg ~ 390 cd
+    color: [1.0, 0.96, 0.90]
+    lamps:                        # FLU from the CG [m], pointing along +x: just ahead of the four Lumen lenses of
+      - [0.235, 0.189, 0.097]     #   the BlueSim mesh (centres at x 0.22, y +-0.189, z 0.097 and -0.070)
+      - [0.235, -0.189, 0.097]
+      - [0.235, 0.189, -0.070]
+      - [0.235, -0.189, -0.070]
+
+camera:
+  resolution: [1280, 720]
+  hfov_deg: 80.0                  # in-water field of view behind the flat/dome port
+  rate_hz: 30.0                   # render, post-process and stream rate (the BlueROV2 camera streams at 30)
+  clip_m: [0.10, 70.0]            # near plane beyond the front dome (radius ~0.065 m around the camera), which
+                                  #   would otherwise be the first hit of every pixel and blind the water model
+
+stream:                           # H.264 to an RTSP server (mediamtx, deploy/docker/pool/compose.yaml), which BlueOS's
+  enabled: true                   #   camera manager pulls as a "Redirect" source and serves to Cockpit over WebRTC
+  url: rtsp://127.0.0.1:8654/rov
+  encoder: libx264                # libx264 | h264_nvenc
+  bitrate_kbps: 4000
+  threads: 2                      # libx264 threads; the encoder also runs niced, so it does not slow the renderer
+
+acoustics:                        # what the DVL's beams hit (physics/pool_geometry.py) is made of: the echo law of
+                                  #   vehicles/common/dvl.py, units as sim/config/tank.yaml materials (Z [MRayl] or reflection,
+                                  #   lambert_db, rms_slope of the incoherent Kirchhoff term). All GUESS
+  materials:
+    tiles:    {Z: 10.0, lambert_db: -30.0, rms_slope: 0.10}   # glazed ceramic, grout every 0.25 m
+    concrete: {Z: 8.0,  lambert_db: -32.0, rms_slope: 0.10}
+    steel:    {Z: 45.0, lambert_db: -35.0, rms_slope: 0.03}   # the ladder
+    pipe:     {Z: 30.0, lambert_db: -35.0, rms_slope: 0.05}   # coated steel
+    board:    {Z: 3.0,  lambert_db: -30.0, rms_slope: 0.10}   # a plastic marker board
+    plastic:  {Z: 2.5,  lambert_db: -30.0, rms_slope: 0.08}   # the COCO objects (sim/config/pool/objects.yaml): chair,
+    neoprene: {Z: 1.6,  lambert_db: -25.0, rms_slope: 0.20}   #   boat, bottles, ball; a wetsuit; a bicycle's steel
+    fabric:   {Z: 1.7,  lambert_db: -24.0, rms_slope: 0.25}   #   is "steel". Wet fabric is nearly water: weak echo
+  roles: {floor: tiles, wall: tiles, ladder: steel, block: concrete, pipe: pipe, board: board, plastic: plastic,
+          neoprene: neoprene, fabric: fabric, steel: steel}
+
+dvl:                              # Water Linked DVL A50 under the Heavy: the model of sim/config/tank.yaml (vehicles/common/dvl.py,
+                                  #   docs/dvl.md) cast at the pool (physics/pool_geometry.py), and the device's network side
+                                  #   (vehicles/common/a50.py) so that BlueOS's Water Linked DVL extension and the ndahn/dvl_a50
+                                  #   driver talk to it unmodified. The instrument values are sim/config/tank.yaml's, kept
+                                  #   equal by tests/rov/test_a50.py; only rssi_ref_dbm and the mount differ
+  enabled: true
+  model: Water Linked DVL A50
+  version: standard
+  mount:                          # body FRD from the CG
+    position_frd_m: [0.0, 0.0, 0.14]  # under the hull's bottom panel (hull height 0.254 m): the extension does not
+                                  #   set VISO_POS_*, so a DVL off the CG would be a lever arm ArduSub does not know.
+                                  #   UNVERIFIED: where the real one goes is not decided
+    roll_deg: 0.0
+    pitch_deg: 0.0
+    rotation_offset_deg: 0.0
+  beams:
+    tilt_deg: 22.5
+    azimuths_deg: [45.0, 135.0, 225.0, 315.0]
+    width_deg: 4.4
+    min_good: 3                   # of 4 (vehicles/common/dvl.py: N beams, M12)
+  min_altitude_m: 0.05
+  max_altitude_m: 50.0
+  max_speed_mps: 3.75
+  resolution_mps: 0.0001
+  rate_hz: [2.0, 15.0]
+  rate_altitude_m: 3.0
+  rate_jitter: 0.05
+  scale_sigma:
+    standard: 0.0101
+    performance: 0.001
+  beam_noise_mps: 0.002
+  bias_sigma_mps: 0.001
+  bias_time_s: 120.0
+  rssi_ref_dbm: 0.0               # the tank's -30 is set for its 0.1-2.6 m altitudes and would lose lock beyond ~3 m;
+                                  #   0 dBm keeps the datasheet's 50 m over a sand-like bottom (mu -27 dB) and the
+                                  #   whole 5 m pool over tiles. UNVERIFIED, like the tank's
+  nsd_dbm: -95.0
+  snr_threshold_db: 6.0
+  noise: true
+  dropout: true
+  device:                         # the A50's network side, emulated in the physics process (vehicles/common/a50.py)
+    enabled: true
+    bind: 0.0.0.0                 # the BlueOS extension reaches it from a container (linus: 172.31.250.1)
+    tcp_port: 16171               # the JSON protocol. VERIFIED, and fixed on the device and in the extension
+    http_port: 8061               # the device's HTTP API is on 80, taken on linus; the extension accepts host:port
+    dead_reckoning_hz: 5.0        # position_local reports. VERIFIED ("the expected update rate is 5 Hz")
+    temperature_c: 30.0           # what /api/v1/about/status reports (the extension warns above 45). GUESS
+    yaw_drift_deg_per_h: 0.0      # the A50's own gyro, in its dead reckoning only. UNVERIFIED: off
+
+nucleus:                          # Nortek Nucleus1000 (M12 P5): off by default; --preset nucleus puts it in place of
+                                  #   the A50, --preset both_dvl next to it. The beam model is vehicles/common/dvl.py's (same
+                                  #   keys as dvl:), the network side vehicles/common/nucleus.py. Values from Nortek's datasheet
+                                  #   where published; the rest UNVERIFIED like the A50's
+  enabled: false
+  model: Nortek Nucleus1000
+  version: standard
+  mount:                          # body FRD from the CG: beside the A50 under the hull. UNVERIFIED
+    position_frd_m: [0.0, 0.0, 0.14]
+    roll_deg: 0.0
+    pitch_deg: 0.0
+    rotation_offset_deg: 0.0
+  beams:
+    tilt_deg: 25.0                # three slanted beams 25 deg off the vertical. UNVERIFIED
+    azimuths_deg: [0.0, 120.0, 240.0]   # 120 deg apart, the first forward. UNVERIFIED
+    width_deg: 3.0                # UNVERIFIED
+    min_good: 3                   # three beams: all of them for a 3-D velocity
+  min_altitude_m: 0.2             # UNVERIFIED (datasheet: bottom track from a few decimetres)
+  max_altitude_m: 50.0
+  max_speed_mps: 5.0
+  resolution_mps: 0.0001
+  rate_hz: [1.0, 8.0]             # the trigger frequency's range (SETTRIG FREQ 1-8 Hz); the device sets it, not the
+  rate_altitude_m: 3.0            #   altitude
+  rate_jitter: 0.0
+  scale_sigma:
+    standard: 0.003               # long-term accuracy +-0.3 % (datasheet, as recalled). UNVERIFIED
+  beam_noise_mps: 0.003
+  bias_sigma_mps: 0.001
+  bias_time_s: 120.0
+  rssi_ref_dbm: 0.0
+  nsd_dbm: -95.0
+  snr_threshold_db: 6.0
+  noise: true
+  dropout: true
+  device:                         # the network side (vehicles/common/nucleus.py)
+    enabled: true
+    bind: 0.0.0.0                 # the Nortek extension reaches it from its bridge (linus: 172.31.250.1)
+    cmd_port: 9000                # the device's command port (password); VERIFIED (driver, manual)
+    data_port: 9002               # data only; VERIFIED
+    password: nortek              # the factory default; VERIFIED
+    serial_number: 900002
+    trig_hz: 8.0                  # SETTRIG FREQ: the acoustic pings per second (bottom track + altimeter)
+    alti_every: 4                 # every 4th ping is the vertical altimeter
+    ahrs_hz: 20.0                 # SETAHRS FREQ: evenly at >= 20 Hz keeps the extension's "streaming" detector steady
+    nav_hz: 10.0                  # SETNAV FREQ: the INS output (the extension sends it as VISION_POSITION_ESTIMATE)
+    ins: true                     # the INS licence: a Nucleus with navigation output
+    roll_pitch_sigma_deg: 0.1     # AHRS white noise. UNVERIFIED
+    heading_sigma_deg: 0.3
+    heading_bias_sigma_deg: 1.0   # a slow heading error (magnetometer), correlation heading_bias_time_s. UNVERIFIED
+    heading_bias_time_s: 300.0
+
+physics:                          # vehicles.common.physics_proc: the ArduSub JSON server in its own process
+  port: 9002                      # UDP; ArduSub SITL --model JSON sends here
+  bind: 127.0.0.1                 # Work with SITL in WSL2: the address SITL reaches Windows on (docs/pool.md)
+  rtf: 1.0                        # paced to the wall clock: SITL, BlueOS and the pilot see real time
+  surface_model: true             # partial-submersion buoyancy: the vehicle floats at the surface
+  control:                        # the control channel (vehicles/common/simctl.py, sim/tools/simctl.py): the current, the true
+    enabled: true                 #   state, repositioning, the DVL on/off, without restarting physics and SITL
+    port: 9020                    # TCP, newline-delimited JSON (uwsim/1)
+    bind: [127.0.0.1]             # a list; addresses this host does not have yet are skipped (profiles add the
+                                  #   docker bridge on linus, where the ROS container lives)
+
+render:
+  translucency: true              # needed for the water surface (refraction, total internal reflection)
+  reflections: true               # linus turns them off: 26 -> 38 fps GPU-bound for 1/255 of mean image difference
+                                  #   (the glossy tiles, 2026-11-25)
+  refraction_bounces: 1           # 2 costs 31 against 8.5 ms a frame on linus with the surface in view, for a
+                                  #   difference of 0.2/255 on average in the image (2026-11-25)
+  dlss: true                      # DLSS (render below the camera resolution, upscale) instead of DLAA: on linus
+                                  #   7.7 against 55 ms a frame at 1280 x 720 (2026-11-25), and no visible loss
+
+sim:
+  gui_fps: 20.0                   # --gui viewport rate
+  stats_every_s: 10.0             # log fps, render / post / encode times, physics packets and stalls

@@ -13,7 +13,9 @@ pxr = pytest.importorskip("pxr", reason="needs Isaac's USD libraries: python -m 
 
 from pxr import Gf, Usd, UsdGeom, UsdLux, Vt  # noqa: E402
 
-from uw import bubbles, config, geometry, sonar, usd_scene  # noqa: E402
+from physics import bubbles, geometry, sonar  # noqa: E402
+from uw import config  # noqa: E402
+from sim import usd_scene  # noqa: E402
 
 
 def _world(stage, path):

@@ -1,13 +1,14 @@
 """Bubble plume on the GPU: 12 s warm-up + 20 s for both pipe presets, then gas balance, bursts, finiteness.
 
-Runs in the container (scripts/uw.sh test); skipped where Warp is not importable (host pytest).
+Runs in the container (uw.sh test); skipped where Warp is not importable (host pytest).
 """
 import numpy as np
 import pytest
 
-wp = pytest.importorskip("warp", reason="Warp tests run in the container: scripts/uw.sh test")
+wp = pytest.importorskip("warp", reason="Warp tests run in the container: uw.sh test")
 
-from uw import bubbles, config, geometry  # noqa: E402
+from physics import bubbles, geometry  # noqa: E402
+from uw import config  # noqa: E402
 
 RUN_S = 20.0
 
@@ -115,7 +116,7 @@ def test_leak_profiles_emit_the_right_gas(profile, seconds, share):
 
 
 def test_flow_jet_source_gives_the_set_flow():
-    from uw import plume
+    from physics import plume
     for flow in (0.1, 30.0, 500.0):
         cfg = config.load(overrides=["leak.source=flow_jet", f"leak.flow_lpm={flow}"])
         src = plume.leak_source(cfg, geometry.build_scene(cfg))

@@ -1,6 +1,6 @@
 # Recording runs
 
-Run with `output\hil\record_all.bat` (tracked as `hil\win\record_all.bat`) on branch m8a-record (commit 375bea4), 2026-11-11. The data (~58 GB) and the videos stay on the workstation under `output/records/`; this folder keeps the report and the contact sheets only.
+Run with `output\hil\record_all.bat` (tracked as `deploy\hil\windows\record_all.bat`) on branch m8a-record (commit 375bea4), 2026-11-11. The data (~58 GB) and the videos stay on the workstation under `output/records/`; this folder keeps the report and the contact sheets only.
 
 Note: the trajectories are shorter than the 300 s runs (circle 105 s, updown 60 s, combined 167 s); after the end the ROV holds its last pose.
 

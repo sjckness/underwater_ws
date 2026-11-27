@@ -1,4 +1,4 @@
-"""uw.rov.frames: round trips, the handedness checks and the concrete repo cases.
+"""vehicles.common.frames: round trips, the handedness checks and the concrete repo cases.
 
 The point of these tests is that there is exactly ONE place converting between the repo's tank/ENU + body/FLU
 frames and ArduPilot's NED + FRD, and that it agrees with (a) the repo's existing rotation convention,
@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from uw.rov import frames as F
+from vehicles.common import frames as F
 
 RNG = np.random.default_rng(20261109)
 
@@ -79,7 +79,7 @@ def test_euler_relations_between_the_conventions(rpy_enu):
 
 
 def test_the_configured_sonar_pitch_is_minus_15_for_ardupilot():
-    """config/tank.yaml says sonar.pitch_deg: 15.0, "positive = nose down". ArduPilot must report -15."""
+    """sim/config/tank.yaml says sonar.pitch_deg: 15.0, "positive = nose down". ArduPilot must report -15."""
     rpy_ned = F.rpy_deg_from_rot(F.rot_flu_enu_to_frd_ned(F.rot_from_rpy_deg([0.0, 15.0, 0.0])))
     assert np.isclose(rpy_ned[1], -15.0, atol=1e-9)
 
@@ -87,9 +87,9 @@ def test_the_configured_sonar_pitch_is_minus_15_for_ardupilot():
 # -------------------------------------------------------------------- agreement with the repo convention
 
 def test_rotation_matches_the_repo_convention():
-    """frames.rot_from_rpy_deg duplicates uw.geometry.rot_rpy_deg so that uw.rov imports nothing from the
+    """frames.rot_from_rpy_deg duplicates physics.geometry.rot_rpy_deg so that vehicles.common imports nothing from the
     repo; this test is what keeps the duplicate honest."""
-    from uw.geometry import rot_rpy_deg
+    from physics.geometry import rot_rpy_deg
     for _ in range(20):
         rpy = RNG.uniform(-180.0, 180.0, 3)
         assert np.allclose(F.rot_from_rpy_deg(rpy), rot_rpy_deg(rpy))
@@ -245,7 +245,7 @@ def test_a_concrete_pose_end_to_end():
 # ------------------------------------------------------------------------------------- the Isaac seam
 
 def test_isaac_seam_is_the_identity():
-    """uw/usd_scene.py sets the stage up axis to Z and metersPerUnit to 1.0 and authors the tank in metres, so
+    """sim/usd_scene.py sets the stage up axis to Z and metersPerUnit to 1.0 and authors the tank in metres, so
     tank -> Isaac is the identity. If a future stage changes either, these two functions are the only things
     that change - this test documents the assumption rather than checking arithmetic."""
     p = np.array([1.0, 2.0, 0.9])

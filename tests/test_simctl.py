@@ -1,4 +1,4 @@
-"""uw/rov/simctl.py and its client (M12 P2): the control channel into the physics process (host, numpy only).
+"""vehicles/common/simctl.py and its client (M12 P2): the control channel into the physics process (host, numpy only).
 
 A fake SITL drives the server with servo packets, as in tests/test_physics_proc.py.
 """
@@ -15,10 +15,10 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from uw import config  # noqa: E402
-from uw.physics_udp import MAGIC_16  # noqa: E402
-from uw.rov import simctl  # noqa: E402
-from uw.rov.physics_proc import PhysicsProcess, make_pool_server  # noqa: E402
-from uw.rov.simctl_client import SimCtl, SimCtlError  # noqa: E402
+from vehicles.common.physics_udp import MAGIC_16  # noqa: E402
+from vehicles.common import simctl  # noqa: E402
+from vehicles.common.physics_proc import PhysicsProcess, make_pool_server  # noqa: E402
+from vehicles.common.simctl_client import SimCtl, SimCtlError  # noqa: E402
 
 NOT_HERE = "203.0.113.7"            # TEST-NET-3: never an address of this host
 
@@ -218,5 +218,5 @@ def test_the_channel_can_be_switched_off(cfg):
 def test_the_profiles_listen_where_their_clients_are():
     linus = config.load(config.POOL_CONFIG, profile="linus")["physics"]["control"]["bind"]
     work = config.load(config.POOL_CONFIG, profile="workstation")["physics"]["control"]["bind"]
-    assert "172.31.250.1" in linus and "127.0.0.1" in linus           # the bridge of docker/pool/compose.yaml
+    assert "172.31.250.1" in linus and "127.0.0.1" in linus           # the bridge of deploy/docker/pool/compose.yaml
     assert work == ["127.0.0.1"]                                      # WSL's mirrored loopback

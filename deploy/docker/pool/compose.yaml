@@ -1,0 +1,261 @@
+# M11 pool stack (docs/pool.md). Host networking: ArduSub SITL next to the physics (the JSON link is a lockstep round
+# trip at 400 Hz, so it stays on loopback), the RTSP server the Isaac camera publishes to, and BlueOS (profile
+# "blueos") wherever it can have its ports. Where 80 and 8000 are taken (linus), profile "blueos-local" instead.
+# Both full profiles also bring BlueOS's Water Linked DVL extension for the A50 the physics process emulates, with a
+# small gateway that stands in for the vehicle's BlueOS host (docs/pool.md, "Il DVL"):
+#   blueos-local (linus):  BlueOS, the extension and the gateway on the bridge 172.31.250.0/24
+#   work (Work, WSL2):     BlueOS and the extension in host networking (mirrored: 127.0.0.1 is Windows', where Isaac
+#                          and the physics run), the gateway alone on the bridge
+#
+#   linus, BlueOS on Work:   BLUEOS_HOST=<Work IPv4> docker compose -f deploy/docker/pool/compose.yaml up -d sitl mediamtx
+#   linus, all local:        BLUEOS_HOST=172.31.250.2 docker compose -f deploy/docker/pool/compose.yaml --profile blueos-local up -d
+#   Work, all in WSL2:       bash deploy/hil/windows/pool/stack.sh up    (= docker compose ... --profile work up -d)
+#   stop:                    docker compose -f deploy/docker/pool/compose.yaml --profile blueos --profile blueos-local --profile work down
+#
+# M12: the Nortek Nucleus1000 instead of the A50 (vehicles/common/nucleus.py, `uw pool --preset nucleus`): profile "nucleus"
+# adds Nortek's BlueOS extension next to blueos-local; stop the Water Linked one (`stop dvl`) and boot SITL with the
+# Nortek EKF parameters (SITL_PARAM_FILES=...,/params/nucleus.parm SITL_WIPE=1). docs/pool.md, "Nucleus1000".
+name: uw-pool
+
+# The extension's start, shared by its two services: its settings file gets the defaults a vehicle's operator would
+# pick, and the A50's address (DVL_HOST) at every start; then the extension's own main.py, unmodified.
+x-dvl-entrypoint: &dvl-entrypoint
+  - python3
+  - -c
+  - |
+    import json, os
+    f = "/root/.config/dvl/settings.json"
+    os.makedirs(os.path.dirname(f), exist_ok=True)
+    d = {"enabled": True, "orientation": 1, "origin": [0, 0], "rangefinder": True, "should_send": "POSITION_DELTA"}
+    if os.path.exists(f):
+        d.update(json.load(open(f)))
+    d["hostname"] = os.environ["DVL_HOST"]
+    json.dump(d, open(f, "w"))
+    os.chdir("/home/pi/dvl-a50")
+    os.execv("/home/pi/dvl-a50/main.py", ["/home/pi/dvl-a50/main.py"])
+
+# Nortek's extension: its settings file gets the emulated Nucleus's address and autoconnect/autostart at every start
+# (as an operator would set them on its page), then its own flask_app.py, unmodified.
+x-nucleus-entrypoint: &nucleus-entrypoint
+  - python
+  - -c
+  - |
+    import json, os
+    f = os.environ["NUCLEUS_SETTINGS_PATH"]
+    os.makedirs(os.path.dirname(f), exist_ok=True)
+    d = json.load(open(f)) if os.path.exists(f) else {}
+    d.update(hostname=os.environ["NUCLEUS_HOST"], port=9000, autoconnect=True, autostart=True)
+    json.dump(d, open(f, "w"))
+    os.chdir("/opt/nucleus_extension")
+    os.execvp("python", ["python", "src/nucleus_extension/flask_app.py"])
+
+services:
+  sitl:
+    # ArduSub-4.5.7 (deploy/docker/ardusub_sitl/README.md); built here on first use.
+    image: uw-ardusub:4.5.7
+    build: ../ardusub_sitl
+    container_name: uw-pool-sitl
+    network_mode: host
+    init: true
+    restart: "no"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      PHYSICS_HOST: ${PHYSICS_HOST:-127.0.0.1}      # where vehicles.common.physics_proc listens (UDP 9002); an IPv4 literal
+      # MAVLink to BlueOS's "Manual" board (its default master endpoint is udpin 0.0.0.0:14551). An IPv4 literal:
+      # ardusub's udpclient silently sends nothing to a host name.
+      MAVLINK_OUT: udpclient:${BLUEOS_HOST:-127.0.0.1}:14551
+      # ,/params/nucleus.parm for the Nucleus1000 (with SITL_WIPE=1: the eeprom would keep the A50's EKF sources)
+      PARAM_FILES: ${SITL_PARAM_FILES:-/opt/ardupilot/default_params/sub-6dof.parm,/params/pool.parm}
+      WIPE: ${SITL_WIPE:-0}
+      HOME_LOC: ${HOME_LOC:-45.0703,7.6869,0,0}
+    # a second MAVLink output for the local tools (sim/tools/pool_smoke.py, a QGC on the sim host)
+    command: ["--serial1", "udpclient:127.0.0.1:14560"]
+    volumes:
+      - ../ardusub_sitl/params:/params:ro
+      - sitl_eeprom:/home/ardu/sitl
+
+  mediamtx:
+    # RTSP server: `uw pool` publishes H.264 to rtsp://<host>:8654/rov, BlueOS's camera manager pulls it.
+    # 8554 is left to BlueOS's own RTSP server; everything else mediamtx would open is moved or off.
+    # Browser check of the stream: http://<host>:8889/rov (WebRTC).
+    image: bluenviron/mediamtx:1.21.3
+    container_name: uw-pool-mediamtx
+    network_mode: host
+    restart: "no"
+    environment:
+      MTX_RTSPADDRESS: ":8654"
+      # TCP only: BlueOS's camera manager otherwise picks RTP over UDP (seen 2026-11-25), which needs two more
+      # inbound UDP ports through the firewall; over TCP the stream is one connection to 8654.
+      MTX_RTSPTRANSPORTS: "tcp"
+      MTX_RTPADDRESS: ":18000"
+      MTX_RTCPADDRESS: ":18001"
+      MTX_RTMP: "no"
+      MTX_HLS: "no"
+      MTX_SRT: "no"
+      MTX_WEBRTCADDRESS: ":8889"
+      # the control API, on loopback only: is the camera publishing? (deploy/hil/windows/pool/stack.sh status)
+      MTX_API: "yes"
+      MTX_APIADDRESS: "127.0.0.1:9997"
+
+  blueos:
+    # BlueOS without its bootstrap (it would manage the host's network and updates): the core alone, as in the
+    # project's own dev compose. 1.5 beta for the "Manual" board, which takes MAVLink from this SITL instead of
+    # running an autopilot of its own. Privileged with the docker socket, as on a vehicle: root on this host (on the
+    # Work, a WSL2 distribution of its own). Its extensions page works: Cockpit installs from there.
+    profiles: [blueos, work]
+    image: bluerobotics/blueos-core:1.5.0-beta.43
+    container_name: uw-pool-blueos
+    network_mode: host
+    pid: host
+    privileged: true
+    restart: "no"
+    environment:
+      BLUEOS_DISABLE_STARTUP_UPDATE: "true"
+      BLUEOS_DISABLE_MEMORY_LIMIT: "true"
+      BLUEOS_DISABLE_SERVICES: cable_guy,wifi,commander
+    volumes:
+      - ${UW_BLUEOS_DIR:-${HOME}/.config/uw_blueos}/config:/root/.config
+      - ${UW_BLUEOS_DIR:-${HOME}/.config/uw_blueos}/etc:/etc/blueos
+      - ${UW_BLUEOS_DIR:-${HOME}/.config/uw_blueos}/bin:/usr/blueos/bin
+      - ${UW_BLUEOS_DIR:-${HOME}/.config/uw_blueos}/extensions:/usr/blueos/extensions
+      - ${UW_BLUEOS_DIR:-${HOME}/.config/uw_blueos}/userdata:/usr/blueos/userdata
+      - ${UW_BLUEOS_DIR:-${HOME}/.config/uw_blueos}/logs:/var/logs/blueos
+      - /dev:/dev
+      - /sys:/sys
+      - /etc/machine-id:/etc/machine-id:ro
+      - /run/udev:/run/udev:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/dbus:/var/run/dbus
+
+  blueos-local:
+    # BlueOS on a machine whose ports 80 and 8000 are taken (linus): unprivileged, on its own bridge at a fixed
+    # address instead of the host network. SITL sends MAVLink to 172.31.250.2:14551 (BLUEOS_HOST), Cockpit (the
+    # desktop app) and the browser reach it at http://172.31.250.2, the UI also at http://localhost:28080, and its
+    # camera manager pulls the RTSP stream from the host at 172.31.250.1:8654. No docker socket, hence no
+    # extensions: Cockpit runs as the desktop app.
+    profiles: [blueos-local]
+    image: bluerobotics/blueos-core:1.5.0-beta.43
+    container_name: uw-pool-blueos-local
+    restart: "no"
+    environment:
+      BLUEOS_DISABLE_STARTUP_UPDATE: "true"
+      BLUEOS_DISABLE_MEMORY_LIMIT: "true"
+      BLUEOS_DISABLE_SERVICES: cable_guy,wifi,commander
+    networks:
+      blueos_local:
+        ipv4_address: 172.31.250.2
+    ports:
+      - "127.0.0.1:28080:80"
+    volumes:
+      - blueos_local_config:/root/.config
+
+  dvl:
+    # BlueOS's Water Linked DVL extension, unmodified: the one a real BlueROV2 with an A50 runs. It talks to the A50
+    # that the physics process emulates on the host (vehicles/common/a50.py: TCP 16171, its HTTP API on 8061 because 80 is
+    # taken on linus) and feeds ArduSub VISION_POSITION_DELTA through BlueOS's mavlink2rest, by way of dvl-gateway.
+    # Its settings live in a volume, as on a vehicle; DVL_HOST is written into them at every start.
+    profiles: [blueos-local]
+    image: bluerobotics/blueos-water-linked-dvl:v1.0.11
+    container_name: uw-pool-dvl
+    restart: "no"
+    networks:
+      blueos_local:
+        ipv4_address: 172.31.250.4
+    extra_hosts:
+      - "host.docker.internal:172.31.250.3"
+    environment:
+      DVL_HOST: ${DVL_HOST:-172.31.250.1:8061}
+    entrypoint: *dvl-entrypoint
+    volumes:
+      - dvl_settings:/root/.config
+
+  dvl-gateway:
+    # The extension's "vehicle" (host.docker.internal on a real one is BlueOS): BlueOS's mavlink2rest, a stand-in
+    # for cable_guy (off in this BlueOS), and the extension's own page at http://172.31.250.3
+    # (dvl_gateway.conf.template).
+    profiles: [blueos-local]
+    image: nginx:1.28.0-alpine
+    container_name: uw-pool-dvl-gateway
+    restart: "no"
+    networks:
+      blueos_local:
+        ipv4_address: 172.31.250.3
+    environment:
+      BLUEOS_HOST: 172.31.250.2
+      DVL_EXTENSION_HOST: 172.31.250.4:9001
+      DVL_EXTENSION_IP: 172.31.250.4
+    volumes:
+      - ./dvl_gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
+
+  dvl-host:
+    # Work (profile "work", docs in deploy/hil/windows/pool/README.md): the same extension, next to the BlueOS above in WSL2's
+    # host networking. Host networking for it too, because with mirrored networking 127.0.0.1 is Windows', where
+    # the physics process inside Isaac emulates the A50 (bound to 127.0.0.1 by the workstation profile); its page is
+    # then http://localhost:9001 on Windows as well. Its "vehicle" (host.docker.internal) is dvl-gateway-host on
+    # the bridge, since BlueOS's own nginx would send the extension's cable_guy request to a service that is off.
+    profiles: [work]
+    image: bluerobotics/blueos-water-linked-dvl:v1.0.11
+    container_name: uw-pool-dvl-host
+    network_mode: host
+    restart: "no"
+    depends_on: [dvl-gateway-host]
+    extra_hosts:
+      - "host.docker.internal:172.31.250.3"
+    environment:
+      DVL_HOST: ${DVL_HOST:-127.0.0.1:8061}
+    entrypoint: *dvl-entrypoint
+    volumes:
+      - dvl_settings:/root/.config
+
+  dvl-gateway-host:
+    # dvl-gateway for the Work: alone on the bridge, at the address dvl-host knows as host.docker.internal. From
+    # the bridge, 172.31.250.1 is the WSL host, where BlueOS (port 80) and the extension (9001) listen.
+    profiles: [work]
+    image: nginx:1.28.0-alpine
+    container_name: uw-pool-dvl-gateway-host
+    restart: "no"
+    networks:
+      blueos_local:
+        ipv4_address: 172.31.250.3
+    environment:
+      BLUEOS_HOST: 172.31.250.1
+      DVL_EXTENSION_HOST: 172.31.250.1:9001
+      DVL_EXTENSION_IP: 127.0.0.1
+    volumes:
+      - ./dvl_gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
+
+  nucleus:
+    # BlueOS's Nortek Nucleus1000 extension (2.0.11), unmodified, for the Nucleus the physics process emulates on the
+    # host (vehicles/common/nucleus.py, TCP 9000). It posts VISION_POSITION_DELTA (bottom track), VISION_POSITION_ESTIMATE (the
+    # INS) and DISTANCE_SENSOR (the altimeter) to mavlink2rest at BLUEOS_URL: dvl-gateway, which forwards them to
+    # BlueOS and answers its cable_guy check. Its page: http://172.31.250.7
+    profiles: [nucleus]
+    image: nortekgroup/blueos_nucleus:2.0.11@sha256:1b8a8cd92cfc19437390f63eefad4e8a81b13a01023a03abf1364590e7c8a711
+    container_name: uw-pool-nucleus
+    restart: "no"
+    networks:
+      blueos_local:
+        ipv4_address: 172.31.250.7
+    extra_hosts:
+      - "host.docker.internal:172.31.250.3"
+    environment:
+      NUCLEUS_HOST: ${NUCLEUS_HOST:-172.31.250.1}
+      BLUEOS_URL: http://172.31.250.3
+    entrypoint: *nucleus-entrypoint
+    volumes:
+      - nucleus_settings:/opt/nucleus_extension/config
+
+networks:
+  blueos_local:
+    name: uw-pool-blueos
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24
+          gateway: 172.31.250.1
+
+volumes:
+  sitl_eeprom:
+  blueos_local_config:
+  dvl_settings:
+  nucleus_settings:

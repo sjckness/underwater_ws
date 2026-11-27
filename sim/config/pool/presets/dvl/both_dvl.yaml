@@ -1,0 +1,4 @@
+# DVL preset "both_dvl": the A50 and the Nucleus1000 on the vehicle at once, each on its own ports and with its own
+# errors. Only one BlueOS extension may feed ArduSub at a time; the other is for the ROS side (deploy/docker/pool/compose.yaml).
+nucleus:
+  enabled: true

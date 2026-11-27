@@ -2,7 +2,7 @@
 H.264 encoder writing a file.
 
 Runs in the container (python -m uw test): needs pxr (Isaac's USD libraries) and Warp; the encoder test needs the
-imageio-ffmpeg binary in ~/.cache/uw_pydeps (installed by the first `uw pool` or tools/sonar_preview.py run).
+imageio-ffmpeg binary in ~/.cache/uw_pydeps (installed by the first `uw pool` or physics/tools/sonar_preview.py run).
 """
 import math
 
@@ -14,7 +14,8 @@ pxr = pytest.importorskip("pxr", reason="needs Isaac's USD libraries: python -m 
 
 from pxr import Usd, UsdGeom, UsdLux  # noqa: E402
 
-from uw import camera_uw, config, pool_scene  # noqa: E402
+from sim import camera_uw, pool_scene  # noqa: E402
+from uw import config  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -87,7 +88,7 @@ def test_warp_water_matches_the_reference(cfg):
 
 
 def test_the_encoder_writes_a_baseline_h264_file(tmp_path):
-    from uw import video
+    from sim import video
     out = tmp_path / "clip.ts"
     s = video.VideoStream(str(out), 320, 240, 25).start()
     for i in range(50):

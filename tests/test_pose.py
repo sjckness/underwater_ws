@@ -1,10 +1,12 @@
-"""Sensor poses (uw/pose.py, host): trajectories inside the tank, smooth, timed by their speed, looking at the leak."""
+"""Sensor poses (sim/pose.py, host): trajectories inside the tank, smooth, timed by their speed, looking at the leak."""
 import math
 
 import numpy as np
 import pytest
 
-from uw import config, geometry, pose
+from uw import config
+from physics import geometry
+from sim import pose
 
 PRESETS = ["approach", "orbit", "lawnmower", "hover"]
 

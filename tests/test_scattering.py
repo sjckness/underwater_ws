@@ -2,8 +2,8 @@
 import numpy as np
 import pytest
 
-from uw import scattering as sc
-from uw import water as wat
+from physics import scattering as sc
+from physics import water as wat
 
 # methane at the leak depth (1.27 bar), seawater 15 C
 G, H = sc.gas_ratios(wat.density(15.0, 35.0), wat.sound_speed(15.0, 35.0), 1.27e5, 288.15, "methane")

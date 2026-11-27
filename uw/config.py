@@ -1,9 +1,9 @@
-"""Configuration: config/tank.yaml, a hardware profile, presets, then ``--set a.b.c=value`` overrides.
+"""Configuration: sim/config/tank.yaml, a hardware profile, presets, then ``--set a.b.c=value`` overrides.
 
 Layers, later ones win:
-1. ``config/tank.yaml``: every scene and sensor parameter (it is the ``exposed`` + ``tank`` scene);
-2. ``config/profiles/<name>.yaml`` (``--profile``, default ``linus``): fidelity knobs for the hardware;
-3. ``config/presets/<group>/<name>.yaml`` (``--preset``, at most one per group): ``pipe`` = exposed | buried,
+1. ``sim/config/tank.yaml``: every scene and sensor parameter (it is the ``exposed`` + ``tank`` scene);
+2. ``sim/config/profiles/<name>.yaml`` (``--profile``, default ``linus``): fidelity knobs for the hardware;
+3. ``sim/config/presets/<group>/<name>.yaml`` (``--preset``, at most one per group): ``pipe`` = exposed | buried,
    ``size`` = tank | basin;
 4. ``--set a.b.c=value``.
 Profiles and presets may add keys (backend selectors enter the config that way); ``--set`` only changes
@@ -22,8 +22,8 @@ from typing import Any, Callable, Iterable
 import yaml
 
 WS = os.environ.get("UW_WS", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DEFAULT_CONFIG = os.path.join(WS, "config", "tank.yaml")
-POOL_CONFIG = os.path.join(WS, "config", "pool", "pool.yaml")     # M11: `uw pool`, its profiles in config/pool/profiles
+DEFAULT_CONFIG = os.path.join(WS, "sim", "config", "tank.yaml")
+POOL_CONFIG = os.path.join(WS, "sim", "config", "pool", "pool.yaml")     # M11: `uw pool`, its profiles in sim/config/pool/profiles
 DEFAULT_PROFILE = "linus"
 
 
@@ -154,15 +154,15 @@ def add_args(add_argument: Callable[..., Any]) -> None:
     """Register --profile, --preset and --set with ``parser.add_argument`` (argparse) or ``parser.addoption``
     (pytest); ``from_args`` builds the config from the parsed options."""
     add_argument("--profile", default=DEFAULT_PROFILE,
-                 help="hardware profile, config/profiles/<name>.yaml (default: %(default)s)")
+                 help="hardware profile, sim/config/profiles/<name>.yaml (default: %(default)s)")
     add_argument("--preset", action="append", default=[], metavar="NAME",
-                 help="config/presets/<group>/<NAME>.yaml, e.g. buried or basin; repeatable")
+                 help="sim/config/presets/<group>/<NAME>.yaml, e.g. buried or basin; repeatable")
     add_argument("--set", action="append", default=[], dest="overrides", metavar="KEY=VALUE",
                  help="override one value, e.g. --set leak.flow_lpm=30; repeatable")
 
 
 def from_args(args: Any, path: str = DEFAULT_CONFIG) -> dict:
-    """The config of ``path`` (default config/tank.yaml; ``POOL_CONFIG`` for the pool) with the parsed options."""
+    """The config of ``path`` (default sim/config/tank.yaml; ``POOL_CONFIG`` for the pool) with the parsed options."""
     return load(path, overrides=args.overrides, profile=args.profile, presets=args.preset)
 
 

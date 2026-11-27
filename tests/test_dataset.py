@@ -1,4 +1,4 @@
-"""Sweep dataset tooling (host): scenario sampling and splits (tools/sweep.py), the training loader (uw/dataset.py)
+"""Sweep dataset tooling (host): scenario sampling and splits (ml/tools/sweep.py), the training loader (ml/dataset.py)
 on a small synthetic dataset written through the flat FileSink."""
 import json
 import math
@@ -9,16 +9,18 @@ import numpy as np
 import pytest
 import yaml
 
-from uw import config, dataset, sinks
+from uw import config
+from ml import dataset
+from sim import sinks
 
 WS = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(WS / "tools"))
+sys.path.insert(0, str(WS / "ml" / "tools"))
 import sweep  # noqa: E402
 
 
 @pytest.fixture(scope="module")
 def sampled(tmp_path_factory):
-    sw = yaml.safe_load((WS / "config" / "sweeps" / "v0.1.yaml").read_text())
+    sw = yaml.safe_load((WS / "ml" / "sweeps" / "v0.1.yaml").read_text())
     sw["scenarios"] = 120
     return sw, sweep.sample(sw, tmp_path_factory.mktemp("sweep"))
 
@@ -88,7 +90,7 @@ def test_holdout_rejects_an_unknown_split(sampled):
 
 @pytest.fixture(scope="module")
 def sampled_v02(tmp_path_factory):
-    sw = yaml.safe_load((WS / "config" / "sweeps" / "v0.2.yaml").read_text())
+    sw = yaml.safe_load((WS / "ml" / "sweeps" / "v0.2.yaml").read_text())
     sw["scenarios"] = 60
     return sw, sweep.sample(sw, tmp_path_factory.mktemp("sweep02"))
 
@@ -124,7 +126,8 @@ def test_v02_places_the_sonar_on_a_wall_and_the_leak_at_a_distance(sampled_v02):
 
 
 def test_v02_aimed_views_put_the_aim_point_inside_the_fan(sampled_v02):
-    from uw import geometry, pose
+    from physics import geometry
+    from sim import pose
     sw, scenarios = sampled_v02
     aimed = 0
     for sc in scenarios:

@@ -1,0 +1,35 @@
+# Defaults layered on top of ArduPilot's stock Tools/autotest/default_params/sub.parm (loaded first, so these win).
+# Defaults only: they apply when the eeprom is wiped (run.bat wipes at every start). No fork of ArduPilot.
+
+# BlueROV2 = "Vectored": 4 horizontal vectored + 2 vertical thrusters. (BlueROV2 Heavy would be 2, "Vectored 6DOF".)
+FRAME_CONFIG 1
+
+# one vehicle, system id 1 (MAVROS targets 1/1 by default)
+SYSID_THISMAV 1
+
+# --- An honest attitude and depth for the DVL dead reckoning (2026-11-13, docs/dvl.md) --------------
+# The estimator in ros/src/dvl_dr takes NO ground truth. The DVL gives velocity only, so attitude and depth
+# come from the autopilot over MAVROS - which is only honest if the autopilot is not handed the answer.
+# Two truth paths run into SITL by default, and they are independent of each other:
+#
+#   1. AHRS_EKF_TYPE 10 is the SITL "truth AHRS": the attitude MAVROS publishes IS the simulator's.
+#   2. SITL enables GPS instance 0 from the FDM position whatever GPS_TYPE says (docs/ros_hil.md 4.2,
+#      marked V: "convenient, physically false"). So even with a real EKF selected, a truth-derived
+#      horizontal fix would aid it. The EKF SOURCE selection, not the GPS parameters, is what closes it.
+#
+# What is left is what a real BlueROV2 has underwater: no GPS, baro for depth, compass for heading.
+# Heading is then the dominant error term of the dead reckoning, which is the point - in a metal tank it
+# is unreliable, and vehicles/tools/dvl_drift.py sweeps SIM_MAG1_OFS to put a number on exactly that.
+#
+# RISK, both named in docs/ros_hil.md 4.1: EKF3 with no position source may refuse to arm ("fails with
+# ARMING_CHECK PARAMETERS on when the EKF has no origin"), and EKF3 health has to be watched rather than
+# assumed. Revert by setting AHRS_EKF_TYPE back to 10; the EK3_SRC1_* lines are then inert.
+#
+# No trailing comments on the value lines: the existing file has none, and ArduPilot's defaults parser
+# is not a config library. Sources are 0 = none, 1 = baro (POSZ) or compass (YAW).
+AHRS_EKF_TYPE 3
+EK3_SRC1_POSXY 0
+EK3_SRC1_VELXY 0
+EK3_SRC1_VELZ 0
+EK3_SRC1_POSZ 1
+EK3_SRC1_YAW 1

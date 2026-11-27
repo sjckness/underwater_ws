@@ -3,24 +3,24 @@
 A Water Linked DVL A50 in the tank sim, and the dead-reckoning chain it feeds. The point of modelling
 the sensor rather than publishing the true velocity is that the chain downstream of it is the one that
 runs on the vehicle, and the drift it accumulates is therefore a number worth measuring:
-`tools/dvl_drift.py` prints it live, `tools/dvl_dr_offline.py` prints it without any hardware at all.
+`vehicles/tools/dvl_drift.py` prints it live, `vehicles/tools/dvl_dr_offline.py` prints it without any hardware at all.
 
 ```
-uw/rov/dvl.py          4 beams, raycast, least squares, noise, FOM, bottom lock   (numpy, no GPU)
+vehicles/common/dvl.py          4 beams, raycast, least squares, noise, FOM, bottom lock   (numpy, no GPU)
       ▼
 /sim/dvl/report        std_msgs/String: the A50's own JSON velocity report, host-local
       ▼
-ros/dvl_relay/         stands in for the real driver (host Jazzy)
+ros/src/dvl_relay/         stands in for the real driver (host Jazzy)
       ├── /rov1/sensors/dvl/velocity        marine_acoustic_msgs/Dvl       in rov1/dvl_instrument (FRD)
       ├── /rov1/sensors/dvl/velocity_twist  TwistWithCovarianceStamped     in rov1/dvl_link (FLU)
       ├── /rov1/sensors/dvl/altitude        sensor_msgs/Range
       └── /rov1/sensors/dvl/meta            std_msgs/String, latched
       ▼
-ros/dvl_dr/preprocess  v_body = v_dvl − ω × r; depth from the baro; drops reports with no lock
+ros/src/dvl_dr/preprocess  v_body = v_dvl − ω × r; depth from the baro; drops reports with no lock
       ▼
 robot_localization     /rov1/nav/odom, and odom → base_link on /tf
       ▲
-      └── /rov1/mavros/{imu/data, imu/static_pressure}       ros/mavros_rov1
+      └── /rov1/mavros/{imu/data, imu/static_pressure}       deploy/hil/thor/mavros_rov1
 ```
 
 On the vehicle the first two boxes are the A50 and `ndahn/dvl_a50`. Everything from
@@ -30,7 +30,7 @@ odometry mean something.
 ## Why the simulator emits the device's protocol
 
 `marine_acoustic_msgs` is not in the Isaac container's bundled rclpy (`docs/topic_map.md` §8), so a
-`Dvl` message cannot be built there at all — the same constraint that produced `ros/sonar_relay`. Rather
+`Dvl` message cannot be built there at all — the same constraint that produced `ros/src/sonar_relay`. Rather
 than invent a half-message in the container, the sim publishes the A50's own JSON report verbatim and a
 host node turns it into ROS types. That the relay is then interchangeable with the real driver is a
 consequence, not a coincidence.
@@ -74,7 +74,7 @@ way.
 For each report, at a rate that falls with altitude:
 
 1. The four beam axes are built from `dvl.beams.tilt_deg` and `dvl.beams.azimuths_deg` in the
-   instrument's FRD frame, then rotated into the tank through `uw.rov.frames` — the only converter.
+   instrument's FRD frame, then rotated into the tank through `vehicles.common.frames` — the only converter.
 2. `geometry.ray_bottom` finds each beam's range. The sand is solved analytically against
    `SandField` (Newton on the height field, using its exact gradient), so the incidence angle comes
    from the true surface normal rather than the 1 cm occlusion mesh; the rocks, the pipe, its flanges
@@ -102,7 +102,7 @@ For each report, at a rate that falls with altitude:
 Every error term is a pure function of the seed and either the sample index or the simulated time.
 The slow bias is a fixed random spectrum rather than an Ornstein-Uhlenbeck recursion precisely so that
 it does not depend on *which* samples were taken — the report schedule varies with altitude, and a
-recursion would make two runs of the same scenario diverge. `uw.rov` is bit-reproducible by design
+recursion would make two runs of the same scenario diverge. `vehicles.common` is bit-reproducible by design
 (`tests/rov/test_dynamics.py`) and a sensor must not be the thing that breaks it.
 
 ### What the tank actually exercises
@@ -119,7 +119,7 @@ and near a wall a tilted beam leaves the footprint. Those are the cases the test
 
 The DVL runs in `python -m uw sim` only, not in `python -m uw sonar-only`. That entry point exists to
 generate sonar datasets: its loop is one iteration per ping, which a 2–15 Hz altitude-dependent report
-schedule does not map onto, and adding a stream would change what `tools/sweep.py` writes, the dataset
+schedule does not map onto, and adding a stream would change what `ml/tools/sweep.py` writes, the dataset
 card and `record.mb_per_frame` for no consumer — nothing that reads those datasets wants DVL rows. The
 HIL path and the estimator both run under `sim`, so nothing needs it there. If a DVL dataset is ever
 wanted, the honest way is a recorded `sim` run, not a second cadence.
@@ -135,12 +135,12 @@ as good as any other, which is optimistic in exactly the region the gas-leak sce
 
 `rov1/dvl_link` is REP-103 FLU. `rov1/dvl_instrument` is the device's own FRD, which is also the frame
 `marine_acoustic_msgs/Dvl` declares for itself ("z-axis in direction DVL is pointing, x-axis aligned
-with vehicle forward"). The two differ by `uw.ros_bridge.R_DVL_INSTRUMENT = diag(1, −1, −1)`, published
+with vehicle forward"). The two differ by `sim.ros_bridge.R_DVL_INSTRUMENT = diag(1, −1, −1)`, published
 as a static transform, and the relay is the only code that applies it — to the twist, covariance
 included. Both edges hang off `rov1/sonar_fls`, like the camera's: payload on one rig, and only the
 relative offset is not ground truth.
 
-`uw/main.py:static_frames` and `uw.rov.dvl.Dvl.geometry_at` must agree on where the acoustic centre is,
+`sim/main.py:static_frames` and `vehicles.common.dvl.Dvl.geometry_at` must agree on where the acoustic centre is,
 or the lever arm the estimator removes is not the one the measurement was taken with.
 `tests/test_sim_parts.py::test_the_dvl_static_edge_matches_the_sensor_model` asserts it.
 
@@ -174,7 +174,7 @@ it is, twice over:
    marked **V**, "convenient, physically false"). Even with a real EKF selected, a truth-derived
    horizontal fix would aid it.
 
-`docker/ardusub_sitl/params/hil.parm` closes both: `AHRS_EKF_TYPE 3` and the `EK3_SRC1_*` sources set
+`deploy/docker/ardusub_sitl/params/hil.parm` closes both: `AHRS_EKF_TYPE 3` and the `EK3_SRC1_*` sources set
 to none for position and velocity, baro for z, compass for yaw. What is left is what a real BlueROV2
 has underwater. The risks are the ones `docs/ros_hil.md` §4.1 already names — EKF3 with no position
 source may refuse to arm, and its health has to be watched — and the revert is one line.
@@ -190,11 +190,11 @@ there. In a metal tank the magnetometer is the least trustworthy thing in the ve
 dominant term.
 
 Rather than hand-rolling a yaw bias in the estimator, inject it where a real one lives — SITL's compass
-model, `SIM_MAG1_OFS` — and re-run `tools/dvl_drift.py`.
+model, `SIM_MAG1_OFS` — and re-run `vehicles/tools/dvl_drift.py`.
 
 ## Measured, offline
 
-`tools/dvl_dr_offline.py` runs the whole chain without Isaac, Docker, ROS or a GPU: the real sensor
+`vehicles/tools/dvl_dr_offline.py` runs the whole chain without Isaac, Docker, ROS or a GPU: the real sensor
 model over a trajectory, `dvl_relay`'s FRD→FLU flip, `dvl_dr.correct`'s lever arm and baro, then the
 same `drift()` the live tool scores with. It is not `robot_localization`, but with velocity, attitude
 and depth as the only inputs **nothing observes x or y**, so an EKF's position estimate *is* the
@@ -258,7 +258,7 @@ bias and barely more at 5°. Measure heading sensitivity on an open path.
 
 `python -m uw pool` (M11, `docs/pool.md`) uses this model too, cast at the pool's floor, walls, ladder and props
 (`uw/pool_geometry.PoolBottom`, the same solids the USD stage is built from; unlike the tank's, the pool's walls stop
-a beam). There the report does not go to ROS but to the network, as the device's own: `uw/rov/a50.py` serves Water
+a beam). There the report does not go to ROS but to the network, as the device's own: `vehicles/common/a50.py` serves Water
 Linked's JSON protocol (json_v3.3) on TCP 16171 (velocity reports, the device's dead reckoning, its commands) and
 the HTTP API BlueOS's Water Linked DVL extension probes, from the physics process. The extension runs unmodified
 and feeds ArduSub; the `ndahn/dvl_a50` driver could connect the same way. The pool's `dvl:` section repeats this
@@ -271,8 +271,8 @@ file's instrument values (kept equal by `tests/rov/test_a50.py`) with its own mo
 pytest tests/rov/test_dvl.py tests/test_dvl_dr.py tests/test_geometry.py
 
 # the whole chain against the truth, offline: no Isaac, no Docker, no ROS
-python tools/dvl_dr_offline.py --duration 180 --seeds 3
-python tools/dvl_dr_offline.py --preset orbit --size room9 --yaw-bias 0 5
+python vehicles/tools/dvl_dr_offline.py --duration 180 --seeds 3
+python vehicles/tools/dvl_dr_offline.py --preset orbit --size room9 --yaw-bias 0 5
 
 # the sim, recording a DVL stream
 python -m uw sim --sink file --out output/datasets/dvl_smoke --duration 60 --no-realtime
@@ -280,14 +280,14 @@ python -m uw sim --sink file --out output/datasets/dvl_smoke --duration 60 --no-
 
 # live, with the relay (host ROS 2 Jazzy)
 python -m uw sim --set sonar.pose_source=ardusub
-ros/dvl_relay/run.sh
+ros/src/dvl_relay/run.sh
 ROS_DOMAIN_ID=73 ros2 topic hz /rov1/sensors/dvl/velocity --no-daemon       # 2-15 Hz, altitude dependent
 ROS_DOMAIN_ID=73 ros2 topic echo /rov1/sensors/dvl/meta --once --qos-durability transient_local
 
 # the whole chain, live
-bash ros/mavros_rov1/run.sh                                                 # on the Thor
-ros2 launch ros/dvl_dr/launch/dvl_dr.launch.py
-python3 tools/dvl_drift.py --duration 120 --label baseline
+bash deploy/hil/thor/mavros_rov1/run.sh                                                 # on the Thor
+ros2 launch ros/src/dvl_dr/launch/dvl_dr.launch.py
+python3 vehicles/tools/dvl_drift.py --duration 120 --label baseline
 ```
 
 Cost: a report costs about 1.7 ms, dominated by the beam raycast, so at 15 Hz the DVL is under 3 % of
@@ -295,16 +295,16 @@ real time. It must stay there — the scene already runs at RTF 0.82–0.95.
 
 ## Configuration
 
-Everything is `dvl:` in `config/tank.yaml`, with a VERIFIED/UNVERIFIED tag per value in the comments.
+Everything is `dvl:` in `sim/config/tank.yaml`, with a VERIFIED/UNVERIFIED tag per value in the comments.
 The mount is in ArduPilot body FRD, like the thruster positions in
-`config/rov_bluerov2_vectored.yaml`, and deliberately not in the size presets — it belongs to the
-vehicle, not to the room. `uw.rov.dvl.params_from_config` refuses a value outside the datasheet.
+`vehicles/bluerov2/vehicle.yaml`, and deliberately not in the size presets — it belongs to the
+vehicle, not to the room. `vehicles.common.dvl.params_from_config` refuses a value outside the datasheet.
 
 ## The Nortek Nucleus1000 (M12)
 
-A second instrument for the pool's station-keeping comparison, emulated like the A50: `uw/rov/nucleus.py`, config
-`nucleus:` in `config/pool/pool.yaml`, presets `nucleus` (instead of the A50) and `both_dvl`. The beams are this
-file's model with three beams (`beams.azimuths_deg` of length 3, `beams.min_good: 3`); `uw/rov/dvl.py` takes any
+A second instrument for the pool's station-keeping comparison, emulated like the A50: `vehicles/common/nucleus.py`, config
+`nucleus:` in `sim/config/pool/pool.yaml`, presets `nucleus` (instead of the A50) and `both_dvl`. The beams are this
+file's model with three beams (`beams.azimuths_deg` of length 3, `beams.min_good: 3`); `vehicles/common/dvl.py` takes any
 N >= 3 beams and a tilt per beam, and the A50's reports did not change by a bit (`tests/rov/data/a50_reports_golden.json`).
 
 What the emulator implements is what Nortek's own software uses, read from its source (NortekSupport/nucleus_driver

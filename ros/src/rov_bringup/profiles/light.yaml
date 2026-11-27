@@ -1,0 +1,22 @@
+# Recording profile "light": what a dive needs for sysid and for checking the estimator, sized for the Pi 4.
+#
+#   ros2 launch rov_bringup record.launch.py profile:=light            (or bringup.launch.py record:=true)
+#
+# IMU, attitude, depth, state, motor commands. {vehicle} is the launch argument `vehicle` (default rov1, the
+# namespace docs/topic_map.md §4.3 uses). Types are listed so the profile documents itself and can be checked
+# offline (tests/test_rov_bringup.py); `ros2 bag record` only needs the names.
+storage: mcap
+storage_config: mcap_light.yaml      # next to this package's config/
+max_bag_duration_s: 600              # one file every 10 min: a crash or a power cut loses at most the open one
+topics:
+  /{vehicle}/mavros/imu/data: sensor_msgs/msg/Imu                  # attitude (EKF orientation) + rates, filtered
+  /{vehicle}/mavros/imu/data_raw: sensor_msgs/msg/Imu              # raw accel/gyro: sysid
+  /{vehicle}/mavros/imu/static_pressure: sensor_msgs/msg/FluidPressure   # depth, from the Bar30
+  /{vehicle}/mavros/altitude: mavros_msgs/msg/Altitude             # depth as ArduSub reports it
+  /{vehicle}/mavros/global_position/rel_alt: std_msgs/msg/Float64
+  /{vehicle}/mavros/local_position/pose: geometry_msgs/msg/PoseStamped
+  /{vehicle}/mavros/vfr_hud: mavros_msgs/msg/VfrHud
+  /{vehicle}/mavros/state: mavros_msgs/msg/State                   # armed, mode
+  /{vehicle}/mavros/battery: sensor_msgs/msg/BatteryState
+  /{vehicle}/mavros/rc/out: mavros_msgs/msg/RCOut                  # PWM to the 8 motors: the sysid input
+  /{vehicle}/mavros/rc/in: mavros_msgs/msg/RCIn                    # what the pilot asked for

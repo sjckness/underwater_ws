@@ -1,0 +1,23 @@
+# rov-sim: a stand-in for the BlueROV2's Pi on linus, to develop `uw deploy|smoke|logs pull rov` without the vehicle.
+#
+# The vehicle side is the M11 pool stack already on linus (deploy/docker/pool/compose.yaml, profile blueos-local):
+# ArduSub SITL + BlueOS at 172.31.250.2 (mavlink2rest: the armed check). This file adds the one thing that stack
+# lacks: the ROS 2 extension container, from the same image as on the Pi, with the same name, network mode and
+# persistent mount (at a folder of the host instead of /usr/blueos/extensions/ros2). MAVROS inside it reads SITL's
+# second MAVLink output (udp 14560, the one sim/tools/pool_smoke.py also uses: do not run both at once).
+#
+#   docker compose -f deploy/docker/compose.rov-sim.yaml up -d          # UW_ROV_SIM_ROOT, default ~/.cache/uw_rov_sim
+#   uw deploy rov-sim --yes --start && uw smoke rov-sim && uw logs pull rov-sim
+#   docker compose -f deploy/docker/compose.rov-sim.yaml down
+# docs/ARCHITECTURE.md §"Ambiente di prova" has the whole procedure.
+name: uw_rov_sim
+services:
+  extension:
+    image: itskalvik/blueos-ros2:0.1.0
+    container_name: extension-itskalvikblueosros2010     # the name BlueOS gives it on the Pi
+    network_mode: host
+    restart: "no"
+    environment:
+      ROS_DOMAIN_ID: "73"
+    volumes:
+      - ${UW_ROV_SIM_ROOT:-${HOME}/.cache/uw_rov_sim}/extensions/ros2:/root/persistent_ws:rw

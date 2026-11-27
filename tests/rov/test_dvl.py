@@ -1,4 +1,4 @@
-"""uw.rov.dvl: the DVL A50 model (host, numpy, no GPU and no ROS).
+"""vehicles.common.dvl: the DVL A50 model (host, numpy, no GPU and no ROS).
 
 Two kinds of assertion live here. The exact ones pin what the geometry and the algebra must do - beam
 directions, the least-squares recovery of a known velocity, the lever arm, quantisation, determinism -
@@ -13,8 +13,9 @@ import math
 import numpy as np
 import pytest
 
-from uw import config, geometry
-from uw.rov import dvl as D
+from uw import config
+from physics import geometry
+from vehicles.common import dvl as D
 
 LEVEL = np.eye(3)                        # body FLU -> tank ENU for a level vehicle heading +x
 MID = np.array([1.5, 1.5, 1.3])          # mid-tank, about 1 m over the sand
@@ -60,7 +61,7 @@ def test_beam_vectors_are_not_the_third_party_drivers_swapped_ones(clean):
 
 def test_the_instrument_frame_is_frd_in_the_tank(clean):
     """Beam 0 is at azimuth 45 deg, forward and to starboard. For a level vehicle heading +x in the
-    tank's ENU, starboard is -y and down is -z: the one place FRD meets ENU, through uw.rov.frames."""
+    tank's ENU, starboard is -y and down is -z: the one place FRD meets ENU, through vehicles.common.frames."""
     origin, dirs = clean.geometry_at(MID, LEVEL)
     assert np.allclose(origin, MID + np.array([0.0, 0.0, -clean.mount.position_frd_m[2]]))
     assert dirs[0][0] > 0 and dirs[0][1] < 0                  # forward, starboard
@@ -167,7 +168,7 @@ def test_a_beam_can_land_on_the_pipe_instead_of_the_sand(scene):
 # ------------------------------------------------------------------------- noise, bias, determinism
 
 def test_two_runs_of_the_same_scenario_are_bit_identical(scene):
-    """uw.rov is deterministic by design (tests/rov/test_dynamics.py) and a sensor must not break that:
+    """vehicles.common is deterministic by design (tests/rov/test_dynamics.py) and a sensor must not break that:
     every error term is a pure function of the seed and the sample index or the simulated time."""
     a, b = make(scene), make(scene)
     v = np.array([0.2, 0.1, -0.05])
@@ -319,20 +320,21 @@ def test_disabled_builds_nothing(scene):
 # ------------------------------------------------------------------- the sim loop, without Isaac
 
 def test_the_loop_block_runs_end_to_end_over_a_trajectory(scene):
-    """Everything uw/main.py's DVL block does, at the loop's own substep, with no Isaac and no GPU:
+    """Everything sim/main.py's DVL block does, at the loop's own substep, with no Isaac and no GPU:
     BodyMotion -> due() -> sample() -> recorder.dvl_message. What this would catch is the thing a host
     test otherwise cannot - a frame or an argument mismatch between the pieces."""
     import json
 
-    from uw import physics_udp, recorder
+    from vehicles.common import physics_udp
+    from sim import recorder
     cfg = config.load(overrides=["sonar.pose_source=trajectory", "sonar.trajectory.preset=approach"])
-    from uw import pose as pose_mod
+    from sim import pose as pose_mod
     motion = pose_mod.sensor_pose(cfg, scene)
     d = D.from_config(cfg, scene)
     bm = D.BodyMotion(motion, *physics_udp.mount(cfg))
     assert not bm.exact, "a kinematic trajectory has no dynamics: the twist must be differenced"
 
-    dt = 1.0 / 240.0                       # uw/main.py: one tick is one bubble substep
+    dt = 1.0 / 240.0                       # sim/main.py: one tick is one bubble substep
     reports, x, truth = [], [], []
     for k in range(1, int(30.0 / dt) + 1):
         t_loop = k * dt
@@ -388,8 +390,8 @@ def test_the_a50_reports_did_not_change():
     """The pool's A50, 72 reports over poses that lock, lose beams, look up and sit below the minimum
     altitude: bit for bit what the 4-beam model gave before it learnt N beams (tests/rov/data/)."""
     import json
-    from uw.pool_geometry import PoolBottom
-    from uw.rov import frames as F
+    from physics.pool_geometry import PoolBottom
+    from vehicles.common import frames as F
     gold = json.loads(GOLDEN_A50.read_text())["pool"]
     cfg = config.load(config.POOL_CONFIG, presets=["pool10"],          # the tank the golden was written in,
                       overrides=["pool.objects=[]"])                    #   before the COCO objects
@@ -413,7 +415,7 @@ def test_the_a50_reports_did_not_change():
 def test_three_beams_need_all_three_and_tilts_may_differ():
     """A three-beam DVL (the Nucleus1000's layout, M12 P5): every beam must return, and a per-beam tilt reaches
     the beam axes and the altitude."""
-    from uw.pool_geometry import PoolBottom
+    from physics.pool_geometry import PoolBottom
     cfg = config.load(config.POOL_CONFIG, overrides=["dvl.beams.azimuths_deg=[0, 120, 240]",
                                                      "dvl.beams.tilt_deg=[25, 25, 30]", "dvl.beams.min_good=3",
                                                      "dvl.noise=false", "dvl.dropout=false"])

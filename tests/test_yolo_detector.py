@@ -1,4 +1,4 @@
-"""ros/yolo_detector without a model: the frame mailbox, the OpenCV reader on a file, the message builders.
+"""ros/src/yolo_detector without a model: the frame mailbox, the OpenCV reader on a file, the message builders.
 
 Host only. Ultralytics is never imported; the message tests need ROS 2 Jazzy sourced (vision_msgs) and skip
 otherwise, the reader test needs OpenCV.
@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 WS = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(WS / "ros" / "yolo_detector"))
+sys.path.insert(0, str(WS / "ros" / "src" / "yolo_detector"))
 from yolo_detector import detector  # noqa: E402 - after sys.path
 from yolo_detector.sources import Frame, Latest, VideoSource, image_from_msg, is_live  # noqa: E402
 

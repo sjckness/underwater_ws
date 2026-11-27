@@ -1,6 +1,6 @@
 # Inspecting v0.2 before converting it to YOLO-seg / COCO
 
-What `tools/sonar_to_yolo.py` is converting, what it had to decide, and what a reader should know before
+What `ml/tools/sonar_to_yolo.py` is converting, what it had to decide, and what a reader should know before
 training on the result. Tags follow the rest of `docs/`: **V** verified here, **U** unverified.
 
 > **This is a simulated dataset.** Every ping in v0.2 came out of the Isaac Sim / Warp forward-looking-sonar
@@ -8,7 +8,7 @@ training on the result. Tags follow the rest of `docs/`: **V** verified here, **
 > annotation anywhere in it; the labels are the simulator's own ground truth, exact by construction. A model
 > trained on it has seen a particular scattering model, a particular speckle model and a particular set of
 > four geometry presets. **No sim-to-real claim is made or tested.** The nearest thing to a reality check in
-> this repo is `tools/compare_real.py` against the DeeperSense recordings and the background-contrast work in
+> this repo is `physics/tools/compare_real.py` against the DeeperSense recordings and the background-contrast work in
 > `docs/validation.md`; the gap between this dataset and an Oculus M750d in a real tank is open and
 > unmeasured. Treat any score on `val`/`test` here as a score on the simulator.
 
@@ -67,7 +67,7 @@ whether or not its echo rose above the background, and it leaves 15355 negative 
 
 ## 3. What the raw data is
 
-**Not rosbags.** There is no ROS in the dataset at all. `tools/sweep.py` writes a flat directory per scenario:
+**Not rosbags.** There is no ROS in the dataset at all. `ml/tools/sweep.py` writes a flat directory per scenario:
 
 ```
 s0000/  manifest.json  DONE  RECOMPRESSED
@@ -78,15 +78,15 @@ s0000/  manifest.json  DONE  RECOMPRESSED
         ping_00000_mask_{all,direct,geom}.png   uint8 0/255, same shape
 ```
 
-**Every PNG is stored flipped** (row 0 = far range); the npz arrays are not (**V**, `uw/recorder.py:81-88`,
-and `uw.dataset.load_ping` flips the PNGs back on the way in). The converter flips every PNG, so images,
+**Every PNG is stored flipped** (row 0 = far range); the npz arrays are not (**V**, `sim/recorder.py:81-88`,
+and `ml.dataset.load_ping` flips the PNGs back on the way in). The converter flips every PNG, so images,
 masks and anything taken from the npz share row 0 = range 0. Mixing the two conventions mirrors the labels in
 range and no loader complains — it is the one silent corruption this conversion can produce.
 
 ## 4. The sonar
 
 A **multibeam forward-looking imaging sonar** (Oculus M750d-like), 512 beams, not an echosounder. Two modes
-(**V**, `config/tank.yaml:166-169`), sampled per scenario:
+(**V**, `sim/config/tank.yaml:166-169`), sampled per scenario:
 
 | mode | frequency | horizontal FOV | vertical FOV | beamwidth | range bin | pings |
 |---|---|---|---|---|---|---|
@@ -110,7 +110,7 @@ normalisation the conversion needs already exists upstream and the converter doe
 reproducible as a display image from the dataset alone (the sidecar carries `noise_floor_db` and `display_db`
 but neither `tvg_db_per_decade` nor the absorption coefficient). `--db-range` therefore produces a
 *different, range-shaded representation*, not a re-window of the stored image; `--db-noise-floor` reproduces
-`uw/dataset.py`'s `"db"` image instead, which is per-ping and so not a fixed normalisation.
+`ml/dataset.py`'s `"db"` image instead, which is per-ping and so not a fixed normalisation.
 
 ## 5. Annotations: they already exist, and there are three of them
 
@@ -130,7 +130,7 @@ instead of on epoch 1.
 
 ### 5.1 Which of the three is the label
 
-`mask_geom`, and `tools/sonar_to_yolo.py` defaults to it; the two energy masks ship as comparison
+`mask_geom`, and `ml/tools/sonar_to_yolo.py` defaults to it; the two energy masks ship as comparison
 variants. The numbers behind that choice — beam coverage, component counts, the 0.132 IoU between
 `direct` and `geom`, and the `--level-gate 128` recovery — are in section 2, which is where a reader
 deciding what to train on should start.
@@ -192,7 +192,7 @@ Anomalies found, none blocking:
   `--min-area 64` floor turns a small number of nominally positive frames into negatives (9 of 200 sampled
   `mask_geom` positives).
 - No corrupt frames, no missing files, no NaN outside the blind zone: the recompression pass verifies every
-  ping through `uw.dataset.load_ping` and has produced 0 `RECOMPRESS_FAILED` markers.
+  ping through `ml.dataset.load_ping` and has produced 0 `RECOMPRESS_FAILED` markers.
 
 ## 7. Things that will bite during training, measured
 

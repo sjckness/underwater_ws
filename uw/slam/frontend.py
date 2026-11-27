@@ -48,7 +48,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..sonar_stats import local_mean
+from physics.sonar_stats import local_mean
 
 
 @dataclass(frozen=True)
@@ -92,7 +92,7 @@ def detection_image(db: np.ndarray, params: Params) -> np.ndarray:
     """dB above the local background, after the speckle is averaged down (pure).
 
     ``db`` is the polar image in dB (rows: range bins from range 0; columns: beams), NaN in the blind
-    zone, as ``uw.sonar.Ping.db`` and the recorder's ``polar_db`` both are.
+    zone, as ``physics.sonar.Ping.db`` and the recorder's ``polar_db`` both are.
     """
     intensity = np.power(10.0, np.asarray(db, float) / 10.0)
     intensity[~np.isfinite(intensity)] = 0.0

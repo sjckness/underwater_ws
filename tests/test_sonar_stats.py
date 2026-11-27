@@ -4,7 +4,7 @@ import math
 import numpy as np
 import pytest
 
-from uw import sonar_stats as ss
+from physics import sonar_stats as ss
 
 RNG = np.random.default_rng(7)
 RANGE = np.arange(800) * 0.004

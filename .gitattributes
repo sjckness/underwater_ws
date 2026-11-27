@@ -6,7 +6,7 @@
 *.py text eol=lf
 Dockerfile text eol=lf
 *.yaml text eol=lf
-# read inside Linux containers from a checkout that may be Windows' (the Work's pool stack, hil/win/pool/README.md)
+# read inside Linux containers from a checkout that may be Windows' (the Work's pool stack, deploy/hil/windows/pool/README.md)
 *.parm text eol=lf
 *.template text eol=lf
 *.conf text eol=lf

@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "physics" / "tools"))
 import compare_real as cr                                                                # noqa: E402
 
 from uw import config                                                                    # noqa: E402
@@ -154,7 +154,7 @@ def test_fit_exponent_forces_contrast_to_one_and_so_proves_nothing_by_itself(tmp
     write_uatd(tmp_path, 1, rows=600, beams=400, power=1.0)
     p = cr.fit_exponent(tmp_path, "uatd", 1.0, "", 0.0, (2.0, 8.0), (-40.0, 40.0))
     db, rng, brg = next(iter(cr.load_uatd(tmp_path, 1, p)))
-    from uw import sonar_stats
+    from physics import sonar_stats
     assert sonar_stats.background(db, rng, brg, (2.0, 8.0), (-40.0, 40.0))["contrast"] == pytest.approx(1.0, abs=0.02)
 
 
@@ -164,7 +164,7 @@ GAIN = {"noise_floor_db": 84.3, "display_db": [0.0, 80.0], "tvg_db_per_decade": 
 
 
 def test_uw_sensor_units_reproduces_the_display_kernel_formula():
-    """The same expression `display_kernel` evaluates on the GPU (uw/sonar.py): level + k log10 R + 2 alpha R
+    """The same expression `display_kernel` evaluates on the GPU (physics/sonar.py): level + k log10 R + 2 alpha R
     - nf_db. If these drift apart, the comparison silently stops measuring what the sonar displays."""
     rng = np.array([0.05, 0.5, 2.0, 3.5], np.float32)
     db = np.full((4, 3), 100.0, np.float32)
@@ -234,7 +234,7 @@ def test_uw_sensor_units_keeps_the_blind_zone_missing():
 
 
 def test_uw_gain_falls_back_to_the_datasets_own_config(tmp_path):
-    """Datasets written before uw/recorder.py exported the gain chain carry only the noise floor and the
+    """Datasets written before sim/recorder.py exported the gain chain carry only the noise floor and the
     display window; the rest has to come from the resolved config in the manifest."""
     cfg = config.load()
     (tmp_path / "sonar").mkdir()

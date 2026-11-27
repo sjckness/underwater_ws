@@ -1,8 +1,8 @@
-"""uw.rov.current and the current in uw.rov.dynamics (M12): the field, the relative-velocity Fossen terms, the
+"""vehicles.common.current and the current in vehicles.common.dynamics (M12): the field, the relative-velocity Fossen terms, the
 runtime change, and that still water is still exactly the model of before.
 
 The golden file pins the still-water path: tests/rov/data/dynamics_golden.json holds the final states of
-``golden_runs()`` written by uw/rov/dynamics.py *before* the current existed (2026-11-27, linus: equal bit for bit
+``golden_runs()`` written by vehicles/common/dynamics.py *before* the current existed (2026-11-27, linus: equal bit for bit
 there). Elsewhere a different BLAS may round differently, so the comparison allows 1e-9 relative: a change to the
 model moves these numbers by far more.
 """
@@ -17,9 +17,9 @@ import numpy as np
 import pytest
 
 from uw import config
-from uw.rov import current as C
-from uw.rov import dynamics as D
-from uw.rov import frames as F
+from vehicles.common import current as C
+from vehicles.common import dynamics as D
+from vehicles.common import frames as F
 
 POOL = (10.0, 10.0, 5.5)
 POOL_WL = 5.0

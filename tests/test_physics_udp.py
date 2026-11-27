@@ -1,4 +1,4 @@
-"""uw/physics_udp.py with a fake SITL client speaking tools/stub_physics.py's protocol (host, pure Python + numpy)."""
+"""vehicles/common/physics_udp.py with a fake SITL client speaking sim/tools/stub_physics.py's protocol (host, pure Python + numpy)."""
 import json
 import re
 import socket
@@ -10,11 +10,11 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sim" / "tools"))
 
 from uw import config  # noqa: E402
 from uw.config import ConfigError  # noqa: E402
-from uw.physics_udp import MAGIC_16, MAGIC_32, ArduSubPose, make_server, parse_servo, reply  # noqa: E402
+from vehicles.common.physics_udp import MAGIC_16, MAGIC_32, ArduSubPose, make_server, parse_servo, reply  # noqa: E402
 
 import stub_physics  # noqa: E402
 

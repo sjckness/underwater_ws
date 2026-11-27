@@ -4,8 +4,8 @@ import math
 import numpy as np
 import pytest
 
-from uw import plume
-from uw import water as wat
+from physics import plume
+from physics import water as wat
 
 FRESH_20C = (wat.density(20.0, 0.0), wat.viscosity(20.0, 0.0), wat.surface_tension(20.0, 0.0))
 SEA_15C = (wat.density(15.0, 35.0), wat.viscosity(15.0, 35.0), wat.surface_tension(15.0, 35.0))

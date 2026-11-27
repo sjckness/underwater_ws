@@ -38,9 +38,9 @@ echo.
  
 if not "%~1"=="" goto :run
 echo [uw] Pronto. Esempi:
-echo        python setup_native.py --write
+echo        python deploy\hil\windows\setup_native.py --write
 echo        python -m uw sim --gui --sink none --set lights.ambient_dome=300
-echo        python tools\debug_sim.py
+echo        python sim\tools\debug_sim.py
 echo.
 cmd /k
 exit /b

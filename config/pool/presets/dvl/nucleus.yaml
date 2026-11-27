@@ -1,7 +1,0 @@
-# DVL preset "nucleus": a Nortek Nucleus1000 in place of the Water Linked A50 (uw/rov/nucleus.py). Run BlueOS's
-# Nortek extension instead of the Water Linked one (docker/pool/compose.yaml profile nucleus) and ArduSub's Nortek
-# parameters (docker/ardusub_sitl/params/nucleus.parm). The A50's model stays configured but is off.
-dvl:
-  enabled: false
-nucleus:
-  enabled: true

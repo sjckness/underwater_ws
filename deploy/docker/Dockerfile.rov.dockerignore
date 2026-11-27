@@ -1,0 +1,5 @@
+# Dockerfile.rov builds from the repo root: send only what it COPYs
+*
+!ros/src/rov_bringup
+!ros/src/link_monitor
+**/__pycache__

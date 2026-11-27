@@ -3,8 +3,9 @@ import math
 
 import pytest
 
-from uw import config, geometry, plume
-from uw import water as wat
+from uw import config
+from physics import geometry, plume
+from physics import water as wat
 
 
 def francois_garrison_db_per_m(f_hz, t, s, depth=0.0, ph=8.0):

@@ -17,9 +17,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from uw.rov import dynamics as D
+from vehicles.common import dynamics as D
 
-CONFIG = Path(__file__).resolve().parents[2] / "config"
+CONFIG = Path(__file__).resolve().parents[2] / "vehicles"
 
 #            roll  pitch  yaw  climb  forward  lateral
 VECTORED_6DOF = np.array([
@@ -35,8 +35,8 @@ VECTORED_6DOF = np.array([
 VECTORED = np.vstack([VECTORED_6DOF[:4], [[1, 0, 0, -1, 0, 0], [-1, 0, 0, -1, 0, 0]]])
 
 FILES = {
-    "rov_bluerov2.yaml": ("vectored_6dof", VECTORED_6DOF),
-    "rov_bluerov2_vectored.yaml": ("vectored", VECTORED),
+    "bluerov2_heavy/vehicle.yaml": ("vectored_6dof", VECTORED_6DOF),
+    "bluerov2/vehicle.yaml": ("vectored", VECTORED),
 }
 DEMANDS = ("roll", "pitch", "yaw", "climb", "forward", "lateral")
 

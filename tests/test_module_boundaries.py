@@ -1,11 +1,11 @@
 """The sonar must not learn about bubbles (host, ast only).
 
-`uw/sonar.py` and `uw/scattering.py` model an acoustic sensor and the scattering of sound. `uw/bubbles.py`
+`physics/sonar.py` and `physics/scattering.py` model an acoustic sensor and the scattering of sound. `physics/bubbles.py`
 models a gas plume. The sonar takes bubbles as a duck-typed argument -- any object with `pos`, `r`, `alive`
 and `cap` -- so the two can be developed, tested and replaced apart, and a sonar calibration run needs no
 plume at all.
 
-Checked by reading the import statements rather than by importing the modules: `uw/sonar.py` needs torch and
+Checked by reading the import statements rather than by importing the modules: `physics/sonar.py` needs torch and
 warp and so cannot be imported on a machine without them, while the boundary it is asked to respect is a
 property of its source. A static check also catches an import added inside a function, which is where an
 accidental dependency usually appears first.
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-UW = Path(__file__).resolve().parents[1] / "uw"
+UW = Path(__file__).resolve().parents[1] / "physics"
 
 
 def imported_modules(path: Path) -> set:
@@ -33,7 +33,7 @@ def imported_modules(path: Path) -> set:
 
 
 def plain(names: set) -> set:
-    """Last components, so that `from . import bubbles`, `from .bubbles import X` and `import uw.bubbles` all
+    """Last components, so that `from . import bubbles`, `from .bubbles import X` and `import physics.bubbles` all
     reduce to the same thing."""
     return {n.replace(".", " ").split()[-1] for n in names if n.strip(".")}
 
@@ -55,7 +55,7 @@ def test_bubbles_does_not_import_the_sonar_either():
 def test_scattering_is_a_leaf_of_the_uw_package():
     """It is pure acoustics with no state: water properties are the only thing it may need from us."""
     local = {n for n in imported_modules(UW / "scattering.py") if n.startswith(".")}
-    assert plain(local) <= {"water"}, f"uw/scattering.py grew local imports: {sorted(plain(local))}"
+    assert plain(local) <= {"water"}, f"physics/scattering.py grew local imports: {sorted(plain(local))}"
 
 
 def test_the_sonar_only_reaches_for_what_it_models():

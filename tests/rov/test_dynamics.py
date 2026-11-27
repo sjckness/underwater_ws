@@ -1,8 +1,8 @@
-"""uw.rov.dynamics: the physics sanity set (a)-(g) of M8a step 1, plus the structural checks.
+"""vehicles.common.dynamics: the physics sanity set (a)-(g) of M8a step 1, plus the structural checks.
 
 The numbers these tests assert are deliberately loose where the underlying parameter is UNVERIFIED (see
-config/rov_bluerov2.yaml): the job here is to catch a sign error, a wrong moment arm or an unstable
-integrator, not to pin a coefficient nobody has measured. ``tools/rov_sanity.py`` prints and plots the same
+vehicles/bluerov2_heavy/vehicle.yaml): the job here is to catch a sign error, a wrong moment arm or an unstable
+integrator, not to pin a coefficient nobody has measured. ``vehicles/tools/rov_sanity.py`` prints and plots the same
 quantities with their actual values, which is what the parameters get judged on.
 
 Free decay in roll and pitch is a damped OSCILLATION, not a monotone decay, because the centre of buoyancy is
@@ -17,12 +17,12 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from uw.rov import dynamics as D
-from uw.rov import frames as F
+from vehicles.common import dynamics as D
+from vehicles.common import frames as F
 
-WL = 2.9                     # config/tank.yaml tank.water_level
+WL = 2.9                     # sim/config/tank.yaml tank.water_level
 TANK = (3.0, 3.0, 3.0)
-SAND = 0.3                   # config/tank.yaml sand.thickness
+SAND = 0.3                   # sim/config/tank.yaml sand.thickness
 MID_TANK_NED = F.position_tank_to_ned([1.5, 1.5, 1.5], WL)
 
 # The six patterns are the factor columns of ArduSub's SUB_FRAME_VECTORED_6DOF (tests/rov/test_motor_map.py
@@ -351,7 +351,7 @@ def test_c_surge_terminal_velocity(vehicle, params):
 
     The analytic terminal speed solves ``X_u u + X_uu u^2 = 4 cos(45 deg) T_max``. With the published damping
     and the T200's 51.5 N at 16 V that is ~0.97 m/s, against Blue Robotics' "up to 1.5 m/s" for the vehicle.
-    The gap is in the damping coefficient, not the thrust: see config/rov_bluerov2.yaml damping_quadratic.
+    The gap is in the damping coefficient, not the thrust: see vehicles/bluerov2_heavy/vehicle.yaml damping_quadratic.
     """
     v = free(vehicle, neutral=True)
     s = at_tank([1.5, 1.5, 1.5])
@@ -564,7 +564,7 @@ def test_bound_stops_the_vehicle_at_the_wall(vehicle, caplog):
     the penetration must be small, and every activation must be logged and counted."""
     v = D.make_vehicle(tank_size=TANK, sand_base=SAND, water_level=WL)
     s = at_tank([2.0, 1.5, 1.5])                        # heading along tank +x
-    with caplog.at_level(logging.DEBUG, logger="uw.rov.dynamics"):
+    with caplog.at_level(logging.DEBUG, logger="vehicles.common.dynamics"):
         end, tr = D.simulate(v, s, FWD, 30.0, record_every=40)
 
     x = np.array([F.position_ned_to_tank(p, WL)[0] for p in tr.position_ned])

@@ -17,10 +17,10 @@
 > vehicle files' thruster map (6 of 8 Heavy thrusters were reversed against ArduSub) and an RK4 attitude stall,
 > which the room9 HIL path shares (`docs/ros_hil.md` §6.3). BlueOS in WSL2 on Work and Cockpit are not yet tried.
 > **2026-11-26: the pool has a DVL** (`docs/pool.md`, "Il DVL"): the M8c A50 model cast at the pool, behind an
-> emulation of the device's own network side (`uw/rov/a50.py`), so BlueOS's unmodified Water Linked DVL extension
+> emulation of the device's own network side (`vehicles/common/a50.py`), so BlueOS's unmodified Water Linked DVL extension
 > feeds ArduSub and POSHOLD holds to 1-3 cm. Flown with Cockpit and a gamepad on linus (BlueOS on a local bridge).
 > **2026-11-26: turbid water and the Work deployment.** `water.turbidity_per_m` (presets turbid/murky) on the camera.
-> The all-on-Work variant is prepared, not yet tried there: compose profile `work` and `hil/win/pool/` (runbook
+> The all-on-Work variant is prepared, not yet tried there: compose profile `work` and `deploy/hil/windows/pool/` (runbook
 > `README.md`, `stack.sh`, `run_pool.bat`). SITL's default baro noise (+-20 cm of depth) was what made ALT_HOLD hunt:
 > at a Bar30's 5 mm it holds 1 cm.
 
@@ -87,17 +87,17 @@ FlowField lbm and Beamformer element_das are stubs with a clear error (M6, condi
 ## Architecture
 A single geometry source (numpy) feeds two consumers:
 - **Isaac/USD stage**: rendering (camera and GUI), ROS bridge, time loop.
-- **Warp acoustic model** on the same GPU, Warp 1.8.2 from the Isaac install (path in `config/runtime.yaml`). BVH ray queries against the same meshes. Runs inside Isaac, and standalone (no SimulationApp) for tests, fast iteration and **sonar-only dataset mode**.
+- **Warp acoustic model** on the same GPU, Warp 1.8.2 from the Isaac install (path in `uw/runtime.yaml`). BVH ray queries against the same meshes. Runs inside Isaac, and standalone (no SimulationApp) for tests, fast iteration and **sonar-only dataset mode**.
 
 ```
 ~/underwater_ws/
-  config/tank.yaml          all parameters (+ presets: exposed, buried; tank, basin); --set a.b=c overrides
-  config/runtime.yaml       how commands run: docker (Linux) | native (Windows venv / native Isaac); no hard-coded install paths
-  docker/compose.yaml       same image, host net, nvidia runtime, mounts ~/underwater_ws, Warp cache ~/.cache/uw_warp
-  scripts/uw.sh             thin Linux wrapper: `uw.sh CMD ...` = `python -m uw CMD ...`
+  sim/config/tank.yaml          all parameters (+ presets: exposed, buried; tank, basin); --set a.b=c overrides
+  uw/runtime.yaml       how commands run: docker (Linux) | native (Windows venv / native Isaac); no hard-coded install paths
+  deploy/docker/compose.isaac.yaml       same image, host net, nvidia runtime, mounts ~/underwater_ws, Warp cache ~/.cache/uw_warp
+  uw.sh             thin Linux wrapper: `uw.sh CMD ...` = `python -m uw CMD ...`
   uw/__main__.py launcher.py runner.py   entry point `python -m uw py|test|sim|sonar-only` (+ --profile/--preset/--set)
   uw/config.py  water.py  plume.py  geometry.py  bubbles.py  scattering.py  sonar.py  sinks.py  camera_uw.py  usd_scene.py  ros_bridge.py  recorder.py  main.py  app.py  gui.py  sonar_only.py
-  ros/sonar_relay/          host-side Jazzy node: Image+meta -> marine_acoustic_msgs/ProjectedSonarImage
+  ros/src/sonar_relay/          host-side Jazzy node: Image+meta -> marine_acoustic_msgs/ProjectedSonarImage
   tools/                    plume_preview.py, sonar_preview.py, compare_real.py, sweep.py
   tests/                    pure-numpy tests on the host (pytest); Warp tests via uw.sh test
 ```
@@ -150,31 +150,31 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
    - `uw.sh sonar-only` (new): Warp-only process, no SimulationApp, no RTX. Bubbles + sonar + recorder + (optional) ROS through host rclpy. This is the default for dataset generation and frees ~4–5 GB of VRAM.
 9. **ROS 2**:
    - From inside Isaac (internal Jazzy rclpy, own ROS_DOMAIN_ID): `/oculus/polar` (mono8 range×beam), `/oculus/polar_db` (32FC1), `/oculus/fan` (Cartesian mono8), `/camera/image_raw` + `camera_info`, `/sim/leak` (PoseStamped hole + flow), `/sim/plume` (MarkerArray, decimated), TF, `/clock`.
-   - Host relay `ros/sonar_relay` (host Jazzy, `ros-jazzy-marine-acoustic-msgs` 2.1.0) republishes as `ProjectedSonarImage`, the message the Oculus ROS drivers use.
-10. **Dataset recorder** (`recorder.py`, `tools/sweep.py`):
+   - Host relay `ros/src/sonar_relay` (host Jazzy, `ros-jazzy-marine-acoustic-msgs` 2.1.0) republishes as `ProjectedSonarImage`, the message the Oculus ROS drivers use.
+10. **Dataset recorder** (`recorder.py`, `ml/tools/sweep.py`):
     - Per ping: raw dB polar (npz), 8-bit polar and fan PNG, per-pixel plume labels (bubble energy share above a threshold: all paths, direct path; geometric: main-lobe cells of visible bubbles), leak range/bearing in the sonar frame, metadata (config + seed).
     - Camera: frames + plume mask from instancer semantics.
     - Sweeps randomize seed, leak rate, hole clock angle, cover depth, sonar tilt, noise, speckle dynamics, focus mode and tank preset.
 
 ## Decisions (2026-10-26)
-- **(a) Entry point:** `python -m uw` (pathlib, no shell logic) replaces `scripts/uw.sh`, which stays as a thin Linux wrapper. Docker on Linux; a venv or native Isaac on Windows. No hard-coded `/isaac-sim` paths: they live in `config/runtime.yaml` (+ an untracked `runtime.local.yaml`).
-- **(b) Sensor outputs** go through a `SensorSink` interface (`uw/sinks.py`): backends `file` (datasets), `ros`, `zenoh`; later `oculus_emulator`.
+- **(a) Entry point:** `python -m uw` (pathlib, no shell logic) replaces `uw.sh`, which stays as a thin Linux wrapper. Docker on Linux; a venv or native Isaac on Windows. No hard-coded `/isaac-sim` paths: they live in `uw/runtime.yaml` (+ an untracked `runtime.local.yaml`).
+- **(b) Sensor outputs** go through a `SensorSink` interface (`sim/sinks.py`): backends `file` (datasets), `ros`, `zenoh`; later `oculus_emulator`.
 - **(c) Real-time mode** besides sim time: wall-clock pacing with a watchdog that reports pings over budget.
 - **(d) Sim and ROS decoupled:** the sim publishes over Zenoh; a relay on linus republishes to ROS 2. ROS is optional on the sim side.
 - **(e) Hardware in the loop:** milestones M7 (open loop), M8a (the ROV platform) and M8b (closed loop) below.
 
 ## Milestones (each ends runnable and checked; I ask before each commit)
-- **M0 Infra**: compose file, `scripts/uw.sh` (incl. `sonar-only` stub), README, `.gitignore` (output/, third_party/), pytest skeleton.
-- **M1 Scene + plume standalone**: `tools/plume_preview.py` writes side and top scatter plots plus stats (flow, bubbles/s, rise time, centreline speed/width), both pipe presets. Plume checked against MTT similarity **and** published bubble-plume / blowout correlations (e.g. Socolofsky & Adams, Bombardelli et al.: centreline velocity, spreading rate, slip-velocity ratio). Adaptive scatterer spacing implemented and cached.
-- **M2 Sonar standalone**: `scattering.py` + `sonar.py`; `tools/sonar_preview.py` writes polar and fan PNGs of the static tank and tank with plume, both focus modes; timing per ping and VRAM. **Real reference goal**: obtain at least one real Oculus (ideally M750d) tank recording (Blueprint sample data, public FLS datasets, or other Oculus users) and compare with `tools/compare_real.py`: sand/background intensity histogram (Rayleigh/K-distribution fit), sidelobe level next to a bright target, blind zone and ring-down shape, TVG profile. Then enable the `basin` preset.
+- **M0 Infra**: compose file, `uw.sh` (incl. `sonar-only` stub), README, `.gitignore` (output/, third_party/), pytest skeleton.
+- **M1 Scene + plume standalone**: `physics/tools/plume_preview.py` writes side and top scatter plots plus stats (flow, bubbles/s, rise time, centreline speed/width), both pipe presets. Plume checked against MTT similarity **and** published bubble-plume / blowout correlations (e.g. Socolofsky & Adams, Bombardelli et al.: centreline velocity, spreading rate, slip-velocity ratio). Adaptive scatterer spacing implemented and cached.
+- **M2 Sonar standalone**: `scattering.py` + `sonar.py`; `physics/tools/sonar_preview.py` writes polar and fan PNGs of the static tank and tank with plume, both focus modes; timing per ping and VRAM. **Real reference goal**: obtain at least one real Oculus (ideally M750d) tank recording (Blueprint sample data, public FLS datasets, or other Oculus users) and compare with `physics/tools/compare_real.py`: sand/background intensity histogram (Rayleigh/K-distribution fit), sidelobe level next to a bright target, blind zone and ring-down shape, TVG profile. Then enable the `basin` preset.
 - **M3 Isaac integration**: USD stage from the geometry, lamps, bubble instancer, sonar in the loop, ROS topics plus host relay; GUI check. `sonar-only` mode feature-complete.
 - **M3.5 Mobile sonar (kinematic ROV)**: SensorPose trajectory (presets) and ros, StaticCache on_motion / none, pose per ping in the data and on /tf, the rig (sonar, camera, lamps) moving in Isaac. Done.
 - **M4 Camera underwater model**.
-- **M5 Dataset recorder + sweeps**: surface boil and bistatic bubble paths, leak presets and time profiles, `tools/sweep.py` (resumable, parallel, pauses for f1tenth runs), dataset layout and card, splits by scenario, `uw/dataset.py` loader, `tools/dataset_stats.py`; first generation v0.1 (docs/validation.md). Done. Buried-pipe sediment penetration (the acoustic echo of a pipe under sand) is not done: see Known gaps.
+- **M5 Dataset recorder + sweeps**: surface boil and bistatic bubble paths, leak presets and time profiles, `ml/tools/sweep.py` (resumable, parallel, pauses for f1tenth runs), dataset layout and card, splits by scenario, `ml/dataset.py` loader, `ml/tools/dataset_stats.py`; first generation v0.1 (docs/validation.md). Done. Buried-pipe sediment penetration (the acoustic echo of a pipe under sand) is not done: see Known gaps.
 - **M6 High-fidelity backends — DEFERRED (2026-10-26)**: element-level beamformer and LBM flow field. No real gas data is in prospect in the short term, so the gap that would justify the LBM cannot be shown; the integral plume model stays. **Reopened only by** (a) real bubble or plume data showing a plume-dynamics gap the integral model cannot close, or (b) a need for scenarios with currents. The element-level beamformer keeps its own trigger: a beamforming gap against a real recording. `FlowField lbm` and `Beamformer element_das` stay as stubs that raise. If reopened: bigger bubble pool when a flow range needs it, each backend checked on linus with a reduced scene and against the default backend on the same scene (same echo level and bearing within tolerance). (The mobile sonar, first planned here, is M3.5.)
 - **M7 HIL open loop — ROS 2 over Ethernet (current main track, 2026-10-26)**: a Jetson on Ethernet receives sonar
   and camera and runs leak detection; end-to-end latency measured (sim stamp → detection). **ROS 2, not Zenoh**:
-  the sim already publishes the topics (`uw/ros_bridge.py`) and the host relay already speaks the Oculus drivers'
+  the sim already publishes the topics (`sim/ros_bridge.py`) and the host relay already speaks the Oculus drivers'
   message, so the bags match future real Oculus bags. Zenoh stays a `SensorSink` option, unscheduled. Steps:
   1. **Design doc `docs/ros_hil.md` first**: topics, message types and QoS for sonar (raw polar beams *and* the
      Cartesian fan image, with Oculus-like metadata: range, gain, beam angles, sound speed), camera, ROV pose/TF,
@@ -211,20 +211,20 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
      checking). The result of that evaluation goes in `docs/ros_hil.md`.
 - **M8c Navigation sensing and dead reckoning (DVL)**: a four-beam Water Linked DVL A50 with bottom lock,
   published as the device's own report and relayed into `marine_acoustic_msgs/Dvl`, feeding a
-  `robot_localization` EKF together with the autopilot's IMU and baro. Built: `uw/rov/dvl.py`,
-  `geometry.ray_bottom`, `ros/dvl_relay`, `ros/dvl_dr`, `ros/mavros_rov1`, `tools/dvl_drift.py`, and
+  `robot_localization` EKF together with the autopilot's IMU and baro. Built: `vehicles/common/dvl.py`,
+  `geometry.ray_bottom`, `ros/src/dvl_relay`, `ros/src/dvl_dr`, `deploy/hil/thor/mavros_rov1`, `vehicles/tools/dvl_drift.py`, and
   `docs/dvl.md`. It is what makes `rov1/odom` stop being a static identity (`docs/topic_map.md` §2).
   1. **The failure modes are the product**: loss of lock out of the 0.05-50 m envelope, a beam on the pipe
      crown or past a wall, degradation with the incidence angle over soft bottom, a scale factor fixed per
      run, a slow bias and per-beam noise. Without them a DVL derived from the true state is ground truth
      wearing a sensor's name (`docs/ros_hil.md` §2.5).
   2. **No ground truth in the chain.** This forces two changes to SITL, in
-     `docker/ardusub_sitl/params/hil.parm`: `AHRS_EKF_TYPE 3` instead of the truth AHRS, and the
+     `deploy/docker/ardusub_sitl/params/hil.parm`: `AHRS_EKF_TYPE 3` instead of the truth AHRS, and the
      `EK3_SRC1_*` sources set to none for position and velocity, because SITL feeds GPS instance 0 from the
      FDM position whatever `GPS_TYPE` says (§4.2 of `docs/ros_hil.md`, **V**). What is left is what a real
      BlueROV2 has underwater. Read-only MAVROS telemetry is pulled forward from M8b for this; commanding is
      not.
-  3. **The number**: `tools/dvl_drift.py` reports position error as a percentage of distance travelled,
+  3. **The number**: `vehicles/tools/dvl_drift.py` reports position error as a percentage of distance travelled,
      against `/gt` on its own domain. Heading dominates in a metal tank, so it is swept through SITL's own
      compass model (`SIM_MAG1_OFS`) rather than faked in the estimator.
   4. **Still open**: bubble degradation of the beams is deferred (the hook is named in `docs/dvl.md`), the
@@ -247,38 +247,38 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
   - **Scene tiling**: the seafloor and its structure as tiles generated and cached per tile, so a survey can run
     beyond one tank-sized box, with the scatterer and facet caches keyed per tile.
 - **M11 Piloted test pool** (built 2026-11-25, `docs/pool.md`): a BlueROV2 Heavy in a 10 x 10 x 5 m test tank, flown
-  the way the real vehicle is: ArduSub SITL 4.5.7 (Heavy, `docker/ardusub_sitl/params/pool.parm`), BlueOS 1.5 beta on
+  the way the real vehicle is: ArduSub SITL 4.5.7 (Heavy, `deploy/docker/ardusub_sitl/params/pool.parm`), BlueOS 1.5 beta on
   its "Manual" board, Cockpit with a Bluetooth gamepad. No bubbles and no sonar: camera and dynamics only.
   1. **The vehicle, checked against ArduSub itself**: thruster axes and channels from `AP_Motors6DOF` and
      `SIM_Submarine` (pinned by `tests/rov/test_motor_map.py`); the Heavy's body and hydrodynamics from [BENZON22]
      Table A1, now opened and found to be the Heavy's own measured set; thruster lag from its eq. 19; partial
      submersion at the surface; the RK4 quaternion stall at heading 180 deg fixed.
-  2. **Physics in its own process** (`uw/rov/physics_proc.py`), lockstep with SITL and paced to the wall clock, read
+  2. **Physics in its own process** (`vehicles/common/physics_proc.py`), lockstep with SITL and paced to the wall clock, read
      by the render loop through shared memory: real time for the pilot whatever the renderer does.
-  3. **The scene and the camera** (`uw/pool_scene.py`, `uw/camera_uw.py`, `uw/video.py`, `uw/pool.py`): tiled tank,
+  3. **The scene and the camera** (`sim/pool_scene.py`, `sim/camera_uw.py`, `sim/video.py`, `sim/pool.py`): tiled tank,
      free surface, hall lights, the Heavy (Blue Robotics' BlueSim mesh) with tilt and Lumens driven by ArduSub's
      outputs; the water as a post-process from the distance annotator (the first piece of M4's `rtx_post`);
      H.264 over RTSP (mediamtx) into BlueOS's camera manager.
   4. **Measured on linus**: 30 fps at 1280 x 720 (DLSS, one refraction bounce, reflections off), 7 ms a frame,
-     2.4 GB VRAM; physics 400 packets/s with no stalls; `tools/pool_smoke.py` 12/12 (every axis, ALT_HOLD, depth
+     2.4 GB VRAM; physics 400 packets/s with no stalls; `sim/tools/pool_smoke.py` 12/12 (every axis, ALT_HOLD, depth
      against the baro, lights, tilt). BlueOS 1.5.0-beta.43 verified in isolation (Manual board, MAVLink to
      mavlink2rest, the Redirect stream decoded).
-  5. **The DVL** (2026-11-26): the M8c model (`uw/rov/dvl.py`) cast at the pool's solids (`uw/pool_geometry.py`,
-     the same list the USD stage is built from) and served as the device itself (`uw/rov/a50.py`: Water Linked's
+  5. **The DVL** (2026-11-26): the M8c model (`vehicles/common/dvl.py`) cast at the pool's solids (`physics/pool_geometry.py`,
+     the same list the USD stage is built from) and served as the device itself (`vehicles/common/a50.py`: Water Linked's
      JSON protocol on TCP 16171, the HTTP API the extension probes), in the physics process. BlueOS's Water Linked
-     DVL extension v1.0.11 runs unmodified next to it (`docker/pool/compose.yaml`: `dvl`, `dvl-gateway`) and sends
+     DVL extension v1.0.11 runs unmodified next to it (`deploy/docker/pool/compose.yaml`: `dvl`, `dvl-gateway`) and sends
      VISION_POSITION_DELTA: POSHOLD holds to 1-3 cm, ArduSub's dead reckoning is 6-7 cm off after 1.1 m.
      `SIM_FLOAT_EXCEPT 0`, because the extension's NaN-by-design EXTERNAL_POSITION_ESTIMATE aborted SITL.
   6. **Turbidity** (2026-11-26): `water.turbidity_per_m`, a flat particle scattering coefficient on both of the
      camera model's coefficients, the veiling light pulled towards the particle cloud's colour; presets turbid (0.6/m,
      ~5.8 m visibility) and murky (1.5/m, ~2.5 m). Not modelled: the lamps' backscatter right in front of the camera.
   7. **Work deployment** (2026-11-26, prepared, not yet tried there): compose profile `work` (BlueOS and the DVL
-     extension in WSL2's host networking, the extension's gateway alone on the bridge), `hil/win/pool/stack.sh` and a
+     extension in WSL2's host networking, the extension's gateway alone on the bridge), `deploy/hil/windows/pool/stack.sh` and a
      `run_pool.bat` that restarts SITL and configures BlueOS by itself, a runbook for Claude Code on the Work
-     (`hil/win/pool/README.md`). The host-network extension was checked on linus: `pool_smoke.py --dvl` 18/18.
+     (`deploy/hil/windows/pool/README.md`). The host-network extension was checked on linus: `pool_smoke.py --dvl` 18/18.
      SITL's baro noise is now a Bar30's (`SIM_BARn_RND` 0.005): the default +-0.2 m made ALT_HOLD limit-cycle by
      5-17 cm (it was blamed on the T200 dead band) and once put the boot calibration 0.5 m off; now 1 cm.
-  8. **YOLO on the onboard camera** (2026-11-26, `ros/yolo_detector`): a host ROS 2 node that reads the H.264
+  8. **YOLO on the onboard camera** (2026-11-26, `ros/src/yolo_detector`): a host ROS 2 node that reads the H.264
      stream BlueOS relays, so on the real vehicle only the URL changes. Any Ultralytics model goes in;
      `vision_msgs/Detection2DArray` and an annotated overlay come out, the overlay as a ROS topic or back into
      mediamtx for the browser and Cockpit. On linus beside the running pool: 30 fps, yolo26n 13-15 ms, 22-24 ms
@@ -295,7 +295,7 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
   computer (MAVROS, camera topic, YOLO as a colcon package); and a 2 x 2 comparison, {ArduSub POSHOLD, a ROS station
   keeper} x {DVL A50, Nortek Nucleus1000}, over a grid of currents. Phases: P1 current, P2 runtime control channel,
   P3 pool size, P4 COCO props, P5 Nucleus1000, P6 ROS container, P7 cost monitor, P8 station keeper, P9 bench.
-  1. **Water current** (P1, `uw/rov/current.py`): Fossen's (2021, 10.3) irrotational current in `Vehicle._deriv`:
+  1. **Water current** (P1, `vehicles/common/current.py`): Fossen's (2021, 10.3) irrotational current in `Vehicle._deriv`:
      added mass and damping on the velocity relative to the water, the rigid body on the ground velocity (the state
      and the position integration are unchanged), plus `M_A nu_c_dot` (the current seen from the rotating body)
      and the Froude-Krylov force of an accelerating flow. Uniform, 1/7-power, linear or tabulated depth profile;
@@ -303,7 +303,7 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
      changes (`Vehicle.set_current`, thread-safe, applied at the next step in sim time). Config `current:`, presets
      light / strong / gusty. Still water is bit-identical to the model before (a golden written by the old code).
      Cost: +50-100 us on a ~250 us step.
-  2. **Runtime control channel** (P2, `uw/rov/simctl.py`, `tools/simctl.py`): TCP 9020 in the physics process,
+  2. **Runtime control channel** (P2, `vehicles/common/simctl.py`, `sim/tools/simctl.py`): TCP 9020 in the physics process,
      newline-delimited JSON (`uwsim/1`), stdlib only: hello, set_current (ramped), get_state and a stream of the true
      state (<= 50 Hz), horizontal reposition (applied by the physics thread between packets; depth, attitude and
      so the EKF untouched), a device's own set_config (the A50's acoustic_enabled for dropouts), stats with the
@@ -315,21 +315,21 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
      far plane and layout live in the size preset. Measured on linus: 29.92 fps for both, render p95 8.30 against
      8.16 ms, VRAM +0.1 GB (3.1 GB): the render costs per pixel, not per square metre. Rule met (fps >= 29.5,
      render p95 <= 1.25x, VRAM <= 4 GB), hence the new default.
-  4. **COCO objects** (P4): eight textured models (`config/pool/objects.yaml`: a scuba diver, a canoe, a bicycle, a
+  4. **COCO objects** (P4): eight textured models (`sim/config/pool/objects.yaml`: a scuba diver, a canoe, a bicycle, a
      monobloc chair, a water bottle, a suitcase, a daypack, a football; Objaverse at a pinned revision and Poly
-     Haven, CC-BY-4.0 / CC0, sha256-pinned) fetched and converted by `tools/fetch_props.py` (Kit's asset converter,
+     Haven, CC-BY-4.0 / CC0, sha256-pinned) fetched and converted by `sim/tools/fetch_props.py` (Kit's asset converter,
      then a wrapper USD: Z up, metres, scaled to the catalogue size, origin at the bottom centre, BLEND materials
      forced opaque). Each carries its COCO class as a semantic label and a box or sphere for the DVL. `uw pool
-     --views NAME` renders every object from 2-8 m with Replicator's 2-D boxes; `tools/eval_views.py` scores a
+     --views NAME` renders every object from 2-8 m with Replicator's 2-D boxes; `sim/tools/eval_views.py` scores a
      model. yolo26m, side views, lamps on: person 19/20, bicycle 20/20, chair 20/20, suitcase 18/20, bottle 11/18
      (to 4 m), ball 13/17 (to 4 m), boat 9/20 (the canoe reads as a surfboard), backpack 0/20 (read as a suitcase);
      yolo26n is much weaker (the diver becomes a bird). Turbid water limits recognition to 3-4 m, murky to 2 m.
      Next: fine-tune on the Replicator boxes, the backpack and the boat first.
-  5. **Nortek Nucleus1000** (P5, `uw/rov/nucleus.py`): emulated at the protocol level from the source of Nortek's own
+  5. **Nortek Nucleus1000** (P5, `vehicles/common/nucleus.py`): emulated at the protocol level from the source of Nortek's own
      clients (driver 1.7.0/1.7.8, BlueOS extension 2.0.11, ROS 2 node) and the manual N3015-033: TCP 9000 with the
      password prompt, ASCII and NMEA commands (GETALL as the manual's 15 lines), TCP 9002 data only; AHRS 0xD2,
      bottom track 0xB4 (128 bytes), altimeter 0xAA (44), INS 0xDC, checksums seeded 0xB58C (pinned by the manual's
-     sample packet). `uw/rov/dvl.py` now takes N beams with per-beam tilt and `min_good` (the A50's reports are
+     sample packet). `vehicles/common/dvl.py` now takes N beams with per-beam tilt and `min_good` (the A50's reports are
      bit-identical to before, a golden pins them); the physics process hosts A50 and/or Nucleus (presets nucleus,
      both_dvl). Nortek's unmodified parser reads every packet (a test), the unmodified driver connects, starts and
      reads, and the unmodified BlueOS extension (compose profile `nucleus`, through dvl-gateway, which now also
@@ -361,7 +361,7 @@ Reused from `~/isaac_ws` (copied, not imported; that repo is the F1Tenth sim):
 
 **M3.7 (2026-11-04) laid the calibration harness**; `docs/validation.md` has the detail. Done: the four real
 corpora extracted in full (80 -> 1600 native-polar UATD frames, 60 -> 1427 and 3847 fan frames) and made
-read-only; a leak-free hold-out (`tools/real_holdout.py`, `output/compare_real/holdout.json`) after finding
+read-only; a leak-free hold-out (`physics/tools/real_holdout.py`, `output/compare_real/holdout.json`) after finding
 that UATD's own `Test_1`/`Test_2` are a random split of one pool -- 80 % of Test_1 has a near-twin in Test_2;
 pass/fail fixed before tuning (`output/compare_real/targets.json`); `generator_version` in every ping; a
 golden-ping guard so no sonar default drifts away from v0.2; and `tests/test_compare_real.py` for loaders
@@ -386,12 +386,12 @@ Sources to obtain:
 - **UATD** multibeam forward-looking sonar dataset (arXiv 2212.00352): background, speckle and sidelobe statistics.
 - **Gas data**: the authors of "Underwater Gas Leakage Flow Detection and Classification Based on Multibeam FLS" (JMSA 2024), on request. **Not expected in the short term (2026-10-26)**; this is what defers M6.
 
-`tools/compare_real.py` gets a reader for each format as the data arrives. Every mismatch found becomes a config or model change, logged in `docs/validation.md`.
+`physics/tools/compare_real.py` gets a reader for each format as the data arrives. Every mismatch found becomes a config or model change, logged in `docs/validation.md`.
 
 Rule: new physics fidelity is added only when the real-data comparison shows a gap it would close. M6 (LBM flow, element-level beamforming) is **deferred** on that rule, not merely unscheduled: the gas-data source below did not materialise, so the plume-dynamics gap cannot be demonstrated either way. Its triggers are listed under M6.
 
 ## Dataset v0.2
-From the v0.1 sanity check (docs/validation.md, M5). `config/sweeps/v0.2.yaml`; v0.1's file still samples its 300
+From the v0.1 sanity check (docs/validation.md, M5). `ml/sweeps/v0.2.yaml`; v0.1's file still samples its 300
 scenarios exactly.
 
 **Done** (d11a9fe, "Dataset v0.2 prep"):
@@ -410,7 +410,7 @@ scenarios exactly.
 **Generated and analysed** (6893055, 2026-10-26/27; docs/validation.md "Second generation: v0.2"):
 - The sweep ran to `/HDD2T/underwater_data/datasets/v0.2`: **400/400 scenarios, 0 failed**, 36 000 pings, 97 min
   wall clock, **201.7 GiB (216.6 GB)**, splits 281/60/59 scenarios (train/val/test).
-- `tools/dataset_stats.py` on v0.1 and v0.2, 1000 random pings image-checked each: leak scenarios never in view
+- `ml/tools/dataset_stats.py` on v0.1 and v0.2, 1000 random pings image-checked each: leak scenarios never in view
   19.1 % → 0.4 %, all 527 aimed views in view, basin leak ranges now p50 4.15 m up to 6.71 m, splits balanced per
   kind and per size with no scenario in two splits, no image flags.
 - Size came out **2.5× the 60–90 GB estimated from an 8-ping sample** (6.0 MB per ping, not ~2.4): that sample was
@@ -465,13 +465,13 @@ scenarios exactly.
 
 ## Where this session stopped (2026-10-28)
 Done and pushed before 2026-10-28 (`origin/main` stood at `6893055`):
-- `ab7243b` real-data work adopted and merged (UATD + DeeperSense loaders in `tools/compare_real.py`, which now
-  runs without `PYTHONPATH`; `tools/deepersense_index.py` + `docs/deepersense_tank_recordings.md`; one "Real data:
+- `ab7243b` real-data work adopted and merged (UATD + DeeperSense loaders in `physics/tools/compare_real.py`, which now
+  runs without `PYTHONPATH`; `physics/tools/deepersense_index.py` + `docs/deepersense_tank_recordings.md`; one "Real data:
   public sonar datasets" section in `docs/validation.md` with the stripe finding as a subsection); M6 deferred;
   Dataset v0.2 split into done/open; `recorder.compress` / `recorder.png_level`.
 - `b8b786f` splits: the by-scenario rule stated and tested, optional held-out domain, `dataset_stats` split report.
 - `6893055` the **v0.2 sweep ran and was analysed**: 400/400 scenarios, 0 failed, 36 000 pings, 97 min, 201.7 GiB in
-  `/HDD2T/underwater_data/datasets/v0.2`, splits 281/60/59; `tools/dataset_stats.py` on v0.1 and v0.2 (see
+  `/HDD2T/underwater_data/datasets/v0.2`, splits 281/60/59; `ml/tools/dataset_stats.py` on v0.1 and v0.2 (see
   "Dataset v0.2" above and docs/validation.md "Second generation: v0.2").
 
 Committed on 2026-10-27 but left unpushed, pushed on 2026-10-28:
@@ -487,7 +487,7 @@ Done on 2026-10-28:
   paths**, and clear the coherent glints and the plume entirely (±25° falls to 0.981, the Rayleigh value, once the
   ripples, the undulation and the rocks are removed). docs/validation.md, "What makes the tank's background contrast
   2.0–3.7".
-- `tools/recompress.py` committed (verified per scenario through the dataset loader, resumable, CPU-only) and the
+- `ml/tools/recompress.py` committed (verified per scenario through the dataset loader, resumable, CPU-only) and the
   **recompression pass started** at 10:20, still running (below). docs/validation.md and this file corrected where
   they still called the pass unapplied and 35–50 min long.
 
@@ -512,7 +512,7 @@ and UATD data, intact); the GPU is otherwise free; the f1tenth telegram bot hold
 
 ## For the next session
 - `docs/validation.md` records what M1–M3 and M5 checked, calibrated and measured.
-- Run everything through `python -m uw` (or `scripts/uw.sh`), e.g. `python -m uw test`, `python -m uw py tools/x.py`. In the container the image has numpy 1.26, scipy, torch 2.7 cu128, cv2, matplotlib and trimesh; pytest is installed into `~/.cache/uw_pydeps` on first use. The host has pytest and numpy.
+- Run everything through `python -m uw` (or `uw.sh`), e.g. `python -m uw test`, `python -m uw py tools/x.py`. In the container the image has numpy 1.26, scipy, torch 2.7 cu128, cv2, matplotlib and trimesh; pytest is installed into `~/.cache/uw_pydeps` on first use. The host has pytest and numpy.
 - `~/.cache/isaac-sim/cache` is root-owned, so the Warp kernel cache goes to `~/.cache/uw_warp`.
 - Run no ROS process on the side while the f1tenth harness batches run (see the f1tenth CLAUDE.md). The tank sim uses its own ROS_DOMAIN_ID.
 
@@ -522,7 +522,7 @@ and UATD data, intact); the GPU is otherwise free; the f1tenth telegram bot hold
   roughness; checked against the analytic echo of a flat plate (docs/validation.md).
 - ~~**Wall roughness and absorption.**~~ Done in M2.2: per-wall rms roughness (Rayleigh loss of the mirror
   reflection) and an absorbing lining (reflection coefficient in config).
-- ~~**Surface backscatter in the plume boil.**~~ Done in M5 (uw/surface.py): Kirchhoff backscatter of the patch the
+- ~~**Surface backscatter in the plume boil.**~~ Done in M5 (physics/surface.py): Kirchhoff backscatter of the patch the
   bursts roughen, from the burst rate per surface cell, random phase per ping. Its parameters (rms slope 0.3,
   saturation rate) are assumed; to check against a real recording of a plume reaching the surface.
 - ~~**Bubble bistatic multipath.**~~ Done in M5: the bubbles' image paths over the surface and the walls, with the

@@ -1,4 +1,4 @@
-"""The /sim/cmd/rov1/pose producer (ros/pose_cmd), host-side: the pose each mode commands. Pure functions only —
+"""The /sim/cmd/rov1/pose producer (ros/src/pose_cmd), host-side: the pose each mode commands. Pure functions only —
 no node, no DDS participant, so safe while other ROS stacks run.
 """
 import sys
@@ -7,10 +7,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from uw import config, geometry, pose as uwpose
+from uw import config
+from physics import geometry
+from sim import pose as uwpose
 
 WS = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(WS / "ros" / "pose_cmd"))
+sys.path.insert(0, str(WS / "ros" / "src" / "pose_cmd"))
 from pose_cmd.cmd import FRAME, TOPIC, KeyDrive, held_pose, traj_time      # noqa: E402 - after sys.path
 
 

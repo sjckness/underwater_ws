@@ -1,4 +1,4 @@
-"""uw.rov.nucleus (M12 P5): the Nortek Nucleus1000 at the protocol level (host, numpy, sockets on loopback).
+"""vehicles.common.nucleus (M12 P5): the Nortek Nucleus1000 at the protocol level (host, numpy, sockets on loopback).
 
 The wire format is pinned against the manual's own sample packet (N3015-033 §11.2) and NMEA examples (§7.38), and,
 when Nortek's driver is installed (``nucleus-driver`` 1.7.x in uw_pydeps), against its real parser.
@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from uw import config
-from uw.rov import nucleus as N
+from vehicles.common import nucleus as N
 
 # The AHRS packet of the manual's §11.2, header and data (108 bytes), as printed there
 def _manual_packet() -> bytes:
@@ -67,7 +67,7 @@ def device():
     cfg["nucleus"]["device"].update(bind="127.0.0.1", cmd_port=0, data_port=0)
     dev = N.pool_device(cfg)
     assert dev is not None
-    from uw.rov.physics_proc import make_pool_server
+    from vehicles.common.physics_proc import make_pool_server
     srv = make_pool_server(cfg)
     dev.start()
     try:
@@ -86,7 +86,7 @@ def _line(sock, buf=b""):
 def _fly(dev, srv, seconds, v_frd=(0.3, 0.0, 0.0)):
     """The physics side, without SITL: the device stepped at 400 Hz on a moving mid-water state."""
     from dataclasses import replace
-    from uw.rov import frames as F
+    from vehicles.common import frames as F
     state = srv.state
     p, q = F.pose_tank_to_ned([25.0, 12.0, 2.5], F.quat_from_rpy_deg((0, 0, 30)), 5.0)
     state = replace(state, position_ned=p, quat_frd_ned=q, velocity_frd=np.array(v_frd, float))

@@ -10,12 +10,12 @@ Isaac fa solo la fisica del veicolo e la camera di bordo, più un DVL Water Link
 In acqua ci sono otto oggetti che un YOLO COCO riconosce (un sub, una canoa, una bici, una sedia, una bottiglia, una valigia, uno zaino, un pallone) e si può accendere una corrente, anche dal vivo.
 
 Questo file è la guida operativa. Il resto è nel codice:
-- l'app: `uw/pool.py`, `uw/pool_scene.py`, `uw/camera_uw.py`, `uw/video.py`;
-- la fisica: `uw/rov/physics_proc.py`;
-- il DVL: `uw/rov/a50.py` (il dispositivo in rete), `uw/rov/dvl.py` (fasci, rumore, aggancio al fondo), `uw/pool_geometry.py` (cosa colpiscono i fasci);
-- lo stack: `docker/pool/compose.yaml`;
-- la configurazione: `config/pool/` (gli oggetti in `config/pool/objects.yaml`);
-- la corrente e il canale di controllo: `uw/rov/current.py`, `uw/rov/simctl.py`, `tools/simctl.py`.
+- l'app: `sim/pool.py`, `sim/pool_scene.py`, `sim/camera_uw.py`, `sim/video.py`;
+- la fisica: `vehicles/common/physics_proc.py`;
+- il DVL: `vehicles/common/a50.py` (il dispositivo in rete), `vehicles/common/dvl.py` (fasci, rumore, aggancio al fondo), `physics/pool_geometry.py` (cosa colpiscono i fasci);
+- lo stack: `deploy/docker/pool/compose.yaml`;
+- la configurazione: `sim/config/pool/` (gli oggetti in `sim/config/pool/objects.yaml`);
+- la corrente e il canale di controllo: `vehicles/common/current.py`, `vehicles/common/simctl.py`, `sim/tools/simctl.py`.
 
 ## Come è fatto
 
@@ -27,7 +27,7 @@ Questo file è la guida operativa. Il resto è nel codice:
  ── macchina della simulazione (linus in docker, oppure la Work nativa) ─────────────────────────────
   mediamtx :8654 ◄── H.264 ── python -m uw pool (Isaac headless: vasca, ROV, camera, acqua, encoder)
                                      ▲ shared memory: posa, tilt camera, luci
-                  uw.rov.physics_proc (Fossen, 400 Hz) ◄── UDP 9002 lockstep ──► ArduSub SITL 4.5.7 (Heavy)
+                  vehicles.common.physics_proc (Fossen, 400 Hz) ◄── UDP 9002 lockstep ──► ArduSub SITL 4.5.7 (Heavy)
                     └─ DVL A50 emulato: TCP 16171 (JSON), HTTP 8061 ──► estensione Water Linked DVL di BlueOS
                                                                           └─► VISION_POSITION_DELTA ad ArduSub
 ```
@@ -42,18 +42,18 @@ Questo file è la guida operativa. Il resto è nel codice:
 ## Preparazione (una volta)
 
 **Sulla macchina della simulazione:**
-1. **Modello 3D del ROV.** Lancia `python -m uw py tools/fetch_bluerov2.py`.
-   - Scarica la Heavy di Blue Robotics da BlueSim (ricavata dal loro CAD, già decimata, 126 k triangoli) e la converte in `assets/bluerov2_heavy/bluerov2_heavy.usd`.
+1. **Modello 3D del ROV.** Lancia `python -m uw py vehicles/bluerov2_heavy/fetch_bluerov2.py`.
+   - Scarica la Heavy di Blue Robotics da BlueSim (ricavata dal loro CAD, già decimata, 126 k triangoli) e la converte in `vehicles/bluerov2_heavy/assets/bluerov2_heavy.usd`.
    - Il file non va in git, per licenza (GPL-2.0) e dimensione.
    - Senza questo file la vasca mostra un parallelepipedo delle stesse misure.
-2. **Immagine di ArduSub SITL.** Lancia `docker compose -f docker/pool/compose.yaml build sitl` (circa 3 minuti).
+2. **Immagine di ArduSub SITL.** Lancia `docker compose -f deploy/docker/pool/compose.yaml build sitl` (circa 3 minuti).
 
-**Sulla Work:** la guida passo per passo è [hil/win/pool/README.md](../hil/win/pool/README.md) (installazione, avvio, verifica, problemi noti). In breve:
-1. Copia `hil/win/pool/wslconfig.example` in `%UserProfile%\.wslconfig`, poi esegui `wsl --shutdown`.
-2. In una distro Ubuntu WSL dedicata, dal repo: `bash hil/win/pool/setup_blueos_wsl.sh`.
+**Sulla Work:** la guida passo per passo è [deploy/hil/windows/pool/README.md](../deploy/hil/windows/pool/README.md) (installazione, avvio, verifica, problemi noti). In breve:
+1. Copia `deploy/hil/windows/pool/wslconfig.example` in `%UserProfile%\.wslconfig`, poi esegui `wsl --shutdown`.
+2. In una distro Ubuntu WSL dedicata, dal repo: `bash deploy/hil/windows/pool/setup_blueos_wsl.sh`.
    - Abilita systemd e installa Docker Engine, non Docker Desktop: BlueOS vuole la vera rete host.
    - La prima volta chiede di riavviare la distro: rilancialo dopo.
-3. Solo se SITL o il browser stanno su un'altra macchina: `hil\win\pool\firewall_pool.bat`, da amministratore.
+3. Solo se SITL o il browser stanno su un'altra macchina: `deploy\hil\windows\pool\firewall_pool.bat`, da amministratore.
 
 ## Avvio
 
@@ -61,27 +61,27 @@ Questo file è la guida operativa. Il resto è nel codice:
 
 **Su linus:**
 ```bash
-BLUEOS_HOST=<IPv4 della Work, LAN o Tailscale> docker compose -f docker/pool/compose.yaml up -d sitl mediamtx
+BLUEOS_HOST=<IPv4 della Work, LAN o Tailscale> docker compose -f deploy/docker/pool/compose.yaml up -d sitl mediamtx
 python -m uw pool                 # headless; --gui per vedere il viewport, --view chase per la vista da dietro
 sudo ufw allow in on tailscale0 to any port 8654 proto tcp    # una volta: la Work deve leggere lo stream
 ```
 
 **Sulla Work, in WSL:**
 ```bash
-docker compose -f docker/pool/compose.yaml --profile blueos up -d blueos
-python3 tools/pool_blueos_setup.py --blueos http://localhost --rtsp rtsp://<IP di linus>:8654/rov
+docker compose -f deploy/docker/pool/compose.yaml --profile blueos up -d blueos
+python3 sim/tools/pool_blueos_setup.py --blueos http://localhost --rtsp rtsp://<IP di linus>:8654/rov
 ```
 
 ### Scenario B: tutto sulla Work
 
-Isaac e la fisica nativi su Windows; SITL, mediamtx, BlueOS e l'estensione DVL in WSL2 (profilo `work`). Guida completa: [hil/win/pool/README.md](../hil/win/pool/README.md).
+Isaac e la fisica nativi su Windows; SITL, mediamtx, BlueOS e l'estensione DVL in WSL2 (profilo `work`). Guida completa: [deploy/hil/windows/pool/README.md](../deploy/hil/windows/pool/README.md).
 
 ```bat
-hil\win\pool\run_pool.bat --gui
+deploy\hil\windows\pool\run_pool.bat --gui
 ```
 
 Fa tutto lui:
-- porta su lo stack in WSL (`hil/win/pool/stack.sh up`);
+- porta su lo stack in WSL (`deploy/hil/windows/pool/stack.sh up`);
 - riavvia SITL;
 - configura BlueOS e il DVL in background, appena il veicolo c'è;
 - lancia Isaac con il profilo `workstation` (30 fps, riflessi accesi).
@@ -92,15 +92,15 @@ Con la rete mirrored di WSL, il `127.0.0.1` di WSL è quello di Windows:
 - Isaac pubblica su mediamtx su 8654.
 
 **Da verificare** al primo avvio (non provato). Le alternative, senza toccare file in git, sono nella guida, §5:
-- `docker/pool/.env` con `PHYSICS_HOST` e `DVL_HOST`;
+- `deploy/docker/pool/.env` con `PHYSICS_HOST` e `DVL_HOST`;
 - `--set physics.bind=0.0.0.0` e `--set dvl.device.bind=0.0.0.0`.
 
 ### Scenario C: tutto su linus (Isaac con la GUI, BlueOS locale, Cockpit desktop)
 
 ```bash
-BLUEOS_HOST=172.31.250.2 docker compose -f docker/pool/compose.yaml --profile blueos-local up -d
+BLUEOS_HOST=172.31.250.2 docker compose -f deploy/docker/pool/compose.yaml --profile blueos-local up -d
 python3 -m uw pool --gui          # viewport alle spalle del ROV; --gui-view onboard|free per cambiarlo
-python3 tools/pool_blueos_setup.py --blueos http://127.0.0.1:28080 --rtsp rtsp://172.31.250.1:8654/rov \
+python3 sim/tools/pool_blueos_setup.py --blueos http://127.0.0.1:28080 --rtsp rtsp://172.31.250.1:8654/rov \
     --dvl http://172.31.250.3     # in un altro terminale, con uw pool già partito (serve il DVL)
 ~/.local/opt/cockpit-1.19.0/Cockpit-linux-x86_64-1.19.0.AppImage --no-sandbox
 ```
@@ -111,8 +111,8 @@ python3 tools/pool_blueos_setup.py --blueos http://127.0.0.1:28080 --rtsp rtsp:/
   - `--no-sandbox` serve su Ubuntu 24.04, che vieta i namespace utente senza privilegi (`kernel.apparmor_restrict_unprivileged_userns = 1`): senza, Electron non parte.
 - **La camera di bordo con l'acqua** è in Cockpit, oppure nel browser su `http://localhost:8889/rov` (il viewer WebRTC di mediamtx). Il viewport di Isaac mostra il render grezzo, senza il post-processing dell'acqua.
 - **Gamepad:** un controller USB o Bluetooth collegato a linus, letto da Cockpit.
-- **Stop:** `Ctrl-C` su `uw pool`, poi `docker compose -f docker/pool/compose.yaml --profile blueos-local down`. BlueOS tiene la configurazione nel volume `uw-pool_blueos_local_config`, l'estensione DVL in `uw-pool_dvl_settings`.
-- **Riavvia SITL insieme alla fisica.** Un nuovo `uw pool` rimette il ROV al punto di partenza, ma l'EKF di ArduSub resta dov'era. La prua stimata ci mette decine di secondi a raggiungere quella vera, e intanto POSHOLD e la navigazione stimata lavorano su una prua sbagliata (misurato: 20–25° di errore, 45 cm su 1 m di traccia). Quindi, prima di ogni `uw pool`: `docker compose -f docker/pool/compose.yaml restart sitl`. `pool_smoke.py` lo controlla.
+- **Stop:** `Ctrl-C` su `uw pool`, poi `docker compose -f deploy/docker/pool/compose.yaml --profile blueos-local down`. BlueOS tiene la configurazione nel volume `uw-pool_blueos_local_config`, l'estensione DVL in `uw-pool_dvl_settings`.
+- **Riavvia SITL insieme alla fisica.** Un nuovo `uw pool` rimette il ROV al punto di partenza, ma l'EKF di ArduSub resta dov'era. La prua stimata ci mette decine di secondi a raggiungere quella vera, e intanto POSHOLD e la navigazione stimata lavorano su una prua sbagliata (misurato: 20–25° di errore, 45 cm su 1 m di traccia). Quindi, prima di ogni `uw pool`: `docker compose -f deploy/docker/pool/compose.yaml restart sitl`. `pool_smoke.py` lo controlla.
 
 ### Pilotare
 
@@ -135,7 +135,7 @@ python3 tools/pool_blueos_setup.py --blueos http://127.0.0.1:28080 --rtsp rtsp:/
 
 ### Controllo senza BlueOS
 
-`python -m uw py tools/pool_smoke.py` pilota il veicolo via MAVLink sulla seconda uscita di SITL (UDP 14560), come farebbe Cockpit, e verifica:
+`python -m uw py sim/tools/pool_smoke.py` pilota il veicolo via MAVLink sulla seconda uscita di SITL (UDP 14560), come farebbe Cockpit, e verifica:
 - i parametri;
 - l'armamento;
 - la discesa;
@@ -148,11 +148,11 @@ python3 tools/pool_blueos_setup.py --blueos http://127.0.0.1:28080 --rtsp rtsp:/
 
 Con `--dvl` (estensione DVL attiva e configurata) verifica anche: l'EKF ha la velocità orizzontale, POSHOLD si attiva e tiene il posto, si sposta con lo stick e tiene il nuovo posto, e la posizione stimata da ArduSub segue quella vera. Prima di tutto controlla che la prua stimata da ArduSub coincida con quella vera (entro 3° per 5 s).
 
-Per provare SITL senza GPU c'è la fisica da sola: `python -m uw py -m uw.rov.physics_proc` (il ROV è invisibile ma vola, e il DVL emulato c'è anche qui).
+Per provare SITL senza GPU c'è la fisica da sola: `python -m uw py -m vehicles.common.physics_proc` (il ROV è invisibile ma vola, e il DVL emulato c'è anche qui).
 
 ## Dimensioni della vasca
 
-`pool.size` in `config/pool/pool.yaml`: **50 × 25 m** con 5 m d'acqua, la pianta di una vasca olimpica con la profondità di una vasca da tuffi.
+`pool.size` in `sim/config/pool/pool.yaml`: **50 × 25 m** con 5 m d'acqua, la pianta di una vasca olimpica con la profondità di una vasca da tuffi.
 - `--preset pool10` riporta la 10 × 10 m di M11, con i suoi oggetti dove erano.
 - Seguono la dimensione da soli: pareti, fondo, griglia, superficie, scaletta (2 m dalla parete x = L), DVL e limite morbido della fisica. Le luci del soffitto sono una ogni `lights.ceiling.spacing_m` (5 m: 2 × 2 nella piccola, 10 × 5 nella grande). Gli oggetti sono messi in frazioni di L e W.
 - Non seguono la dimensione, quindi stanno nel preset: partenza del ROV, piano lontano della camera, disposizione degli oggetti COCO.
@@ -172,7 +172,7 @@ Il render costa per pixel, non per metro quadro. La vasca grande aggiunge solo 4
 
 ## Oggetti COCO
 
-Otto oggetti che hanno senso sott'acqua e che un YOLO addestrato su COCO conosce. Il catalogo è `config/pool/objects.yaml`: per ogni oggetto la classe COCO, le dimensioni reali, il materiale acustico e la sorgente del modello 3-D. La disposizione è `pool.objects`.
+Otto oggetti che hanno senso sott'acqua e che un YOLO addestrato su COCO conosce. Il catalogo è `sim/config/pool/objects.yaml`: per ogni oggetto la classe COCO, le dimensioni reali, il materiale acustico e la sorgente del modello 3-D. La disposizione è `pool.objects`.
 
 | id | classe COCO | modello | licenza |
 |---|---|---|---|
@@ -190,8 +190,8 @@ Nel catalogo ci sono anche `rowboat` (una barca a remi) e `backpack` (uno zaino 
 **Preparazione (una volta):**
 
 ```bash
-python -m uw py tools/fetch_props.py          # scarica, controlla lo sha256, converte in USD (Kit), scala e centra
-python3 tools/fetch_props.py --list           # cosa c'è, con le licenze
+python -m uw py sim/tools/fetch_props.py          # scarica, controlla lo sha256, converte in USD (Kit), scala e centra
+python3 sim/tools/fetch_props.py --list           # cosa c'è, con le licenze
 ```
 
 - I file vanno in `assets/props/<id>/<id>.usd`, fuori da git per licenza e dimensione. `assets/props/ATTRIBUTION.md` ha i crediti chiesti da CC-BY.
@@ -200,17 +200,17 @@ python3 tools/fetch_props.py --list           # cosa c'è, con le licenze
 - I materiali glTF trasparenti ("BLEND") diventano opachi: la bici altrimenti spariva.
 - **Senza i modelli** la vasca mostra al loro posto un parallelepipedo (o una sfera) delle stesse misure.
 
-**Il DVL li vede**: il catalogo dà a ogni oggetto un solido (box ruotato o sfera) delle sue misure, nella stessa lista di scaletta e props (`uw/pool_geometry.py`). I materiali acustici sono `plastic`, `steel`, `neoprene`, `fabric`.
+**Il DVL li vede**: il catalogo dà a ogni oggetto un solido (box ruotato o sfera) delle sue misure, nella stessa lista di scaletta e props (`physics/pool_geometry.py`). I materiali acustici sono `plastic`, `steel`, `neoprene`, `fabric`.
 
 **Ogni oggetto ha la sua etichetta semantica** (la classe COCO), quindi Replicator ne dà i box 2-D: la base per misurare un detector, o per addestrarne uno.
 
 ### Quanto li vede YOLO
 
-`uw pool --views NOME` non fa partire né la fisica né lo stream. Mette la camera davanti a ogni oggetto, a 2, 3, 4, 6 e 8 m da quattro direzioni, e scrive i fotogrammi con l'acqua applicata, più i box veri di Replicator. Poi `tools/eval_views.py` fa girare il modello e conta i colpi: classe giusta, IoU ≥ 0,5 con il box vero.
+`uw pool --views NOME` non fa partire né la fisica né lo stream. Mette la camera davanti a ogni oggetto, a 2, 3, 4, 6 e 8 m da quattro direzioni, e scrive i fotogrammi con l'acqua applicata, più i box veri di Replicator. Poi `sim/tools/eval_views.py` fa girare il modello e conta i colpi: classe giusta, IoU ≥ 0,5 con il box vero.
 
 ```bash
 python -m uw pool --views lit --view-height -0.2 --view-lights 1.0 [--preset turbid]   # camera a 20 cm sotto la cima dell'oggetto, luci accese
-$UW_YOLO_PYTHON tools/eval_views.py lit --model yolo26m.pt                              # tabella per classe e distanza
+$UW_YOLO_PYTHON sim/tools/eval_views.py lit --model yolo26m.pt                              # tabella per classe e distanza
 ```
 
 **Misurato** (2026-11-27, linus): `yolo26m`, conf 0,25, camera di fianco con le Lumen accese. Colpi su viste a 2 / 3 / 4 / 6 / 8 m (4 viste per distanza).
@@ -236,7 +236,7 @@ Cosa se ne ricava:
 
 ## Torbidità
 
-Un solo parametro, `water.turbidity_per_m` (b_p, in 1/m): il coefficiente di diffusione delle particelle sospese, uguale nei tre canali, perché particelle molto più grandi della lunghezza d'onda diffondono tutti i colori allo stesso modo (`uw/camera_uw.py`).
+Un solo parametro, `water.turbidity_per_m` (b_p, in 1/m): il coefficiente di diffusione delle particelle sospese, uguale nei tre canali, perché particelle molto più grandi della lunghezza d'onda diffondono tutti i colori allo stesso modo (`sim/camera_uw.py`).
 - Si somma all'attenuazione del segnale diretto e a quella della luce diffusa.
 - Sposta la luce diffusa di fondo dal blu dell'acqua limpida verso `water.turbidity_veil`, il colore della nuvola di particelle illuminata (grigio-verde, a occhio).
 
@@ -254,7 +254,7 @@ Cosa non c'è: le lampade del ROV illuminano le particelle subito davanti alla c
 
 ## Corrente
 
-L'acqua può muoversi: una corrente orizzontale, uguale in tutta la vasca in x e y, che entra solo nella dinamica del veicolo (`uw/rov/current.py`, `uw/rov/dynamics.py`). Non si vede nell'immagine: niente particelle che scorrono.
+L'acqua può muoversi: una corrente orizzontale, uguale in tutta la vasca in x e y, che entra solo nella dinamica del veicolo (`vehicles/common/current.py`, `vehicles/common/dynamics.py`). Non si vede nell'immagine: niente particelle che scorrono.
 
 **Il modello.** È quello di Fossen (2021, §10.3) per una corrente irrotazionale:
 - massa aggiunta e smorzamento vedono la velocità **rispetto all'acqua**;
@@ -266,7 +266,7 @@ Quindi, senza spinta, il ROV finisce per muoversi con l'acqua. Il DVL (bottom tr
 
 Senza il primo, un ROV fermo nell'acqua che ruota verrebbe "lanciato" fuori dalla sua particella d'acqua.
 
-**I parametri** (`current:` in `config/pool/pool.yaml`):
+**I parametri** (`current:` in `sim/config/pool/pool.yaml`):
 
 | Chiave | Cosa |
 |---|---|
@@ -284,24 +284,24 @@ python -m uw pool --preset gusty                   # 0,25 ± 0,08 m/s verso +x, 
 python -m uw pool --set current.speed_mps=0.3 --set current.direction_deg=45
 ```
 
-La corrente vale anche per la fisica da sola (`python -m uw py -m uw.rov.physics_proc --preset strong`), che la scrive nella riga di log ogni 2 s ("water … m/s").
+La corrente vale anche per la fisica da sola (`python -m uw py -m vehicles.common.physics_proc --preset strong`), che la scrive nella riga di log ogni 2 s ("water … m/s").
 
 **A simulazione avviata** si cambia con il canale di controllo, senza riavviare niente (vedi sotto). Il passaggio dal vecchio valore al nuovo è una rampa smoothstep di `--ramp` secondi, contati nel tempo simulato.
 
 ## Canale di controllo (`simctl`)
 
-Il processo della fisica (`uw pool`, oppure `uw.rov.physics_proc` da solo) ascolta su **TCP 9020**. Il protocollo è `uwsim/1`: JSON una riga per richiesta, solo stdlib (`uw/rov/simctl.py`, client `uw/rov/simctl_client.py`).
+Il processo della fisica (`uw pool`, oppure `vehicles.common.physics_proc` da solo) ascolta su **TCP 9020**. Il protocollo è `uwsim/1`: JSON una riga per richiesta, solo stdlib (`vehicles/common/simctl.py`, client `vehicles/common/simctl_client.py`).
 - **Su linus** ascolta su `127.0.0.1` e sul bridge docker `172.31.250.1`, da dove lo raggiunge il container ROS.
 - **Sulla Work** ascolta solo sul loopback, che WSL vede in modalità mirrored.
 
 ```bash
-python3 tools/simctl.py hello                                   # versione, vasca, corrente, dispositivi, SITL vivo?
-python3 tools/simctl.py current --speed 0.3 --dir 90 --ramp 3   # corrente dal vivo
-python3 tools/simctl.py still --ramp 2                          # acqua ferma
-python3 tools/simctl.py stream --rate 5                         # posizione vera, velocità sul fondo e dell'acqua
-python3 tools/simctl.py reposition 5 5                          # sposta il ROV in orizzontale
-python3 tools/simctl.py device a50 acoustic_enabled=false       # spegne il ping dell'A50 (dropout)
-python3 tools/simctl.py stats                                   # tempo di passo p50/p95/max, pacchetti, stalli
+python3 sim/tools/simctl.py hello                                   # versione, vasca, corrente, dispositivi, SITL vivo?
+python3 sim/tools/simctl.py current --speed 0.3 --dir 90 --ramp 3   # corrente dal vivo
+python3 sim/tools/simctl.py still --ramp 2                          # acqua ferma
+python3 sim/tools/simctl.py stream --rate 5                         # posizione vera, velocità sul fondo e dell'acqua
+python3 sim/tools/simctl.py reposition 5 5                          # sposta il ROV in orizzontale
+python3 sim/tools/simctl.py device a50 acoustic_enabled=false       # spegne il ping dell'A50 (dropout)
+python3 sim/tools/simctl.py stats                                   # tempo di passo p50/p95/max, pacchetti, stalli
 ```
 
 - **`reposition` è solo orizzontale.** Profondità e assetto restano, velocità e spinte vanno a zero, così baro, bussola, giroscopi e DVL non vedono niente e l'EKF di ArduSub non se ne accorge. Il target di POSHOLD però è in coordinate EKF: riposiziona in ALT_HOLD, non in POSHOLD.
@@ -327,21 +327,21 @@ python3 tools/simctl.py stats                                   # tempo di passo
 
 Un Water Linked DVL A50 sotto la Heavy, a 0,14 m sotto il baricentro, rivolto in basso. Sono tre pezzi:
 
-1. **Il sensore** (`uw/rov/dvl.py`, `docs/dvl.md`): lo stesso modello della vasca del gas.
+1. **Il sensore** (`vehicles/common/dvl.py`, `docs/dvl.md`): lo stesso modello della vasca del gas.
    - Quattro fasci a 22,5°, aggancio al fondo con il rapporto segnale/rumore, rumore, bias lento, fattore di scala.
-   - I fasci colpiscono la geometria della piscina (`uw/pool_geometry.py`): fondo, pareti, scaletta, oggetti. Sono la stessa lista di solidi della scena USD, così quello che vede la camera e quello che misura il DVL non possono divergere.
+   - I fasci colpiscono la geometria della piscina (`physics/pool_geometry.py`): fondo, pareti, scaletta, oggetti. Sono la stessa lista di solidi della scena USD, così quello che vede la camera e quello che misura il DVL non possono divergere.
    - Le pareti fermano i fasci. Vicino a una parete un fascio la colpisce di striscio, l'eco è debole e il DVL può perdere l'aggancio, come quello vero. Lo stesso succede sul tubo.
-2. **Il dispositivo in rete** (`uw/rov/a50.py`), dentro il processo della fisica.
+2. **Il dispositivo in rete** (`vehicles/common/a50.py`), dentro il processo della fisica.
    - Protocollo JSON di Water Linked `json_v3.3` su TCP 16171: report di velocità, dead reckoning `position_local` a 5 Hz, comandi (`get_config`, `set_config`, `reset_dead_reckoning`, `trigger_ping`, …).
    - L'API HTTP che l'estensione interroga, sulla porta 8061 perché la 80 su linus è occupata.
    - Timestamp in tempo Unix, come il dispositivo vero.
 3. **L'estensione DVL di BlueOS**, la stessa del ROV vero (`bluerobotics/blueos-water-linked-dvl:v1.0.11`), senza modifiche.
    - Legge il DVL e manda ad ArduSub `VISION_POSITION_DELTA`, l'altitudine come rangefinder e l'origine EKF.
-   - Sul ROV vero raggiunge BlueOS come `host.docker.internal`. Qui al suo posto c'è `dvl-gateway` (un nginx, `docker/pool/dvl_gateway.conf.template`), per due motivi: il BlueOS locale non ha il socket docker per le estensioni, e cable_guy è spento (gestirebbe la rete dell'host), mentre l'estensione lo aspetta all'avvio.
+   - Sul ROV vero raggiunge BlueOS come `host.docker.internal`. Qui al suo posto c'è `dvl-gateway` (un nginx, `deploy/docker/pool/dvl_gateway.conf.template`), per due motivi: il BlueOS locale non ha il socket docker per le estensioni, e cable_guy è spento (gestirebbe la rete dell'host), mentre l'estensione lo aspetta all'avvio.
    - Il gateway inoltra mavlink2rest a BlueOS, risponde al posto di cable_guy e serve la pagina dell'estensione su `http://172.31.250.3`.
    - Sulla Work (profilo `work`) l'estensione gira in rete host accanto a BlueOS (servizio `dvl-host`, pagina su `http://localhost:9001`). Il gateway (`dvl-gateway-host`) resta da solo sulla rete bridge e da lì raggiunge BlueOS su 172.31.250.1. Su linus questa variante è stata provata con BlueOS locale: `pool_smoke.py --dvl` 18/18.
 
-**Lato ArduSub** (`docker/ardusub_sitl/params/pool.parm`): EKF3 con posizione e velocità orizzontali dal DVL (`EK3_SRC1_POSXY/VELXY 6`), `VISO_TYPE 1`, `RNGFND1_TYPE 10`. Sono i valori che imposta l'estensione stessa, messi già come default perché `VISO_TYPE` vale solo dopo un riavvio. `pool_blueos_setup.py --dvl` fa quello che farebbe un operatore sulla pagina dell'estensione:
+**Lato ArduSub** (`deploy/docker/ardusub_sitl/params/pool.parm`): EKF3 con posizione e velocità orizzontali dal DVL (`EK3_SRC1_POSXY/VELXY 6`), `VISO_TYPE 1`, `RNGFND1_TYPE 10`. Sono i valori che imposta l'estensione stessa, messi già come default perché `VISO_TYPE` vale solo dopo un riavvio. `pool_blueos_setup.py --dvl` fa quello che farebbe un operatore sulla pagina dell'estensione:
 - carica i parametri "DVL";
 - sceglie `POSITION_DELTA`;
 - attiva il rangefinder;
@@ -364,7 +364,7 @@ L'errore della posizione stimata viene da due scale che si sommano:
 
 Sul ROV vero la velocità del suono si imposta dalla pagina web dell'A50; qui con `set_config`.
 
-**Ancora incerti** (UNVERIFIED in `config/pool/pool.yaml`):
+**Ancora incerti** (UNVERIFIED in `sim/config/pool/pool.yaml`):
 - come cala la frequenza dei report con l'altitudine. Water Linked pubblica solo l'intervallo 2–15 Hz, e la forma conta per la qualità di POSHOLD;
 - il riferimento d'eco (`rssi_ref_dbm`);
 - i materiali acustici della piscina;
@@ -372,7 +372,7 @@ Sul ROV vero la velocità del suono si imposta dalla pagina web dell'A50; qui co
 
 ## Nucleus1000
 
-Il secondo DVL del confronto: un Nortek Nucleus1000 (DVL a tre fasci, AHRS e INS nello stesso strumento) emulato nel processo della fisica come l'A50 (`uw/rov/nucleus.py`). Lo leggono, senza modifiche, i tre client di Nortek:
+Il secondo DVL del confronto: un Nortek Nucleus1000 (DVL a tre fasci, AHRS e INS nello stesso strumento) emulato nel processo della fisica come l'A50 (`vehicles/common/nucleus.py`). Lo leggono, senza modifiche, i tre client di Nortek:
 - il driver Python `nucleus_driver` (1.7.0 e 1.7.8);
 - l'estensione BlueOS `nortekgroup/blueos_nucleus:2.0.11`;
 - il nodo ROS 2.
@@ -380,19 +380,19 @@ Il secondo DVL del confronto: un Nortek Nucleus1000 (DVL a tre fasci, AHRS e INS
 **Come è fatto.** È ricavato dal sorgente di quei client e dal manuale N3015-033; dettagli in `docs/dvl.md`.
 - **Rete:** TCP 9000 con password (`nortek`), comandi ASCII o NMEA, un client alla volta; TCP 9002 solo dati.
 - **Pacchetti:** AHRS 0xD2 a 20 Hz, bottom track 0xB4 e altimetro 0xAA sulla frequenza di trigger (8 Hz, un ping su quattro all'altimetro), INS 0xDC a 10 Hz.
-- **Fasci:** il modello di `uw/rov/dvl.py`, con tre fasci a 25° e tutti e tre necessari (config `nucleus:`; valori UNVERIFIED dove il datasheet non li dà).
+- **Fasci:** il modello di `vehicles/common/dvl.py`, con tre fasci a 25° e tutti e tre necessari (config `nucleus:`; valori UNVERIFIED dove il datasheet non li dà).
 - **AHRS:** l'assetto vero con rumore e un errore di prua lento.
 - **INS:** integra la velocità sul fondo con l'assetto dell'AHRS, come lo strumento.
 
 **Avvio** (al posto dell'A50, scenario C):
 
 ```bash
-docker compose -f docker/pool/compose.yaml stop dvl                       # l'estensione Water Linked
+docker compose -f deploy/docker/pool/compose.yaml stop dvl                       # l'estensione Water Linked
 SITL_PARAM_FILES=/opt/ardupilot/default_params/sub-6dof.parm,/params/pool.parm,/params/nucleus.parm SITL_WIPE=1 \
-  BLUEOS_HOST=172.31.250.2 docker compose -f docker/pool/compose.yaml up -d --force-recreate sitl
-BLUEOS_HOST=172.31.250.2 docker compose -f docker/pool/compose.yaml --profile blueos-local --profile nucleus up -d nucleus
-python3 -m uw pool --preset nucleus           # oppure la fisica da sola: python3 -m uw.rov.physics_proc --preset nucleus
-python3 tools/pool_blueos_setup.py --blueos http://127.0.0.1:28080 --rtsp rtsp://172.31.250.1:8654/rov --nucleus http://172.31.250.7
+  BLUEOS_HOST=172.31.250.2 docker compose -f deploy/docker/pool/compose.yaml up -d --force-recreate sitl
+BLUEOS_HOST=172.31.250.2 docker compose -f deploy/docker/pool/compose.yaml --profile blueos-local --profile nucleus up -d nucleus
+python3 -m uw pool --preset nucleus           # oppure la fisica da sola: python3 -m vehicles.common.physics_proc --preset nucleus
+python3 sim/tools/pool_blueos_setup.py --blueos http://127.0.0.1:28080 --rtsp rtsp://172.31.250.1:8654/rov --nucleus http://172.31.250.7
 ```
 
 - **L'estensione di Nortek** si collega e parte da sola: compose le scrive `autoconnect` e `autostart`. La sua pagina è `http://172.31.250.7`.
@@ -417,28 +417,28 @@ Una prova per DVL: il confronto vero lo farà il banco (P9), con le ripetizioni.
 
 ## Riconoscimento con YOLO
 
-`ros/yolo_detector` fa girare un modello Ultralytics sulla camera di bordo, sull'host con ROS 2 Jazzy. Legge lo stesso stream H.264 che BlueOS passa a Cockpit (`rtsp://127.0.0.1:8654/rov`), quindi:
+`ros/src/yolo_detector` fa girare un modello Ultralytics sulla camera di bordo, sull'host con ROS 2 Jazzy. Legge lo stesso stream H.264 che BlueOS passa a Cockpit (`rtsp://127.0.0.1:8654/rov`), quindi:
 - la simulazione non cambia e non le serve ROS;
 - il detector vede gli artefatti dell'encoder e il ritardo della rete, come sul ROV vero;
 - sul ROV vero cambia solo `--source` (lo stream RTSP di BlueOS).
 
-**Il Python.** Serve un Python 3.12 con Ultralytics e torch CUDA, separato da quello di sistema: `ros/yolo_detector/requirements.txt`.
+**Il Python.** Serve un Python 3.12 con Ultralytics e torch CUDA, separato da quello di sistema: `ros/src/yolo_detector/requirements.txt`.
 - Su linus c'è già: `export UW_YOLO_PYTHON=/HDD2T/dev_ws/py_venv/bin/python`.
-- Altrove: `python3 -m venv ~/.cache/uw_yolo/venv && ~/.cache/uw_yolo/venv/bin/pip install -r ros/yolo_detector/requirements.txt` (circa 5 GB, per torch). `run.sh` lo usa da solo.
+- Altrove: `python3 -m venv ~/.cache/uw_yolo/venv && ~/.cache/uw_yolo/venv/bin/pip install -r ros/src/yolo_detector/requirements.txt` (circa 5 GB, per torch). `run.sh` lo usa da solo.
 - numpy resta sotto la 2: rclpy di Jazzy è compilato con numpy 1.26.
 
 **Avvio**, con `uw pool` già partito:
 ```bash
-ros/yolo_detector/run.sh                                                # COCO yolo26n, topic ROS sul dominio 73
-ros/yolo_detector/run.sh --video-out rtsp://127.0.0.1:8654/rov_yolo     # + l'overlay nel browser: http://localhost:8889/rov_yolo
-ros/yolo_detector/run.sh --track --publish-camera                       # id di tracking, e la camera come topic ROS
-ros/yolo_detector/run.sh --no-ros --source video.mp4 --video-out out.mp4   # offline, senza ROS: ogni fotogramma
+ros/src/yolo_detector/run.sh                                                # COCO yolo26n, topic ROS sul dominio 73
+ros/src/yolo_detector/run.sh --video-out rtsp://127.0.0.1:8654/rov_yolo     # + l'overlay nel browser: http://localhost:8889/rov_yolo
+ros/src/yolo_detector/run.sh --track --publish-camera                       # id di tracking, e la camera come topic ROS
+ros/src/yolo_detector/run.sh --no-ros --source video.mp4 --video-out out.mp4   # offline, senza ROS: ogni fotogramma
 ```
 - **Topic** (dominio `UW_ROS_DOMAIN_ID`, default 73): `/rov1/perception/camera/detections` (`vision_msgs/Detection2DArray`: box in pixel, `class_id` = nome della classe, `id` = id di tracking con `--track`) e `/rov1/perception/camera/overlay` (l'immagine annotata, per `rqt_image_view`).
 - **In Cockpit** (non provato): in BlueOS aggiungi `rtsp://172.31.250.1:8654/rov_yolo` come secondo stream "Redirect", come quello della camera.
 - **Il modello:** `--model` accetta un percorso o un nome. Un nome viene cercato in `assets/models/` (fuori da git), dove Ultralytics lo scarica la prima volta. Vanno bene `.pt`, `.onnx` e `.engine`, nei task detect, segment e pose.
 - **Le installazioni automatiche di Ultralytics sono spente:** un pacchetto che manca è un errore, non un `pip install` a metà corsa.
-- Tutte le opzioni: `ros/yolo_detector/run.sh --help`.
+- Tutte le opzioni: `ros/src/yolo_detector/run.sh --help`.
 
 **Cosa riconosce.** Dal 2026-11-27 in vasca ci sono gli oggetti COCO: vedi "Oggetti COCO" sopra, con le misure per classe. In breve: con `--model yolo26m.pt` sei classi su otto si riconoscono bene in acqua limpida: fino a 4 m bottiglia e pallone, fino a 8 m sub, bici, sedia e valigia. La canoa si riconosce a fatica, lo zaino mai. Sulla vasca nuda (pipe, blocco, scacchiera, scaletta) un modello COCO non trova niente. Per quella le strade sono due:
 - **Prompt di testo, senza addestramento:** `--model yoloe-26s-seg.pt --prompts "pipe,concrete block,checkerboard,ladder"`. Serve il CLIP di Ultralytics: `$UW_YOLO_PYTHON -m pip install git+https://github.com/ultralytics/CLIP.git` (non ancora installato nel venv di linus, quindi non provato). Il modello YOLOE "prompt-free" (`-pf`) sulla piscina dà solo etichette a caso.
@@ -463,7 +463,7 @@ ros/yolo_detector/run.sh --no-ros --source video.mp4 --video-out out.mp4   # off
 | linus, scenario C | 172.31.250.3:80 | `dvl-gateway`: la pagina dell'estensione DVL |
 | Work, scenario B | TCP 9001 | la pagina dell'estensione DVL (`dvl-host`) |
 | macchina sim | TCP 127.0.0.1:9997 | API di mediamtx: la camera sta pubblicando? (`stack.sh status`) |
-| macchina sim | TCP 9020 | canale di controllo della simulazione (`tools/simctl.py`): loopback, e su linus anche 172.31.250.1 |
+| macchina sim | TCP 9020 | canale di controllo della simulazione (`sim/tools/simctl.py`): loopback, e su linus anche 172.31.250.1 |
 | macchina sim | TCP 9000, TCP 9002 | il Nucleus1000 emulato (`--preset nucleus`): comandi con password, solo dati |
 | linus | 172.31.250.7:80 | la pagina dell'estensione Nortek (profilo `nucleus`) |
 | BlueOS | UDP 14551 | MAVLink da SITL (master della board Manual) |
@@ -520,7 +520,7 @@ Sulla Work restano accesi (profilo `workstation`).
 
 ## Da verificare (non ancora provato)
 
-Tutto lo scenario B, con la tabella di verifica di [hil/win/pool/README.md](../hil/win/pool/README.md) (§4). In particolare:
+Tutto lo scenario B, con la tabella di verifica di [deploy/hil/windows/pool/README.md](../deploy/hil/windows/pool/README.md) (§4). In particolare:
 
 - BlueOS in WSL2 con la rete mirrored sulla Work, e Cockpit con il video WebRTC e il gamepad. Sono state verificate su linus, con un BlueOS 1.5.0-beta.43 isolato:
   - la board Manual;

@@ -36,7 +36,7 @@ Sulla work, in `underwater_ws` (`output\` è ignorato da git):
 
 | File | A cosa serve |
 |---|---|
-| `tools\debug_sim.py` | avvia `uw sim` come il launcher nativo, ma stampa subito il traceback, mostra i log INFO e scrive le statistiche in `output\debug_stats.json` |
+| `sim\tools\debug_sim.py` | avvia `uw sim` come il launcher nativo, ma stampa subito il traceback, mostra i log INFO e scrive le statistiche in `output\debug_stats.json` |
 | `output\hil\hil_env.bat` | variabili ROS 2 per Windows (distribuzione, dominio, profilo DDS, DLL del bridge) |
 | `output\hil\fastdds_win.xml` | profilo Fast DDS della work |
 | `output\hil\netcheck.py` | test di rete TCP/UDP (throughput, RTT, perdite), solo libreria standard |
@@ -51,7 +51,7 @@ Sul Thor, nella home: `~/hil_env.sh`, `~/hil_fastdds.xml`, `~/netcheck.py`.
 ```bat
 .\uw.bat
 call output\hil\hil_env.bat
-python tools\debug_sim.py --gui --sink ros --set lights.ambient_dome=300 > output\hil\run.log 2>&1
+python sim\tools\debug_sim.py --gui --sink ros --set lights.ambient_dome=300 > output\hil\run.log 2>&1
 ```
 
 Il terminale resta muto perché il log va su file. Per fermare la scena: chiudere la finestra di Isaac e premere Invio nel terminale (scrive `output\debug_stats.json`).
@@ -72,7 +72,7 @@ In Jazzy `ros2 topic hz` non ha opzioni QoS e si sottoscrive già in best-effort
 | Sintomo | Causa | Soluzione |
 |---|---|---|
 | La scena si chiudeva dopo 3 s, senza errori | `torch 2.7.0+cpu`: il sonar alloca tensori su CUDA | `pip install torch==2.7.0+cu126 --index-url https://download.pytorch.org/whl/cu126` (il suffisso `+cu126` è necessario, altrimenti pip considera soddisfatto `2.7.0+cpu`) |
-| Nessun traceback, mancavano le righe `setup` e `running` | `main.main()` chiude Kit in un `finally`, e Kit in console mostra solo i Warning | `tools\debug_sim.py` |
+| Nessun traceback, mancavano le righe `setup` e `running` | `main.main()` chiude Kit in un `finally`, e Kit in console mostra solo i Warning | `sim\tools\debug_sim.py` |
 | `uw.bat` stampava sempre `uscita: 0` | `%ERRORLEVEL%` viene espanso dentro il blocco `( )` prima che Python parta | correzione qui sotto (da applicare) |
 | `ros2 topic list` sul Thor vedeva solo `/rosout` e `/parameter_events` | il firewall di Windows scartava il traffico in ingresso dal Thor | vedi sezione Firewall |
 
@@ -81,9 +81,9 @@ Correzione di `uw.bat`: sostituire le righe 39–51 (`if "%~1"=="" ( … ) else 
 ```bat
 if not "%~1"=="" goto :run
 echo [uw] Pronto. Esempi:
-echo        python setup_native.py --write
+echo        python deploy\hil\windows\setup_native.py --write
 echo        python -m uw sim --gui --sink none --set lights.ambient_dome=300
-echo        python tools\debug_sim.py
+echo        python sim\tools\debug_sim.py
 echo.
 cmd /k
 exit /b

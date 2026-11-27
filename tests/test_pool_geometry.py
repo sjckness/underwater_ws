@@ -1,4 +1,4 @@
-"""uw/pool_geometry.py: the pool's solids and the DVL's ray casting against them (host, numpy only)."""
+"""physics/pool_geometry.py: the pool's solids and the DVL's ray casting against them (host, numpy only)."""
 import math
 import sys
 from pathlib import Path
@@ -9,7 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from uw import config  # noqa: E402
-from uw.pool_geometry import Box, Cylinder, PoolBottom, Quad, solids  # noqa: E402
+from physics.pool_geometry import Box, Cylinder, PoolBottom, Quad, solids  # noqa: E402
 
 DOWN = np.array([[0.0, 0.0, -1.0]])
 
@@ -42,7 +42,7 @@ def test_straight_down_on_the_floor(bottom):
     ((2.0, 9.7, 2.0), (0.0, 1.0, -0.1), (0, -1, 0)),
 ])
 def test_the_walls_stop_a_beam_and_face_the_water(bottom, origin, direction, normal):
-    """Unlike the tank's (uw.geometry.ray_bottom), the pool's walls are occluders: a tilted beam near one hits it."""
+    """Unlike the tank's (physics.geometry.ray_bottom), the pool's walls are occluders: a tilted beam near one hits it."""
     d = np.asarray(direction) / np.linalg.norm(direction)
     t, n, role = hit(bottom, origin, d)
     assert role == "wall" and np.allclose(n, normal)
@@ -89,7 +89,7 @@ def test_the_ladder_is_there(bottom):
 
 def test_the_solids_follow_the_switches(cfg):
     kinds = {type(s) for s in solids(cfg)}
-    from uw.pool_geometry import Sphere
+    from physics.pool_geometry import Sphere
     assert kinds == {Box, Cylinder, Quad, Sphere}
     off = config.load(config.POOL_CONFIG, presets=["pool10"],
                       overrides=["pool.props=false", "pool.ladder=false", "pool.objects=[]"])
@@ -129,7 +129,7 @@ def test_the_props_and_the_ladder_follow_the_size(presets, lw):
 
 @pytest.mark.parametrize("presets, grid", [(["pool10"], (2, 2)), ([], (10, 5))])
 def test_the_hall_lights_keep_their_density(presets, grid):
-    from uw.pool_geometry import ceiling_grid
+    from physics.pool_geometry import ceiling_grid
     assert ceiling_grid(config.load(config.POOL_CONFIG, presets=presets)) == grid
 
 
@@ -148,7 +148,7 @@ def test_a_bad_prop_is_a_config_error(cfg):
 
 def _with(cfg, solid):
     import copy
-    from uw import pool_geometry
+    from physics import pool_geometry
     c = copy.deepcopy(cfg)
     c["pool"]["props"], c["pool"]["ladder"] = [], False
     b = PoolBottom(c)
@@ -158,7 +158,7 @@ def _with(cfg, solid):
 
 
 def test_a_box_turned_about_z_is_hit_on_its_own_faces(cfg):
-    from uw.pool_geometry import Box as B
+    from physics.pool_geometry import Box as B
     b, _ = _with(cfg, B("obj", (5.0, 5.0, 0.5), (2.0, 0.4, 1.0), "thing", yaw_deg=90.0))
     # turned by 90 deg the long side runs along y: a beam down at (5, 5.9) hits it, one at (5.9, 5) does not
     t, n, role = hit(b, (5.0, 5.9, 2.0), DOWN)
@@ -173,7 +173,7 @@ def test_a_box_turned_about_z_is_hit_on_its_own_faces(cfg):
 
 
 def test_a_sphere_is_hit_on_its_surface(cfg):
-    from uw.pool_geometry import Sphere
+    from physics.pool_geometry import Sphere
     b, _ = _with(cfg, Sphere("ball", (5.0, 5.0, 0.11), 0.11, "thing"))
     t, n, role = hit(b, (5.0, 5.0, 1.0), DOWN)
     assert role == "thing" and t == pytest.approx(1.0 - 0.22) and np.allclose(n, [0, 0, 1])
@@ -186,7 +186,7 @@ def test_a_sphere_is_hit_on_its_surface(cfg):
 # ------------------------------------------------------------------------------- COCO objects (M12 P4)
 
 def test_placed_objects_are_dvl_solids_with_their_class():
-    from uw.pool_geometry import Sphere, object_catalog, placed_objects
+    from physics.pool_geometry import Sphere, object_catalog, placed_objects
     cfg = config.load(config.POOL_CONFIG, presets=["pool10"], overrides=[
         "pool.objects=[{id: chair, at: [0.2, 0.3], yaw_deg: 30}, {id: ball, at: [0.7, 0.2]},"
         " {id: chair, name: chair_2, at: [0.25, 0.35]}]"])

@@ -1,4 +1,4 @@
-"""The pool's docker stack and its tools (docker/pool/compose.yaml, tools/pool_blueos_setup.py, hil/win/pool/): the
+"""The pool's docker stack and its tools (deploy/docker/pool/compose.yaml, sim/tools/pool_blueos_setup.py, deploy/hil/windows/pool/): the
 addresses the services agree on, line endings that survive a Windows checkout, the setup's wait for the vehicle.
 Host only, no docker: the files are read as data."""
 import json
@@ -12,11 +12,11 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(ROOT / "sim" / "tools"))
 
 from uw import config  # noqa: E402
 
-COMPOSE = yaml.safe_load((ROOT / "docker/pool/compose.yaml").read_text())
+COMPOSE = yaml.safe_load((ROOT / "deploy/docker/pool/compose.yaml").read_text())
 SERVICES = COMPOSE["services"]
 
 
@@ -61,12 +61,12 @@ def test_the_a50_binds_where_its_extension_looks():
     assert "172.31.250.1:" in SERVICES["dvl"]["environment"]["DVL_HOST"]
 
 
-@pytest.mark.parametrize("path", ["docker/ardusub_sitl/entrypoint.sh", "docker/ardusub_sitl/params/pool.parm",
-                                  "docker/pool/compose.yaml", "docker/pool/dvl_gateway.conf.template",
-                                  "hil/win/pool/stack.sh", "hil/win/pool/setup_blueos_wsl.sh"])
+@pytest.mark.parametrize("path", ["deploy/docker/ardusub_sitl/entrypoint.sh", "deploy/docker/ardusub_sitl/params/pool.parm",
+                                  "deploy/docker/pool/compose.yaml", "deploy/docker/pool/dvl_gateway.conf.template",
+                                  "deploy/hil/windows/pool/stack.sh", "deploy/hil/windows/pool/setup_blueos_wsl.sh"])
 def test_files_read_in_linux_stay_lf(path):
     """On the Work the WSL stack runs from the Windows checkout: .gitattributes must pin these to LF, and a
-    checkout made before it shows up here (hil/win/pool/README.md, 'Fine riga')."""
+    checkout made before it shows up here (deploy/hil/windows/pool/README.md, 'Fine riga')."""
     assert b"\r" not in (ROOT / path).read_bytes(), f"{path} has CRLF line endings"
 
 
@@ -129,7 +129,7 @@ def test_the_nucleus_extension_reaches_the_gateway_and_the_emulated_device():
 
 
 def test_the_nucleus_parameters_take_position_velocity_and_yaw_from_external_navigation():
-    parm = dict(line.split()[:2] for line in (ROOT / "docker/ardusub_sitl/params/nucleus.parm").read_text().splitlines()
+    parm = dict(line.split()[:2] for line in (ROOT / "deploy/docker/ardusub_sitl/params/nucleus.parm").read_text().splitlines()
                 if line.strip() and not line.startswith("#"))
     assert parm["EK3_SRC1_POSXY"] == parm["EK3_SRC1_VELXY"] == parm["EK3_SRC1_YAW"] == "6"
     assert parm["VISO_TYPE"] == "1"
