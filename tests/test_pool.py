@@ -38,12 +38,15 @@ def test_pool_profiles_set_the_same_keys():
     assert leaves(a) == leaves(b)
 
 
-def test_pool_start_is_inside_the_tank_and_at_the_surface():
-    cfg = config.load(POOL)
+@pytest.mark.parametrize("presets", [[], ["pool10"]])
+def test_pool_start_is_inside_the_tank_and_at_the_surface(presets):
+    cfg = config.load(POOL, presets=presets)
     x, y, z, _ = cfg["vehicle"]["start"]
-    L, W, _ = cfg["pool"]["size"]
+    L, W, H = cfg["pool"]["size"]
     assert 0.5 < x < L - 0.5 and 0.5 < y < W - 0.5
     assert abs(cfg["pool"]["water_level"] - z) < 0.2, "the vehicle starts floating, as one is launched"
+    assert cfg["pool"]["water_level"] < H, "the walls stand out of the water"
+    assert cfg["camera"]["clip_m"][1] >= np.hypot(L, W), "the far plane reaches the far corner"
 
 
 def test_water_model_limits():

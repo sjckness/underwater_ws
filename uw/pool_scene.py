@@ -268,7 +268,7 @@ def _prop_look(stage, role: str, texture_dir: Path):
 def _hall_lights(stage, cfg: dict) -> None:
     L, W, _ = (float(v) for v in get(cfg, "pool.size"))
     c = get(cfg, "lights.ceiling")
-    nx, ny = (int(v) for v in c["grid"])
+    nx, ny = pool_geometry.ceiling_grid(cfg)
     z = float(get(cfg, "pool.water_level")) + float(c["height_m"])
     for i in range(nx):
         for j in range(ny):

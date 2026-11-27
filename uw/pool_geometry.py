@@ -53,20 +53,46 @@ def solids(cfg: dict) -> list:
     L, W, _ = (float(v) for v in get(cfg, "pool.size"))
     wl = float(get(cfg, "pool.water_level"))
     out: list = []
-    if get(cfg, "pool.ladder"):                                 # stainless, on the y = 0 wall
+    if get(cfg, "pool.ladder"):                                 # stainless, on the y = 0 wall, 2 m from the x = L one
         x0, y0, top = L - 2.0, 0.15, wl + 0.9
         bottom = wl - 1.5
         for side, x in (("a", x0), ("b", x0 + 0.5)):
             out.append(Cylinder(f"ladder/rail_{side}", (x, y0, (bottom + top) / 2), 0.02, top - bottom, "Z", "ladder"))
         for r in range(5):
             out.append(Cylinder(f"ladder/rung_{r}", (x0 + 0.25, y0, wl - 1.4 + 0.3 * r), 0.015, 0.5, "X", "ladder"))
-    if get(cfg, "pool.props"):                                  # on the floor
-        out.append(Box("props/block", (3.0, 6.0, 0.1), (0.4, 0.2, 0.2), "block"))
-        out.append(Cylinder("props/pipe", (6.5, 6.5, 0.15), 0.15, 1.5, "X", "pipe"))
-        cx, cy, s = 5.0, 8.5, 0.6                               # a marker board standing up, facing the start
-        out.append(Quad("props/board", ((cx - s / 2, cy, 0.05), (cx + s / 2, cy, 0.05), (cx + s / 2, cy, 0.05 + s),
-                                        (cx - s / 2, cy, 0.05 + s)), "board"))
+    for prop in get(cfg, "pool.props") or ():                   # on the floor
+        out.append(_prop(prop, L, W))
     return out
+
+
+def _prop(prop: dict, L: float, W: float):
+    """One entry of ``pool.props``: ``at`` is [x, y] as fractions of the pool's length and width, so the layout
+    follows ``pool.size``; the sizes are metres. Kinds: box (``size``, ``z`` its centre), cylinder (``radius``,
+    ``length``, ``axis``, ``z``), board (a square marker board of side ``size`` standing on the floor, facing -y)."""
+    from .config import ConfigError
+    try:
+        name, kind, role = str(prop["name"]), str(prop["kind"]), str(prop.get("role", prop["kind"]))
+        x, y = float(prop["at"][0]) * L, float(prop["at"][1]) * W
+        if kind == "box":
+            return Box(f"props/{name}", (x, y, float(prop["z"])), tuple(float(v) for v in prop["size"]), role)
+        if kind == "cylinder":
+            return Cylinder(f"props/{name}", (x, y, float(prop["z"])), float(prop["radius"]), float(prop["length"]),
+                            str(prop["axis"]), role)
+        if kind == "board":
+            s, z0 = float(prop["size"]), float(prop.get("z", 0.05))
+            return Quad(f"props/{name}", ((x - s / 2, y, z0), (x + s / 2, y, z0), (x + s / 2, y, z0 + s),
+                                          (x - s / 2, y, z0 + s)), role)
+    except (KeyError, TypeError, IndexError, ValueError) as exc:
+        raise ConfigError(f"pool.props entry {prop!r}: {exc!r}") from None
+    raise ConfigError(f"pool.props entry {prop.get('name')!r}: kind must be box | cylinder | board, got {kind!r}")
+
+
+def ceiling_grid(cfg: dict) -> tuple[int, int]:
+    """The hall lights along x and y (uw/pool_scene.py): one every ``lights.ceiling.spacing_m``, at least one, so a
+    bigger pool keeps the same light per square metre."""
+    L, W, _ = (float(v) for v in get(cfg, "pool.size"))
+    sp = float(get(cfg, "lights.ceiling.spacing_m"))
+    return max(1, round(L / sp)), max(1, round(W / sp))
 
 
 # ----------------------------------------------------------------------------------------- ray casting

@@ -1,0 +1,15 @@
+# Size preset "pool10" (python -m uw pool --preset pool10): the M11 test tank, 10 x 10 m with 5 m of water, as it was
+# until 2026-11-27 (the default is now 50 x 25 m). The props keep their old places; the start, the far plane and the
+# COCO objects' layout change with the size, so they are here.
+scene:
+  name: pool10
+pool:
+  size: [10.0, 10.0, 5.5]
+  props:
+    - {name: block, kind: box, at: [0.30, 0.60], z: 0.10, size: [0.4, 0.2, 0.2], role: block}
+    - {name: pipe, kind: cylinder, at: [0.65, 0.65], z: 0.15, radius: 0.15, length: 1.5, axis: X, role: pipe}
+    - {name: board, kind: board, at: [0.50, 0.85], size: 0.6, role: board}
+vehicle:
+  start: [5.0, 1.5, 4.88, 90.0]   # floating near the y = 0 wall, facing the far one
+camera:
+  clip_m: [0.10, 40.0]

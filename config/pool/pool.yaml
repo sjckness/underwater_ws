@@ -9,10 +9,12 @@
 seed: 0
 
 scene:
-  name: pool10
+  name: pool50x25                 # --preset pool10: the M11 10 x 10 m tank (config/pool/presets/size/)
 
 pool:
-  size: [10.0, 10.0, 5.5]         # inner length x width x wall height [m]
+  size: [50.0, 25.0, 5.5]         # inner length x width x wall height [m]: an Olympic pool's plan with 5 m of water
+                                  #   everywhere. M12, 2026-11-27: on linus it costs the same as the 10 x 10 tank (30 fps,
+                                  #   render p95 8.3 against 8.2 ms, VRAM +0.1 GB; docs/pool.md). --preset pool10
   water_level: 5.0                # free surface, above the floor [m]
   tile_m: 0.25                    # tile pitch on the walls and the floor
   tile_color: [0.70, 0.78, 0.78]  # linear RGB
@@ -21,7 +23,11 @@ pool:
   grid_color: [0.05, 0.06, 0.08]
   depth_marks_m: 0.5              # depth marks on the y = 0 wall, every depth_marks_m from the surface
   ladder: true                    # a stainless ladder on the y = 0 wall
-  props: true                     # on the floor: a concrete block, a pipe section, a marker board
+  props:                          # on the floor (uw/pool_geometry.py): `at` = [x, y] as fractions of L and W, so the
+                                  #   layout follows pool.size; sizes in metres; [] or false = none
+    - {name: block, kind: box, at: [0.44, 0.24], z: 0.10, size: [0.4, 0.2, 0.2], role: block}      # concrete
+    - {name: pipe, kind: cylinder, at: [0.56, 0.26], z: 0.15, radius: 0.15, length: 1.5, axis: X, role: pipe}
+    - {name: board, kind: board, at: [0.50, 0.40], size: 0.6, role: board}   # a checkerboard 8.5 m ahead of the start
 
 water:
   temperature_c: 27.0            # an indoor pool. Sets the speed of sound the DVL sees (uw/water.py). GUESS
@@ -63,7 +69,7 @@ current:                          # the water's motion, in the vehicle dynamics 
 lights:
   ceiling:                        # rect lights above the water (an indoor test hall), facing down
     height_m: 2.5                 # above the free surface
-    grid: [2, 2]                  # lights along x and y, evenly spaced
+    spacing_m: 5.0                # one light every spacing_m along x and y (10 x 10 m: 2 x 2), evenly spread
     size_m: [1.2, 0.6]
     intensity: 20000.0            # luminance [nits]; with the dome, set by eye for a lit hall
     color: [1.0, 0.98, 0.94]
@@ -72,8 +78,8 @@ lights:
 vehicle:
   params: config/rov_bluerov2.yaml                    # BlueROV2 Heavy, FRAME_CONFIG 2 (8 x T200)
   asset: assets/bluerov2_heavy/bluerov2_heavy.usd     # tools/fetch_bluerov2.py; if missing, a box of the hull size
-  start: [5.0, 1.5, 4.88, 90.0]   # CG x, y, z [m] and heading [deg, ENU: 0 = +x, 90 = +y]: floating at the
-                                  #   surface near the y = 0 wall, facing the far one
+  start: [25.0, 1.5, 4.88, 90.0]  # CG x, y, z [m] and heading [deg, ENU: 0 = +x, 90 = +y]: floating at the
+                                  #   surface near the y = 0 wall at mid-length, facing the far one
   home: null                      # SITL home [x, y] on the surface; null = the start point
   camera:                         # the Low-Light HD USB camera behind the front dome, on its tilt servo
     position_body: [0.15, 0.0, 0.05]   # FLU from the CG [m]: the centre of the front dome in the BlueSim mesh
@@ -96,7 +102,7 @@ camera:
   resolution: [1280, 720]
   hfov_deg: 80.0                  # in-water field of view behind the flat/dome port
   rate_hz: 30.0                   # render, post-process and stream rate (the BlueROV2 camera streams at 30)
-  clip_m: [0.10, 40.0]            # near plane beyond the front dome (radius ~0.065 m around the camera), which
+  clip_m: [0.10, 70.0]            # near plane beyond the front dome (radius ~0.065 m around the camera), which
                                   #   would otherwise be the first hit of every pixel and blind the water model
 
 stream:                           # H.264 to an RTSP server (mediamtx, docker/pool/compose.yaml), which BlueOS's
@@ -121,7 +127,7 @@ dvl:                              # Water Linked DVL A50 under the Heavy: the mo
                                   #   docs/dvl.md) cast at the pool (uw/pool_geometry.py), and the device's network side
                                   #   (uw/rov/a50.py) so that BlueOS's Water Linked DVL extension and the ndahn/dvl_a50
                                   #   driver talk to it unmodified. The instrument values are config/tank.yaml's, kept
-                                  #   equal by tests/test_pool_dvl.py; only rssi_ref_dbm and the mount differ
+                                  #   equal by tests/rov/test_a50.py; only rssi_ref_dbm and the mount differ
   enabled: true
   model: Water Linked DVL A50
   version: standard

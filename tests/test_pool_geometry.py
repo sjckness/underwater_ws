@@ -16,7 +16,8 @@ DOWN = np.array([[0.0, 0.0, -1.0]])
 
 @pytest.fixture(scope="module")
 def cfg():
-    return config.load(config.POOL_CONFIG)
+    """The M11 10 x 10 m tank: the coordinates below are its own."""
+    return config.load(config.POOL_CONFIG, presets=["pool10"])
 
 
 @pytest.fixture(scope="module")
@@ -89,7 +90,7 @@ def test_the_ladder_is_there(bottom):
 def test_the_solids_follow_the_switches(cfg):
     kinds = {type(s) for s in solids(cfg)}
     assert kinds == {Box, Cylinder, Quad}
-    off = config.load(config.POOL_CONFIG, overrides=["pool.props=false", "pool.ladder=false"])
+    off = config.load(config.POOL_CONFIG, presets=["pool10"], overrides=["pool.props=false", "pool.ladder=false"])
     assert solids(off) == []
     t, _, role = hit(PoolBottom(off), (3.0, 6.0, 1.0), DOWN)
     assert role == "floor" and t == pytest.approx(1.0)
@@ -101,3 +102,42 @@ def test_every_role_needs_a_material(cfg):
     del bad["acoustics"]["roles"]["pipe"]
     with pytest.raises(config.ConfigError, match="pipe"):
         PoolBottom(bad)
+
+
+# ------------------------------------------------------------------- the pool size is a parameter (M12 P3)
+
+SIZES = [(["pool10"], (10.0, 10.0)), ([], (50.0, 25.0))]
+
+
+@pytest.mark.parametrize("presets, lw", SIZES)
+def test_the_props_and_the_ladder_follow_the_size(presets, lw):
+    cfg = config.load(config.POOL_CONFIG, presets=presets)
+    L, W = lw
+    assert tuple(cfg["pool"]["size"][:2]) == lw
+    by_name = {s.name: s for s in solids(cfg)}
+    block = cfg["pool"]["props"][0]["at"]
+    assert by_name["props/block"].center[:2] == pytest.approx((block[0] * L, block[1] * W))
+    assert by_name["ladder/rail_a"].center[0] == pytest.approx(L - 2.0)
+    b = PoolBottom(cfg)
+    t, _, role = hit(b, (block[0] * L, block[1] * W, 1.0), DOWN)
+    assert role == "block" and t == pytest.approx(0.8)
+    t, n, role = hit(b, (L - 0.3, W / 2, 2.0), np.array([1.0, 0.0, -0.1]) / math.hypot(1.0, 0.1))
+    assert role == "wall" and np.allclose(n, [-1, 0, 0])
+
+
+@pytest.mark.parametrize("presets, grid", [(["pool10"], (2, 2)), ([], (10, 5))])
+def test_the_hall_lights_keep_their_density(presets, grid):
+    from uw.pool_geometry import ceiling_grid
+    assert ceiling_grid(config.load(config.POOL_CONFIG, presets=presets)) == grid
+
+
+def test_a_bad_prop_is_a_config_error(cfg):
+    import copy
+    bad = copy.deepcopy(cfg)
+    bad["pool"]["props"] = [{"name": "x", "kind": "torus", "at": [0.5, 0.5]}]
+    with pytest.raises(config.ConfigError, match="torus"):
+        solids(bad)
+    bad["pool"]["props"] = [{"name": "x", "kind": "box", "at": [0.5, 0.5]}]
+    with pytest.raises(config.ConfigError, match="pool.props"):
+        solids(bad)
+

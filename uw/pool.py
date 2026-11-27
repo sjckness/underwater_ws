@@ -1,5 +1,6 @@
 """`python -m uw pool [--gui]`: the M11 test pool. A BlueROV2 Heavy flown through ArduSub SITL (and BlueOS, Cockpit,
-a gamepad) in a 10 x 10 x 5 m tank; the onboard camera goes out as a live H.264 stream. No bubbles, no sonar.
+a gamepad) in a test tank (pool.size: 50 x 25 x 5 m, or the M11 10 x 10 x 5 m with --preset pool10); the onboard camera
+goes out as a live H.264 stream. No bubbles, no sonar.
 
     python -m uw pool [--gui] [--duration S] [--snapshot T]... [--no-stream] [--stats-file F] [--profile P] [--set k=v]
 
