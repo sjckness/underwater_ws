@@ -321,6 +321,8 @@ dvl:                            # Water Linked DVL A50: 4-beam convex Janus bott
                                 #   sin and cos swapped (they encode 22.5 deg above the horizontal), so only the
                                 #   azimuths are taken from it, never the vectors
     width_deg: 4.4              # half-power beam width. VERIFIED (A50 page)
+    min_good: 3                 # beams that must return for a velocity: 3 of 4 (the fourth is redundant, it measures
+                                #   the error velocity). VERIFIED (the A50's num_good_beams >= 3 for velocity_valid)
   min_altitude_m: 0.05          # VERIFIED (datasheet). The end of the envelope the tank actually reaches
   max_altitude_m: 50.0          # VERIFIED. Out of reach in every size preset (room9 tops out near 8.6 m)
   max_speed_mps: 3.75           # VERIFIED; above it the device loses bottom lock

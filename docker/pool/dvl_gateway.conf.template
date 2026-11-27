@@ -3,7 +3,8 @@
 # that the extension runs unmodified next to a BlueOS without a docker socket (no extensions of its own):
 #   /mavlink2rest/            -> BlueOS's mavlink2rest (the extension's VISION_POSITION_DELTA, PARAM_SET, ...)
 #   /cable-guy/v1.0/ethernet  -> a fixed answer: cable_guy is off in this BlueOS (it would manage the host's
-#                                network), and the extension waits for it before anything else
+#                                network), and the extension waits for it before anything else. Nortek's Nucleus
+#                                extension (M12) reads [0].info.connected too, hence the "info"
 #   everything else           -> the extension's own page, so that http://<this server>/ shows it with its live
 #                                attitude and status, as BlueOS shows it on a vehicle
 # nginx's template step fills in the ${...} from the service's environment; nginx's own $variables stay.
@@ -12,7 +13,7 @@ server {
 
     location = /cable-guy/v1.0/ethernet {
         default_type application/json;
-        return 200 '[{"name": "eth0", "addresses": [{"ip": "${DVL_EXTENSION_IP}", "mode": "server"}]}]';
+        return 200 '[{"name": "eth0", "addresses": [{"ip": "${DVL_EXTENSION_IP}", "mode": "server"}], "info": {"connected": true}}]';
     }
 
     location /mavlink2rest/ {

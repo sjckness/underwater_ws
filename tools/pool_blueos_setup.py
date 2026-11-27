@@ -142,6 +142,31 @@ def set_dvl(dvl: str, origin: tuple, timeout_s: float) -> None:
         print(f"  {what}{'' if str(ok) in ('True', 'None') else f' (answered {ok!r})'}")
 
 
+def set_nucleus(url: str, origin: tuple, timeout_s: float) -> None:
+    """Nortek's extension (nortekgroup/blueos_nucleus 2.0.11, its Flask API): it connects and starts the Nucleus by
+    itself (compose seeds autoconnect/autostart); wait until it runs and has the vehicle, then set the EKF origin as
+    the operator would on its map (it sends SET_GPS_GLOBAL_ORIGIN)."""
+    t_end = time.monotonic() + timeout_s
+    st = {}
+    while True:
+        try:
+            st = call("GET", f"{url}/api/get_status", timeout=3.0) or {}
+        except (urllib.error.URLError, OSError):
+            st = {}
+        if st.get("running") and st.get("heartbeat"):
+            break
+        if time.monotonic() > t_end:
+            raise SystemExit(f"Nortek's extension at {url} is not running with the vehicle (last status {st}): is the "
+                             "physics up with --preset nucleus, the nucleus service up and dvl-gateway answering?")
+        time.sleep(2.0)
+    print(f"  Nucleus extension: connected and running; cable_guy {st.get('cable_guy')}, origin {st.get('gps_origin')}")
+    call("POST", f"{url}/api/set_current_position", {"lat": origin[0], "lon": origin[1]}, timeout=10.0)
+    print(f"  EKF origin: {origin[0]}, {origin[1]}")
+    for kind in ("delta", "estimate"):
+        st = call("GET", f"{url}/api/get_status_position_{kind}", timeout=3.0) or {}
+        print(f"  VISION_POSITION_{kind.upper()}: {'on' if st.get('enabled') else 'OFF'}, {st.get('frequency')} Hz")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--blueos", default="http://localhost", help="BlueOS base URL (default %(default)s)")
@@ -152,18 +177,23 @@ def main(argv=None) -> int:
     ap.add_argument("--dvl", default="", help="the Water Linked DVL extension's page: http://172.31.250.3 on linus "
                                               "(dvl-gateway), http://127.0.0.1:9001 on the Work (dvl-host); "
                                               "default: leave it alone")
+    ap.add_argument("--nucleus", default="", help="Nortek's Nucleus extension instead (M12): http://172.31.250.7 on "
+                                                  "linus (compose profile nucleus)")
     ap.add_argument("--origin", default="45.0703,7.6869",
-                    help="EKF origin lat,lon for --dvl (default: the compose file's HOME_LOC, %(default)s)")
+                    help="EKF origin lat,lon for --dvl / --nucleus (default: the compose file's HOME_LOC, %(default)s)")
     args = ap.parse_args(argv)
     blueos = args.blueos.rstrip("/")
     print(f"BlueOS {blueos}:")
     wait_up(blueos, args.wait)
     set_manual_board(blueos, args.mavlink_port)
     set_stream(blueos, args.rtsp)
-    if args.dvl:
+    if args.dvl or args.nucleus:
         lat, lon = (float(v) for v in args.origin.split(","))
         wait_vehicle(blueos, args.wait)
-        set_dvl(args.dvl.rstrip("/"), (lat, lon), args.wait)
+        if args.dvl:
+            set_dvl(args.dvl.rstrip("/"), (lat, lon), args.wait)
+        if args.nucleus:
+            set_nucleus(args.nucleus.rstrip("/"), (lat, lon), args.wait)
     print(f"done. Open {blueos} (BlueOS) and Cockpit; the vehicle appears once SITL sends to UDP {args.mavlink_port}.")
     return 0
 

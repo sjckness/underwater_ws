@@ -1,0 +1,9293 @@
+{
+"note": "uw.rov.dvl reports (pool A50, seed 0, the poses and twists of tests/rov/test_dvl.py::test_the_a50_reports_did_not_change), float.hex, written by the 4-beam dvl.py BEFORE the N-beam refactor (2026-11-27, linus)",
+"pool": [
+{
+"velocity": [
+"0x1.3a92a30553262p-8",
+"0x1.be5c91d14e3bdp-2",
+"0x1.7f972474538f0p-2"
+],
+"covariance": [
+"0x1.a50dd011d25e1p-15",
+"0x1.a50dd011d25e3p-123",
+"0x1.ed4b9ef17c82cp-71",
+"0x1.a50dd011d25e3p-123",
+"0x1.a50dd011d25e3p-15",
+"0x1.ed4b9ef17c82ep-71",
+"0x1.ed4b9ef17c82cp-71",
+"0x1.ed4b9ef17c82ep-71",
+"0x1.20f73b7ea892cp-18"
+],
+"fom": [
+"0x1.d04e373d393e7p-8"
+],
+"altitude": [
+"0x1.2e147ae147ae1p+1"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1"
+],
+"beam_velocity": [
+"0x1.de835fefbe003p-2",
+"0x1.d7e906ed1cdfep-2",
+"0x1.d4895db1375dbp-3",
+"0x1.d209936e3f478p-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 0.0,
+"vx": 0.0048000000000000004,
+"vy": 0.4359,
+"vz": 0.37460000000000004,
+"fom": 0.007084740148660429,
+"covariance": [
+[
+5.019354297404098e-05,
+1.5467079588574896e-37,
+8.160887724105844e-22
+],
+[
+1.5467079588574896e-37,
+5.019354297404099e-05,
+8.160887724105846e-22
+],
+[
+8.160887724105844e-22,
+8.160887724105846e-22,
+4.305925243615939e-06
+]
+],
+"altitude": 2.36,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.4672980299069424,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.46084986517163873,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.2287776298243632,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.22755732708165843,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 130000,
+"time_of_transmission": 130000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.ce703afb7e910p-3",
+"0x1.0f27bb2fec56ep-5",
+"0x1.d1eb851eb851fp-3"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.bb60b50d39d2bp-1"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.daa15ae9b68b8p-1",
+"0x1.cc9482d04aa26p-1",
+"0x1.e46da7da4a330p-1",
+"0x1.f3feeadc9172bp-1"
+],
+"beam_velocity": [
+"0x1.1ef3a28692051p-2",
+"0x1.43d52f699493fp-3",
+"0x1.1f039f62bd83dp-3",
+"0x1.0cb330fa77123p-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.902815b37abc1p+5",
+"-0x1.315e5358e64cbp+5",
+"-0x1.a9a96d2912cd2p+5",
+"-0x1.b1bcc5feee3d5p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.2258,
+"vy": 0.033100000000000004,
+"vz": 0.2275,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 0.8659721926350462,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.2802262682566879,
+"distance": 0.927012291936328,
+"rssi": -50.01957264154726,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.15812146225887067,
+"distance": 0.8995705489408621,
+"rssi": -38.171057409790215,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.14014362831193408,
+"distance": 0.946149106404027,
+"rssi": -53.20772773827197,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.26240231064527303,
+"distance": 0.9765542406318891,
+"rssi": -54.21717452206182,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 260000,
+"time_of_transmission": 260000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.e113404ea4a8cp-3",
+"-0x1.f972474538ef4p-5",
+"-0x1.d495182a9930cp-4"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.a17bf57d69c06p+0"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.7a6bca5c20aa4p+0",
+"0x1.7a6bca5c20aa3p+0",
+"0x1.143c9d358fb49p+1",
+"0x1.f23602208fd3ap+0"
+],
+"beam_velocity": [
+"-0x1.ddbe643b48636p-5",
+"-0x1.7de551e51a3bbp-3",
+"-0x1.3762be6fef4f6p-3",
+"-0x1.a9b64ad95074ep-6"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.105884a38489cp+6",
+"-0x1.105884a38489cp+6",
+"-0x1.ea66990ed605bp+5",
+"-0x1.66ee4f1086b1cp+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.2349,
+"vy": -0.061700000000000005,
+"vz": -0.1144,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 1.6307977133926683,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.05831832481841241,
+"distance": 1.47820725201806,
+"rssi": -68.08644347664307,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.18647254925170195,
+"distance": 1.4782072520180598,
+"rssi": -68.08644347664307,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.15204380778406063,
+"distance": 2.158099795487406,
+"rssi": -61.300096622377815,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.025983403296101763,
+"distance": 1.9461366014000547,
+"rssi": -44.8663617411714,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 390000,
+"time_of_transmission": 390000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.141205bc01a37p-5",
+"0x1.025aee631f8a1p-2",
+"-0x1.123a29c779a6cp-2"
+],
+"covariance": [
+"0x1.96f7957cba4ecp-16",
+"0x1.96f7957cba4eep-124",
+"0x1.dccaa93644c69p-72",
+"0x1.96f7957cba4eep-124",
+"0x1.96f7957cba4eep-16",
+"0x1.dccaa93644c6bp-72",
+"0x1.dccaa93644c69p-72",
+"0x1.dccaa93644c6bp-72",
+"0x1.174c4ee629df2p-19"
+],
+"fom": [
+"0x1.42c65a8db9a87p-8"
+],
+"altitude": [
+"0x1.68f84b64426c6p-3"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.7f4cc52cc1deep-3",
+"0x1.d64e7ee5b5056p-3",
+"0x1.614020356b437p-3",
+"0x1.63fcad56fbf28p-3"
+],
+"beam_velocity": [
+"-0x1.7ed9ac947337dp-3",
+"-0x1.5effacb99c57dp-3",
+"-0x1.389bef6a14eb5p-2",
+"-0x1.4dfe6924b09d6p-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.70d5c3bdb0a7dp+5",
+"-0x1.b96fbb73f7847p+5",
+"-0x1.5dd4272156982p+5",
+"-0x1.642e019441244p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.0337,
+"vy": 0.2523,
+"vz": -0.26780000000000004,
+"fom": 0.004925152881446799,
+"covariance": [
+[
+2.4257130905623697e-05,
+7.474805564169882e-38,
+3.9439280453287277e-22
+],
+[
+7.474805564169882e-38,
+2.4257130905623704e-05,
+3.9439280453287287e-22
+],
+[
+3.9439280453287277e-22,
+3.9439280453287287e-22,
+2.080932847442956e-06
+]
+],
+"altitude": 0.17625483417241677,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.18693861797364866,
+"distance": 0.18715814631308042,
+"rssi": -46.10437725253448,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.17138609830321264,
+"distance": 0.22964190615187147,
+"rssi": -55.17955675696481,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.30528234562846573,
+"distance": 0.17248559153577656,
+"rssi": -43.72859025998606,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.32616581236302744,
+"distance": 0.17382178708748453,
+"rssi": -44.52246394943043,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 520000,
+"time_of_transmission": 520000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.3f141205bc01ap-1",
+"-0x1.b6e2eb1c432cbp-3",
+"-0x1.2786c226809d5p-3"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.2bd988ba96884p+2"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.49bd6e030649dp+2",
+"0x1.49bd6e030649dp+2",
+"0x1.49bd6e030649dp+2",
+"0x1.35000dd00c0cbp+2"
+],
+"beam_velocity": [
+"-0x1.70f918cc56d38p-2",
+"-0x1.6e69402be9afdp-6",
+"0x1.7c8aebe81db2ap-4",
+"-0x1.f2f68d96fa2eap-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.08491ac9a427ap+6",
+"-0x1.08491ac9a427ap+6",
+"-0x1.08491ac9a427ap+6",
+"-0x1.24078a54d5ea1p+6"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.6232,
+"vy": -0.21430000000000002,
+"vz": -0.1443,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 4.68515222760664,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.3603252291411141,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.022363960902704417,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.09290592337661666,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.24363432518955302,
+"distance": 4.82812829320046,
+"rssi": -73.00736362987165,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 650000,
+"time_of_transmission": 650000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.2c3c9eecbfb16p-2",
+"-0x1.4ea4a8c154c99p-4",
+"-0x1.d1eb851eb851fp-3"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.7354b025a8daap-3"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.67141ae30a0e0p-3",
+"0x1.67141ae30a0e0p-3",
+"0x1.bcc5ca24edd37p-3",
+"0x1.bcc5ca24edd38p-3"
+],
+"beam_velocity": [
+"-0x1.38886909611e1p-3",
+"-0x1.3f79891594848p-2",
+"-0x1.11775581ac83bp-2",
+"-0x1.bed699fa16d0ep-4"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.62b61af60027dp+4",
+"-0x1.62b61af60027dp+4",
+"-0x1.52407f33a427dp+5",
+"-0x1.52407f33a427dp+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.2932,
+"vy": -0.08170000000000001,
+"vz": -0.2275,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 0.1813138734333795,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.15260393199800062,
+"distance": 0.17533131604546437,
+"rssi": -22.169459305705903,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.31198705858435405,
+"distance": 0.17533131604546437,
+"rssi": -22.169459305705903,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.26705678562132434,
+"distance": 0.21717412877272022,
+"rssi": -42.28149261803353,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.10909137866240234,
+"distance": 0.21717412877272024,
+"rssi": -42.28149261803353,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 780000,
+"time_of_transmission": 780000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"covariance": [
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0"
+],
+"fom": [
+"inf"
+],
+"altitude": [
+"nan"
+],
+"valid": false,
+"n_good": 0,
+"beam_range": [
+"nan",
+"nan",
+"nan",
+"nan"
+],
+"beam_velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"beam_valid": [
+false,
+false,
+false,
+false
+],
+"rssi": [
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0,
+"vy": 0.0,
+"vz": 0.0,
+"fom": Infinity,
+"covariance": [
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+]
+],
+"altitude": NaN,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 1,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 2,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 3,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+}
+],
+"velocity_valid": false,
+"status": 0,
+"time_of_validity": 910000,
+"time_of_transmission": 910000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"covariance": [
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0"
+],
+"fom": [
+"inf"
+],
+"altitude": [
+"nan"
+],
+"valid": false,
+"n_good": 0,
+"beam_range": [
+"nan",
+"nan",
+"nan",
+"nan"
+],
+"beam_velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"beam_valid": [
+false,
+false,
+false,
+false
+],
+"rssi": [
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0,
+"vy": 0.0,
+"vz": 0.0,
+"fom": Infinity,
+"covariance": [
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+]
+],
+"altitude": NaN,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 1,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 2,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 3,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+}
+],
+"velocity_valid": false,
+"status": 0,
+"time_of_validity": 1040000,
+"time_of_transmission": 1040000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.74f0d844d013bp-3",
+"-0x1.0240b780346ddp-2",
+"0x1.af1a9fbe76c8cp-2"
+],
+"covariance": [
+"0x1.71ebc59d5ce02p-16",
+"0x1.71ebc59d5ce04p-124",
+"0x1.b163af20708f3p-72",
+"0x1.71ebc59d5ce04p-124",
+"0x1.71ebc59d5ce04p-16",
+"0x1.b163af20708f5p-72",
+"0x1.b163af20708f3p-72",
+"0x1.b163af20708f5p-72",
+"0x1.fbbf4c189d784p-20"
+],
+"fom": [
+"0x1.33bbb8457a0d5p-8"
+],
+"altitude": [
+"0x1.cd07b16a3026ap-2"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.9ea17f77e1029p-2",
+"0x1.23b32d028ce0bp-1",
+"0x1.23b32d028ce0cp-1",
+"0x1.9ea17f77e1029p-2"
+],
+"beam_velocity": [
+"0x1.7c36e26ed898bp-2",
+"0x1.14af2f7f072b7p-2",
+"0x1.a306943a4e559p-2",
+"0x1.02acf679476dap-1"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.4465295c5370ep+5",
+"-0x1.9ffb410c618b6p+5",
+"-0x1.9ffb410c618b6p+5",
+"-0x1.4465295c5370ep+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.1821,
+"vy": -0.25220000000000004,
+"vz": 0.42100000000000004,
+"fom": 0.004695637214787681,
+"covariance": [
+[
+2.2049008852899003e-05,
+6.794375423017194e-38,
+3.584913018979063e-22
+],
+[
+6.794375423017194e-38,
+2.204900885289901e-05,
+3.584913018979064e-22
+],
+[
+3.584913018979063e-22,
+3.584913018979064e-22,
+1.8915059226942957e-06
+]
+],
+"altitude": 0.450224659067351,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.3713031177668646,
+"distance": 0.40491294068511025,
+"rssi": -40.54939529542581,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.2701995297700636,
+"distance": 0.5697263780224956,
+"rssi": -51.99768266365702,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.4092047844493059,
+"distance": 0.5697263780224957,
+"rssi": -51.99768266365702,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.5052258513494181,
+"distance": 0.40491294068511025,
+"rssi": -40.54939529542581,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 1170000,
+"time_of_transmission": 1170000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.f559b3d07c84cp-3",
+"-0x1.b39c0ebedfa44p-2",
+"0x1.7fcb923a29c78p-3"
+],
+"covariance": [
+"0x1.abb15fff45086p-16",
+"0x1.abb15fff45088p-124",
+"0x1.f512c828554f8p-72",
+"0x1.abb15fff45088p-124",
+"0x1.abb15fff45088p-16",
+"0x1.f512c828554fap-72",
+"0x1.f512c828554f8p-72",
+"0x1.f512c828554fap-72",
+"0x1.2585a0a4411c8p-19"
+],
+"fom": [
+"0x1.4ae44c2e585cep-8"
+],
+"altitude": [
+"0x1.2e147ae147ae1p+1"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1"
+],
+"beam_velocity": [
+"0x1.015dc031ef13ap-3",
+"-0x1.3908237cac4e0p-7",
+"0x1.c992a6441b372p-3",
+"0x1.69a7d5efe60f8p-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.24480000000000002,
+"vy": -0.4254,
+"vz": 0.1874,
+"fom": 0.005049007986913391,
+"covariance": [
+[
+2.549248165191521e-05,
+7.855477403226513e-38,
+4.144781743693662e-22
+],
+[
+7.855477403226513e-38,
+2.5492481651915216e-05,
+4.144781743693663e-22
+],
+[
+4.144781743693662e-22,
+4.144781743693663e-22,
+2.1869091871870432e-06
+]
+],
+"altitude": 2.36,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.12566709663759373,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.009552972152365447,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.2234242429289242,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.35317930485463433,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 1300000,
+"time_of_transmission": 1300000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.eb851eb851eb9p-5",
+"0x1.e5604189374bdp-3",
+"-0x1.14467381d7dc0p-3"
+],
+"covariance": [
+"0x1.ea68727447116p-17",
+"0x1.ea68727447118p-125",
+"0x1.1f463c0321c86p-72",
+"0x1.ea68727447118p-125",
+"0x1.ea68727447118p-17",
+"0x1.1f463c0321c87p-72",
+"0x1.1f463c0321c86p-72",
+"0x1.1f463c0321c87p-72",
+"0x1.50901647f1fd8p-20"
+],
+"fom": [
+"0x1.f516743b5e50fp-9"
+],
+"altitude": [
+"0x1.bb60b50d39d2bp-1"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.daa15ae9b68b8p-1",
+"0x1.cc9482d04aa26p-1",
+"0x1.e46da7da4a330p-1",
+"0x1.f3feeadc9172bp-1"
+],
+"beam_velocity": [
+"-0x1.3600ddc24b7e1p-4",
+"-0x1.72c23f45b3ecbp-5",
+"-0x1.5f21fb04e9c03p-3",
+"-0x1.a5eb58791918fp-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.902815b37abc1p+5",
+"-0x1.315e5358e64cbp+5",
+"-0x1.a9a96d2912cd2p+5",
+"-0x1.b1bcc5feee3d5p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.060000000000000005,
+"vy": 0.23700000000000002,
+"vz": -0.13490000000000002,
+"fom": 0.003822995842423744,
+"covariance": [
+[
+1.4615297211189231e-05,
+4.503686167223777e-38,
+2.3762777546235066e-22
+],
+[
+4.503686167223777e-38,
+1.4615297211189235e-05,
+2.376277754623507e-22
+],
+[
+2.3762777546235066e-22,
+2.376277754623507e-22,
+1.253794282606363e-06
+]
+],
+"altitude": 0.8659721926350462,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.07568441986651876,
+"distance": 0.927012291936328,
+"rssi": -50.01957264154726,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.04525863988749065,
+"distance": 0.8995705489408621,
+"rssi": -38.171057409790215,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.17145153149360234,
+"distance": 0.946149106404027,
+"rssi": -53.20772773827197,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.2060152923542202,
+"distance": 0.9765542406318891,
+"rssi": -54.21717452206182,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 1430000,
+"time_of_transmission": 1430000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.bb2fec56d5cfbp-3",
+"-0x1.de69ad42c3c9fp-7",
+"0x1.2f4f0d844d014p-3"
+],
+"covariance": [
+"0x1.79ae090946401p-15",
+"0x1.79ae090946402p-123",
+"0x1.ba7abc82ca36cp-71",
+"0x1.79ae090946402p-123",
+"0x1.79ae090946402p-15",
+"0x1.ba7abc82ca36ep-71",
+"0x1.ba7abc82ca36cp-71",
+"0x1.ba7abc82ca36ep-71",
+"0x1.0332cde60fdadp-18"
+],
+"fom": [
+"0x1.b7bdac7a000bcp-8"
+],
+"altitude": [
+"0x1.a17bf57d69c06p+0"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.7a6bca5c20aa4p+0",
+"0x1.7a6bca5c20aa3p+0",
+"0x1.143c9d358fb49p+1",
+"0x1.f23602208fd3ap+0"
+],
+"beam_velocity": [
+"0x1.8bd11ad05e405p-3",
+"0x1.2927b5d23b8ebp-4",
+"0x1.587772967e918p-4",
+"0x1.9499324417022p-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.105884a38489cp+6",
+"-0x1.105884a38489cp+6",
+"-0x1.ea66990ed605bp+5",
+"-0x1.66ee4f1086b1cp+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.2164,
+"vy": -0.0146,
+"vz": 0.1481,
+"fom": 0.006709913834129274,
+"covariance": [
+[
+4.502294366143939e-05,
+1.3873765661124101e-37,
+7.320208267023015e-22
+],
+[
+1.3873765661124101e-37,
+4.50229436614394e-05,
+7.320208267023017e-22
+],
+[
+7.320208267023015e-22,
+7.320208267023017e-22,
+3.862357948191726e-06
+]
+],
+"altitude": 1.6307977133926683,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.1932699293936652,
+"distance": 1.47820725201806,
+"rssi": -68.08644347664307,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.07254763626017151,
+"distance": 1.4782072520180598,
+"rssi": -68.08644347664307,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.08409828911672823,
+"distance": 2.158099795487406,
+"rssi": -61.300096622377815,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.19755782385152637,
+"distance": 1.9461366014000547,
+"rssi": -44.8663617411714,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 1560000,
+"time_of_transmission": 1560000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.9db22d0e56042p-4",
+"0x1.23d70a3d70a3ep-3",
+"0x1.895182a9930bep-2"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.68f84b64426c6p-3"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.7f4cc52cc1deep-3",
+"0x1.d64e7ee5b5056p-3",
+"0x1.614020356b437p-3",
+"0x1.63fcad56fbf28p-3"
+],
+"beam_velocity": [
+"0x1.7755a17f7b401p-2",
+"0x1.ae5d7f89f6fd7p-2",
+"0x1.6056c05f9b5aap-2",
+"0x1.2761ea813e192p-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.70d5c3bdb0a7dp+5",
+"-0x1.b96fbb73f7847p+5",
+"-0x1.5dd4272156982p+5",
+"-0x1.642e019441244p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.101,
+"vy": 0.14250000000000002,
+"vz": 0.3841,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 0.17625483417241677,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.36653759327492713,
+"distance": 0.18715814631308042,
+"rssi": -46.10437725253448,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.4202785423237833,
+"distance": 0.22964190615187147,
+"rssi": -55.17955675696481,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.34408093055284417,
+"distance": 0.17248559153577656,
+"rssi": -43.72859025998606,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.2884594575293927,
+"distance": 0.17382178708748453,
+"rssi": -44.52246394943043,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 1690000,
+"time_of_transmission": 1690000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.d013a92a30554p-4",
+"-0x1.17c1bda5119cep-4",
+"-0x1.3ac710cb295eap-2"
+],
+"covariance": [
+"0x1.e20df8e72c4bep-16",
+"0x1.e20df8e72c4c0p-124",
+"0x1.1a618b7d679e5p-71",
+"0x1.e20df8e72c4c0p-124",
+"0x1.e20df8e72c4c0p-16",
+"0x1.1a618b7d679e6p-71",
+"0x1.1a618b7d679e5p-71",
+"0x1.1a618b7d679e6p-71",
+"0x1.4ad4784e8bc30p-19"
+],
+"fom": [
+"0x1.5f4ab77719833p-8"
+],
+"altitude": [
+"0x1.2bd988ba96884p+2"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.49bd6e030649dp+2",
+"0x1.49bd6e030649dp+2",
+"0x1.49bd6e030649dp+2",
+"0x1.35000dd00c0cbp+2"
+],
+"beam_velocity": [
+"-0x1.14d1d04eae721p-2",
+"-0x1.5695bc09e652ep-2",
+"-0x1.2dc05e3b7b8a0p-2",
+"-0x1.e3dac773ca967p-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.08491ac9a427ap+6",
+"-0x1.08491ac9a427ap+6",
+"-0x1.08491ac9a427ap+6",
+"-0x1.24078a54d5ea1p+6"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.11330000000000001,
+"vy": -0.0683,
+"vz": -0.3074,
+"fom": 0.0053602884209791755,
+"covariance": [
+[
+2.8732691956083417e-05,
+8.853944291372052e-38,
+4.671602345070284e-22
+],
+[
+8.853944291372052e-38,
+2.8732691956083424e-05,
+4.671602345070285e-22
+],
+[
+4.671602345070284e-22,
+4.671602345070285e-22,
+2.4648752863436237e-06
+]
+],
+"altitude": 4.68515222760664,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.2703316257499058,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.33455556688712107,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.29467913854649375,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.23625713178746396,
+"distance": 4.82812829320046,
+"rssi": -73.00736362987165,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 1820000,
+"time_of_transmission": 1820000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.9c432ca57a787p-2",
+"-0x1.d02de00d1b718p-2",
+"-0x1.7a0f9096bb98dp-4"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.7354b025a8daap-3"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.67141ae30a0e0p-3",
+"0x1.67141ae30a0e0p-3",
+"0x1.bcc5ca24edd37p-3",
+"0x1.bcc5ca24edd38p-3"
+],
+"beam_velocity": [
+"-0x1.91892d2866b17p-4",
+"-0x1.456ec6f339fabp-2",
+"-0x1.21268a877e401p-4",
+"0x1.29bda8ab8f9c5p-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.62b61af60027dp+4",
+"-0x1.62b61af60027dp+4",
+"-0x1.52407f33a427dp+5",
+"-0x1.52407f33a427dp+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.4026,
+"vy": -0.45330000000000004,
+"vz": -0.09230000000000001,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 0.1813138734333795,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.09803121223232512,
+"distance": 0.17533131604546437,
+"rssi": -22.169459305705903,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.3178053937867797,
+"distance": 0.17533131604546437,
+"rssi": -22.169459305705903,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.07059339631076968,
+"distance": 0.21717412877272022,
+"rssi": -42.28149261803353,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.1453812768322235,
+"distance": 0.21717412877272024,
+"rssi": -42.28149261803353,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 1950000,
+"time_of_transmission": 1950000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"covariance": [
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0"
+],
+"fom": [
+"inf"
+],
+"altitude": [
+"nan"
+],
+"valid": false,
+"n_good": 0,
+"beam_range": [
+"nan",
+"nan",
+"nan",
+"nan"
+],
+"beam_velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"beam_valid": [
+false,
+false,
+false,
+false
+],
+"rssi": [
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0,
+"vy": 0.0,
+"vz": 0.0,
+"fom": Infinity,
+"covariance": [
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+]
+],
+"altitude": NaN,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 1,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 2,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 3,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+}
+],
+"velocity_valid": false,
+"status": 0,
+"time_of_validity": 2080000,
+"time_of_transmission": 2080000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"covariance": [
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0"
+],
+"fom": [
+"inf"
+],
+"altitude": [
+"nan"
+],
+"valid": false,
+"n_good": 0,
+"beam_range": [
+"nan",
+"nan",
+"nan",
+"nan"
+],
+"beam_velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"beam_valid": [
+false,
+false,
+false,
+false
+],
+"rssi": [
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0,
+"vy": 0.0,
+"vz": 0.0,
+"fom": Infinity,
+"covariance": [
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+]
+],
+"altitude": NaN,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 1,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 2,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 3,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+}
+],
+"velocity_valid": false,
+"status": 0,
+"time_of_validity": 2210000,
+"time_of_transmission": 2210000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.3f141205bc01ap-4",
+"0x1.1d14e3bcd35a9p-7",
+"-0x1.1bda5119ce076p-4"
+],
+"covariance": [
+"0x1.23655bbe6baa0p-16",
+"0x1.23655bbe6baa2p-124",
+"0x1.55643ddbeb7d8p-72",
+"0x1.23655bbe6baa2p-124",
+"0x1.23655bbe6baa2p-16",
+"0x1.55643ddbeb7d9p-72",
+"0x1.55643ddbeb7d8p-72",
+"0x1.55643ddbeb7d9p-72",
+"0x1.8ff710ebfe9bcp-20"
+],
+"fom": [
+"0x1.11200b20a674ap-8"
+],
+"altitude": [
+"0x1.cd07b16a3026ap-2"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.9ea17f77e1029p-2",
+"0x1.23b32d028ce0bp-1",
+"0x1.23b32d028ce0cp-1",
+"0x1.9ea17f77e1029p-2"
+],
+"beam_velocity": [
+"-0x1.43020139fd1dbp-5",
+"-0x1.5759424778641p-4",
+"-0x1.61777a4af849ep-4",
+"-0x1.7c328e5d30d98p-5"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.4465295c5370ep+5",
+"-0x1.9ffb410c618b6p+5",
+"-0x1.9ffb410c618b6p+5",
+"-0x1.4465295c5370ep+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0779,
+"vy": 0.008700000000000001,
+"vz": -0.0693,
+"fom": 0.004167559353527592,
+"covariance": [
+[
+1.7368550965175312e-05,
+5.352097983111516e-38,
+2.8239248707849187e-22
+],
+[
+5.352097983111516e-38,
+1.736855096517532e-05,
+2.823924870784919e-22
+],
+[
+2.8239248707849187e-22,
+2.823924870784919e-22,
+1.4899861140437318e-06
+]
+],
+"altitude": 0.450224659067351,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.03942966689638513,
+"distance": 0.40491294068511025,
+"rssi": -40.54939529542581,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.08382535829834926,
+"distance": 0.5697263780224956,
+"rssi": -51.99768266365702,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.08629558344502405,
+"distance": 0.5697263780224957,
+"rssi": -51.99768266365702,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.046410825781573795,
+"distance": 0.40491294068511025,
+"rssi": -40.54939529542581,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 2340000,
+"time_of_transmission": 2340000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.bda5119ce0760p-8",
+"-0x1.ce075f6fd2200p-2",
+"0x1.9f212d77318fdp-2"
+],
+"covariance": [
+"0x1.fabbb0ca7be94p-16",
+"0x1.fabbb0ca7be97p-124",
+"0x1.28d660eb08ac7p-71",
+"0x1.fabbb0ca7be97p-124",
+"0x1.fabbb0ca7be97p-16",
+"0x1.28d660eb08ac8p-71",
+"0x1.28d660eb08ac7p-71",
+"0x1.28d660eb08ac8p-71",
+"0x1.5bc4442e55be6p-19"
+],
+"fom": [
+"0x1.682bf7e8459f5p-8"
+],
+"altitude": [
+"0x1.2e147ae147ae1p+1"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1"
+],
+"beam_velocity": [
+"0x1.05f55dd2acbb5p-2",
+"0x1.fe422bd5487c1p-3",
+"0x1.fc38df770c9d1p-2",
+"0x1.fcf5c3f250667p-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0068000000000000005,
+"vy": -0.45120000000000005,
+"vz": 0.40540000000000004,
+"fom": 0.005495784782644443,
+"covariance": [
+[
+3.0203650377146217e-05,
+9.3072183505838e-38,
+4.9107631177483535e-22
+],
+[
+9.3072183505838e-38,
+3.0203650377146228e-05,
+4.910763117748354e-22
+],
+[
+4.9107631177483535e-22,
+4.910763117748354e-22,
+2.5910635691838984e-06
+]
+],
+"altitude": 2.36,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.2558188114009526,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.24914964909208773,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.49631070293540086,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.49703127066104574,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 2470000,
+"time_of_transmission": 2470000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.5f3b645a1cac1p-3",
+"-0x1.09930be0ded29p-1",
+"0x1.9e1b089a02753p-2"
+],
+"covariance": [
+"0x1.2f5f2bd08b103p-16",
+"0x1.2f5f2bd08b105p-124",
+"0x1.636c1091eb4f2p-72",
+"0x1.2f5f2bd08b105p-124",
+"0x1.2f5f2bd08b105p-16",
+"0x1.636c1091eb4f3p-72",
+"0x1.636c1091eb4f2p-72",
+"0x1.636c1091eb4f3p-72",
+"0x1.a067260b01f75p-20"
+],
+"fom": [
+"0x1.16ae5e6902881p-8"
+],
+"altitude": [
+"0x1.bb60b50d39d2bp-1"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.daa15ae9b68b8p-1",
+"0x1.cc9482d04aa26p-1",
+"0x1.e46da7da4a330p-1",
+"0x1.f3feeadc9172bp-1"
+],
+"beam_velocity": [
+"0x1.8107fe1f6bf92p-3",
+"0x1.1d39c66b6cafep-2",
+"0x1.1f877f15337d4p-1",
+"0x1.dda2a51cfed38p-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.902815b37abc1p+5",
+"-0x1.315e5358e64cbp+5",
+"-0x1.a9a96d2912cd2p+5",
+"-0x1.b1bcc5feee3d5p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.1715,
+"vy": -0.5187,
+"vz": 0.40440000000000004,
+"fom": 0.004252336549152359,
+"covariance": [
+[
+1.808236612725699e-05,
+5.572059262377232e-38,
+2.939982934200082e-22
+],
+[
+5.572059262377232e-38,
+1.8082366127256995e-05,
+2.9399829342000825e-22
+],
+[
+2.939982934200082e-22,
+2.9399829342000825e-22,
+1.5512217739227907e-06
+]
+],
+"altitude": 0.8659721926350462,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.18800352605239518,
+"distance": 0.927012291936328,
+"rssi": -50.01957264154726,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.2785407069269893,
+"distance": 0.8995705489408621,
+"rssi": -38.171057409790215,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.5615806306247983,
+"distance": 0.946149106404027,
+"rssi": -53.20772773827197,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.4664407538363835,
+"distance": 0.9765542406318891,
+"rssi": -54.21717452206182,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 2600000,
+"time_of_transmission": 2600000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.8c7e28240b781p-3",
+"-0x1.e94467381d7dcp-3",
+"-0x1.5119ce075f6fdp-4"
+],
+"covariance": [
+"0x1.f3e291ceeaf6fp-15",
+"0x1.f3e291ceeaf72p-123",
+"0x1.24d36c8f924d3p-70",
+"0x1.f3e291ceeaf72p-123",
+"0x1.f3e291ceeaf72p-15",
+"0x1.24d36c8f924d4p-70",
+"0x1.24d36c8f924d3p-70",
+"0x1.24d36c8f924d4p-70",
+"0x1.57111d40e68d9p-18"
+],
+"fom": [
+"0x1.f9e80058832b4p-8"
+],
+"altitude": [
+"0x1.a17bf57d69c06p+0"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.7a6bca5c20aa4p+0",
+"0x1.7a6bca5c20aa3p+0",
+"0x1.143c9d358fb49p+1",
+"0x1.f23602208fd3ap+0"
+],
+"beam_velocity": [
+"-0x1.61180ab303457p-4",
+"-0x1.8fab2a933d61dp-3",
+"-0x1.f913edc8e22bdp-5",
+"0x1.3ef5ce276bab1p-5"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.105884a38489cp+6",
+"-0x1.105884a38489cp+6",
+"-0x1.ea66990ed605bp+5",
+"-0x1.66ee4f1086b1cp+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.19360000000000002,
+"vy": -0.2389,
+"vz": -0.0823,
+"fom": 0.00771951683465193,
+"covariance": [
+[
+5.959094016047452e-05,
+1.8362876171079333e-37,
+9.68879547465008e-22
+],
+[
+1.8362876171079333e-37,
+5.959094016047454e-05,
+9.688795474650081e-22
+],
+[
+9.68879547465008e-22,
+9.688795474650081e-22,
+5.112094471205173e-06
+]
+],
+"altitude": 1.6307977133926683,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.08620456866647551,
+"distance": 1.47820725201806,
+"rssi": -68.08644347664307,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.19515069257583742,
+"distance": 1.4782072520180598,
+"rssi": -68.08644347664307,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.06165501062702592,
+"distance": 2.158099795487406,
+"rssi": -61.300096622377815,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.03893556847048297,
+"distance": 1.9461366014000547,
+"rssi": -44.8663617411714,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 2730000,
+"time_of_transmission": 2730000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.8d4fdf3b645a2p-5",
+"0x1.14e3bcd35a859p-2",
+"-0x1.068db8bac710dp-3"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.68f84b64426c6p-3"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.7f4cc52cc1deep-3",
+"0x1.d64e7ee5b5056p-3",
+"0x1.614020356b437p-3",
+"0x1.63fcad56fbf28p-3"
+],
+"beam_velocity": [
+"-0x1.e010d3fed9406p-5",
+"-0x1.059eda6e13c0ep-5",
+"-0x1.6e0bc0710d76bp-3",
+"-0x1.a2dd8aa011efcp-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.70d5c3bdb0a7dp+5",
+"-0x1.b96fbb73f7847p+5",
+"-0x1.5dd4272156982p+5",
+"-0x1.642e019441244p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.0485,
+"vy": 0.27040000000000003,
+"vz": -0.1282,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 0.17625483417241677,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.05860177426692563,
+"distance": 0.18715814631308042,
+"rssi": -46.10437725253448,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.03193609869105539,
+"distance": 0.22964190615187147,
+"rssi": -55.17955675696481,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.17873335213669903,
+"distance": 0.17248559153577656,
+"rssi": -43.72859025998606,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.20452411938662596,
+"distance": 0.17382178708748453,
+"rssi": -44.52246394943043,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 2860000,
+"time_of_transmission": 2860000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.1c432ca57a787p-2",
+"-0x1.9205bc01a36e3p-3",
+"0x1.6cf41f212d773p-3"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.2bd988ba96884p+2"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.49bd6e030649dp+2",
+"0x1.49bd6e030649dp+2",
+"0x1.49bd6e030649dp+2",
+"0x1.35000dd00c0cbp+2"
+],
+"beam_velocity": [
+"0x1.7c926aed8c81cp-3",
+"0x1.30261a19e1993p-5",
+"0x1.22853a625cdcdp-3",
+"0x1.2ca7f91ed7f19p-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.08491ac9a427ap+6",
+"-0x1.08491ac9a427ap+6",
+"-0x1.08491ac9a427ap+6",
+"-0x1.24078a54d5ea1p+6"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.2776,
+"vy": -0.1963,
+"vz": 0.1782,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 4.68515222760664,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.1858261445755155,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.03712754342909643,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.14185567486457132,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.29360951662782636,
+"distance": 4.82812829320046,
+"rssi": -73.00736362987165,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 2990000,
+"time_of_transmission": 2990000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.2fb7e90ff9725p-2",
+"-0x1.5182a9930be0ep-7",
+"-0x1.b81d7dbf487fdp-3"
+],
+"covariance": [
+"0x1.0abfefb903579p-15",
+"0x1.0abfefb90357ap-123",
+"0x1.38844b446fc34p-71",
+"0x1.0abfefb90357ap-123",
+"0x1.0abfefb90357ap-15",
+"0x1.38844b446fc35p-71",
+"0x1.38844b446fc34p-71",
+"0x1.38844b446fc35p-71",
+"0x1.6e22dc5b635d5p-19"
+],
+"fom": [
+"0x1.718fcd9618f0ap-8"
+],
+"altitude": [
+"0x1.7354b025a8daap-3"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.67141ae30a0e0p-3",
+"0x1.67141ae30a0e0p-3",
+"0x1.bcc5ca24edd37p-3",
+"0x1.bcc5ca24edd38p-3"
+],
+"beam_velocity": [
+"-0x1.e9b34e94ef552p-4",
+"-0x1.21e6ef2803ca2p-2",
+"-0x1.1916a6170444fp-2",
+"-0x1.df72564949ef1p-4"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.62b61af60027dp+4",
+"-0x1.62b61af60027dp+4",
+"-0x1.52407f33a427dp+5",
+"-0x1.52407f33a427dp+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.29660000000000003,
+"vy": -0.0103,
+"vz": -0.2149,
+"fom": 0.00563906449506014,
+"covariance": [
+[
+3.179904837944786e-05,
+9.798838316319528e-38,
+5.170156322543242e-22
+],
+[
+9.798838316319528e-38,
+3.1799048379447866e-05,
+5.170156322543243e-22
+],
+[
+5.170156322543242e-22,
+5.170156322543243e-22,
+2.727927080398437e-06
+]
+],
+"altitude": 0.1813138734333795,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.11955576606756793,
+"distance": 0.17533131604546437,
+"rssi": -22.169459305705903,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.28310750657778716,
+"distance": 0.17533131604546437,
+"rssi": -22.169459305705903,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.27450046077234885,
+"distance": 0.21717412877272022,
+"rssi": -42.28149261803353,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.11705239968852844,
+"distance": 0.21717412877272024,
+"rssi": -42.28149261803353,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 3120000,
+"time_of_transmission": 3120000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"covariance": [
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0"
+],
+"fom": [
+"inf"
+],
+"altitude": [
+"nan"
+],
+"valid": false,
+"n_good": 0,
+"beam_range": [
+"nan",
+"nan",
+"nan",
+"nan"
+],
+"beam_velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"beam_valid": [
+false,
+false,
+false,
+false
+],
+"rssi": [
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0,
+"vy": 0.0,
+"vz": 0.0,
+"fom": Infinity,
+"covariance": [
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+]
+],
+"altitude": NaN,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 1,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 2,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 3,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+}
+],
+"velocity_valid": false,
+"status": 0,
+"time_of_validity": 3250000,
+"time_of_transmission": 3250000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"covariance": [
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0"
+],
+"fom": [
+"inf"
+],
+"altitude": [
+"nan"
+],
+"valid": false,
+"n_good": 0,
+"beam_range": [
+"nan",
+"nan",
+"nan",
+"nan"
+],
+"beam_velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"beam_valid": [
+false,
+false,
+false,
+false
+],
+"rssi": [
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0,
+"vy": 0.0,
+"vz": 0.0,
+"fom": Infinity,
+"covariance": [
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+]
+],
+"altitude": NaN,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 1,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 2,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 3,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+}
+],
+"velocity_valid": false,
+"status": 0,
+"time_of_validity": 3380000,
+"time_of_transmission": 3380000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.f41f212d77319p-3",
+"0x1.2a161e4f765fep-1",
+"0x1.4c49ba5e353f8p-1"
+],
+"covariance": [
+"0x1.65dc3899bfeb0p-14",
+"0x1.65dc3899bfeb2p-122",
+"0x1.a34264addbbe4p-70",
+"0x1.65dc3899bfeb2p-122",
+"0x1.65dc3899bfeb2p-14",
+"0x1.a34264addbbe6p-70",
+"0x1.a34264addbbe4p-70",
+"0x1.a34264addbbe6p-70",
+"0x1.eb3160a0de99bp-18"
+],
+"fom": [
+"0x1.2eacd3e352ae7p-7"
+],
+"altitude": [
+"0x1.cd07b16a3026ap-2"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.9ea17f77e1029p-2",
+"0x1.23b32d028ce0bp-1",
+"0x1.23b32d028ce0cp-1",
+"0x1.9ea17f77e1029p-2"
+],
+"beam_velocity": [
+"0x1.a6bf9da36f496p-1",
+"0x1.6087032381339p-1",
+"0x1.838284b17bac7p-2",
+"0x1.02db68f42fc42p-1"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.4465295c5370ep+5",
+"-0x1.9ffb410c618b6p+5",
+"-0x1.9ffb410c618b6p+5",
+"-0x1.4465295c5370ep+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.2442,
+"vy": 0.5822,
+"vz": 0.649,
+"fom": 0.009236911259582438,
+"covariance": [
+[
+8.532052961740077e-05,
+2.6291418057780837e-37,
+1.3872128196428812e-21
+],
+[
+2.6291418057780837e-37,
+8.53205296174008e-05,
+1.3872128196428816e-21
+],
+[
+1.3872128196428812e-21,
+1.3872128196428816e-21,
+7.319344292317649e-06
+]
+],
+"altitude": 0.450224659067351,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.8256806623463884,
+"distance": 0.40491294068511025,
+"rssi": -40.54939529542581,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.6885300618019762,
+"distance": 0.5697263780224956,
+"rssi": -51.99768266365702,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.37842757542868494,
+"distance": 0.5697263780224957,
+"rssi": -51.99768266365702,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.5055802152709321,
+"distance": 0.40491294068511025,
+"rssi": -40.54939529542581,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 3510000,
+"time_of_transmission": 3510000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.0ce703afb7e91p-3",
+"0x1.5a858793dd980p-3",
+"0x1.fb15b573eab37p-5"
+],
+"covariance": [
+"0x1.8121d605674e0p-16",
+"0x1.8121d605674e2p-124",
+"0x1.c335dd2bb5840p-72",
+"0x1.8121d605674e2p-124",
+"0x1.8121d605674e2p-16",
+"0x1.c335dd2bb5842p-72",
+"0x1.c335dd2bb5840p-72",
+"0x1.c335dd2bb5842p-72",
+"0x1.08501c9938d7dp-19"
+],
+"fom": [
+"0x1.39ff1e2c47c8bp-8"
+],
+"altitude": [
+"0x1.2e147ae147ae1p+1"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1"
+],
+"beam_velocity": [
+"0x1.1e4f6b2a18a5ap-3",
+"0x1.0ed6dd54d66b7p-4",
+"-0x1.76572d900fc86p-6",
+"0x1.75e8994cb69efp-5"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.1313,
+"vy": 0.16920000000000002,
+"vz": 0.061900000000000004,
+"fom": 0.004791207186172329,
+"covariance": [
+[
+2.2955666300829357e-05,
+7.073760819540518e-38,
+3.732325000647913e-22
+],
+[
+7.073760819540518e-38,
+2.2955666300829363e-05,
+3.7323250006479138e-22
+],
+[
+3.732325000647913e-22,
+3.7323250006479138e-22,
+1.9692848353001416e-06
+]
+],
+"altitude": 2.36,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.13979991647927897,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.06612287957741612,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.022847933287490928,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.04564313832607413,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 3640000,
+"time_of_transmission": 3640000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.916872b020c4ap-3",
+"0x1.8c7e28240b781p-6",
+"-0x1.2474538ef34d7p-3"
+],
+"covariance": [
+"0x1.e9668e573939ap-16",
+"0x1.e9668e573939cp-124",
+"0x1.1eaf2a533c5bep-71",
+"0x1.e9668e573939cp-124",
+"0x1.e9668e573939cp-16",
+"0x1.1eaf2a533c5bfp-71",
+"0x1.1eaf2a533c5bep-71",
+"0x1.1eaf2a533c5bfp-71",
+"0x1.4fdf193cfdf87p-19"
+],
+"fom": [
+"0x1.61f55a5bcaed6p-8"
+],
+"altitude": [
+"0x1.bb60b50d39d2bp-1"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.daa15ae9b68b8p-1",
+"0x1.cc9482d04aa26p-1",
+"0x1.e46da7da4a330p-1",
+"0x1.f3feeadc9172bp-1"
+],
+"beam_velocity": [
+"-0x1.6a681701070f3p-3",
+"-0x1.2e3858f7d2458p-4",
+"-0x1.57d25ccd1e9a8p-4",
+"-0x1.8b2e12699b82ep-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.902815b37abc1p+5",
+"-0x1.315e5358e64cbp+5",
+"-0x1.a9a96d2912cd2p+5",
+"-0x1.b1bcc5feee3d5p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.196,
+"vy": 0.024200000000000003,
+"vz": -0.1428,
+"fom": 0.00540097671527536,
+"covariance": [
+[
+2.917054947894661e-05,
+8.988869557717243e-38,
+4.742792898107946e-22
+],
+[
+8.988869557717243e-38,
+2.9170549478946617e-05,
+4.742792898107947e-22
+],
+[
+4.742792898107946e-22,
+4.742792898107947e-22,
+2.502437523418198e-06
+]
+],
+"altitude": 0.8659721926350462,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.1769563481510726,
+"distance": 0.927012291936328,
+"rssi": -50.01957264154726,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.07378420594354063,
+"distance": 0.8995705489408621,
+"rssi": -38.171057409790215,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.083940851693035,
+"distance": 0.946149106404027,
+"rssi": -53.20772773827197,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.1929589689711419,
+"distance": 0.9765542406318891,
+"rssi": -54.21717452206182,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 3770000,
+"time_of_transmission": 3770000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.538ef34d6a162p-4",
+"0x1.3c36113404ea5p-5",
+"-0x1.1b3d07c84b5ddp-3"
+],
+"covariance": [
+"0x1.65ddf8e7c5fafp-16",
+"0x1.65ddf8e7c5fb1p-124",
+"0x1.a34471e69e643p-72",
+"0x1.65ddf8e7c5fb1p-124",
+"0x1.65ddf8e7c5fb1p-16",
+"0x1.a34471e69e645p-72",
+"0x1.a34471e69e643p-72",
+"0x1.a34471e69e645p-72",
+"0x1.eb33c7f6c349fp-20"
+],
+"fom": [
+"0x1.2ead917925f74p-8"
+],
+"altitude": [
+"0x1.a17bf57d69c06p+0"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.7a6bca5c20aa4p+0",
+"0x1.7a6bca5c20aa3p+0",
+"0x1.143c9d358fb49p+1",
+"0x1.f23602208fd3ap+0"
+],
+"beam_velocity": [
+"-0x1.7f5643bb79931p-4",
+"-0x1.20b9aee3ed7dfp-3",
+"-0x1.46618622f8b24p-3",
+"-0x1.df1fce9ecac00p-4"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.105884a38489cp+6",
+"-0x1.105884a38489cp+6",
+"-0x1.ea66990ed605bp+5",
+"-0x1.66ee4f1086b1cp+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0829,
+"vy": 0.0386,
+"vz": -0.1383,
+"fom": 0.004618499771048213,
+"covariance": [
+[
+2.1330540135172385e-05,
+6.572980156205163e-38,
+3.468098341408252e-22
+],
+[
+6.572980156205163e-38,
+2.1330540135172392e-05,
+3.468098341408253e-22
+],
+[
+3.468098341408252e-22,
+3.468098341408253e-22,
+1.8298710508541587e-06
+]
+],
+"altitude": 1.6307977133926683,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.09358812768877979,
+"distance": 1.47820725201806,
+"rssi": -68.08644347664307,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.1409791625316634,
+"distance": 1.4782072520180598,
+"rssi": -68.08644347664307,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.15936569971298653,
+"distance": 2.158099795487406,
+"rssi": -61.300096622377815,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.11697369299933769,
+"distance": 1.9461366014000547,
+"rssi": -44.8663617411714,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 3900000,
+"time_of_transmission": 3900000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.0e5604189374cp-6",
+"0x1.3851eb851eb85p-3",
+"-0x1.9f212d77318fdp-2"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.68f84b64426c6p-3"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.7f4cc52cc1deep-3",
+"0x1.d64e7ee5b5056p-3",
+"0x1.614020356b437p-3",
+"0x1.63fcad56fbf28p-3"
+],
+"beam_velocity": [
+"-0x1.594756cebc811p-2",
+"-0x1.5159138d3949fp-2",
+"-0x1.a4a223ba5d9e1p-2",
+"-0x1.aefaa4c5dab48p-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.70d5c3bdb0a7dp+5",
+"-0x1.b96fbb73f7847p+5",
+"-0x1.5dd4272156982p+5",
+"-0x1.642e019441244p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.0165,
+"vy": 0.1525,
+"vz": -0.40540000000000004,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 0.17625483417241677,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.3371861995393611,
+"distance": 0.18715814631308042,
+"rssi": -46.10437725253448,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.32944136189900947,
+"distance": 0.22964190615187147,
+"rssi": -55.17955675696481,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.4107747633455841,
+"distance": 0.17248559153577656,
+"rssi": -43.72859025998606,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.420878004623479,
+"distance": 0.17382178708748453,
+"rssi": -44.52246394943043,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 4030000,
+"time_of_transmission": 4030000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.71758e219652cp-4",
+"-0x1.3afb7e90ff973p-3",
+"0x1.6666666666667p-4"
+],
+"covariance": [
+"0x1.096c10f4b0073p-14",
+"0x1.096c10f4b0074p-122",
+"0x1.36f61c7fd03c2p-70",
+"0x1.096c10f4b0074p-122",
+"0x1.096c10f4b0074p-14",
+"0x1.36f61c7fd03c3p-70",
+"0x1.36f61c7fd03c2p-70",
+"0x1.36f61c7fd03c3p-70",
+"0x1.6c505c5901a76p-18"
+],
+"fom": [
+"0x1.04ab22bbb379ap-7"
+],
+"altitude": [
+"0x1.2bd988ba96884p+2"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.49bd6e030649dp+2",
+"0x1.49bd6e030649dp+2",
+"0x1.49bd6e030649dp+2",
+"0x1.35000dd00c0cbp+2"
+],
+"beam_velocity": [
+"0x1.1565d2914fc3ep-6",
+"0x1.f74a208cb152ep-5",
+"0x1.311b7b492efd7p-3",
+"0x1.88a6b29818a65p-4"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.08491ac9a427ap+6",
+"-0x1.08491ac9a427ap+6",
+"-0x1.08491ac9a427ap+6",
+"-0x1.24078a54d5ea1p+6"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.0902,
+"vy": -0.15380000000000002,
+"vz": 0.08750000000000001,
+"fom": 0.007954971274923218,
+"covariance": [
+[
+6.328156798485352e-05,
+1.9500138673568968e-37,
+1.0288848738907492e-21
+],
+[
+1.9500138673568968e-37,
+6.328156798485353e-05,
+1.0288848738907494e-21
+],
+[
+1.0288848738907492e-21,
+1.0288848738907494e-21,
+5.428700284865382e-06
+]
+],
+"altitude": 4.68515222760664,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.016931014664120385,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.061436713765525716,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.14897819821442113,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.09586210025148885,
+"distance": 4.82812829320046,
+"rssi": -73.00736362987165,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 4160000,
+"time_of_transmission": 4160000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.6e147ae147ae2p-2",
+"0x1.fbe76c8b43958p-7",
+"-0x1.6dab9f559b3d1p-2"
+],
+"covariance": [
+"0x1.8c309faf98e81p-16",
+"0x1.8c309faf98e83p-124",
+"0x1.d02a568d6c5a9p-72",
+"0x1.8c309faf98e83p-124",
+"0x1.8c309faf98e83p-16",
+"0x1.d02a568d6c5abp-72",
+"0x1.d02a568d6c5a9p-72",
+"0x1.d02a568d6c5abp-72",
+"0x1.0fe6db774dc9ep-19"
+],
+"fom": [
+"0x1.3e78ea7ec2866p-8"
+],
+"altitude": [
+"0x1.7354b025a8daap-3"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.67141ae30a0e0p-3",
+"0x1.67141ae30a0e0p-3",
+"0x1.bcc5ca24edd37p-3",
+"0x1.bcc5ca24edd38p-3"
+],
+"beam_velocity": [
+"-0x1.d23f877d5dce9p-3",
+"-0x1.b1f2a6b10f015p-2",
+"-0x1.b7d48e772044fp-2",
+"-0x1.e8c90923a9218p-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.62b61af60027dp+4",
+"-0x1.62b61af60027dp+4",
+"-0x1.52407f33a427dp+5",
+"-0x1.52407f33a427dp+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.35750000000000004,
+"vy": 0.0155,
+"vz": -0.35710000000000003,
+"fom": 0.004859502076906086,
+"covariance": [
+[
+2.3614760435454553e-05,
+7.276859880347664e-38,
+3.839486059891623e-22
+],
+[
+7.276859880347664e-38,
+2.361476043545456e-05,
+3.839486059891624e-22
+],
+[
+3.839486059891623e-22,
+3.839486059891624e-22,
+2.025826173170425e-06
+]
+],
+"altitude": 0.1813138734333795,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.2276602349408912,
+"distance": 0.17533131604546437,
+"rssi": -22.169459305705903,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.4237772031372072,
+"distance": 0.17533131604546437,
+"rssi": -22.169459305705903,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.42952177621925086,
+"distance": 0.21717412877272022,
+"rssi": -42.28149261803353,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.2386646951682827,
+"distance": 0.21717412877272024,
+"rssi": -42.28149261803353,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 4290000,
+"time_of_transmission": 4290000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"covariance": [
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0"
+],
+"fom": [
+"inf"
+],
+"altitude": [
+"nan"
+],
+"valid": false,
+"n_good": 0,
+"beam_range": [
+"nan",
+"nan",
+"nan",
+"nan"
+],
+"beam_velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"beam_valid": [
+false,
+false,
+false,
+false
+],
+"rssi": [
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0,
+"vy": 0.0,
+"vz": 0.0,
+"fom": Infinity,
+"covariance": [
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+]
+],
+"altitude": NaN,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 1,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 2,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 3,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+}
+],
+"velocity_valid": false,
+"status": 0,
+"time_of_validity": 4420000,
+"time_of_transmission": 4420000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"covariance": [
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0"
+],
+"fom": [
+"inf"
+],
+"altitude": [
+"nan"
+],
+"valid": false,
+"n_good": 0,
+"beam_range": [
+"nan",
+"nan",
+"nan",
+"nan"
+],
+"beam_velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"beam_valid": [
+false,
+false,
+false,
+false
+],
+"rssi": [
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0,
+"vy": 0.0,
+"vz": 0.0,
+"fom": Infinity,
+"covariance": [
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+]
+],
+"altitude": NaN,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 1,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 2,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 3,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+}
+],
+"velocity_valid": false,
+"status": 0,
+"time_of_validity": 4550000,
+"time_of_transmission": 4550000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.4b923a29c779bp-3",
+"-0x1.1205bc01a36e3p-2",
+"0x1.edc5d63886595p-3"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.cd07b16a3026ap-2"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.9ea17f77e1029p-2",
+"0x1.23b32d028ce0bp-1",
+"0x1.23b32d028ce0cp-1",
+"0x1.9ea17f77e1029p-2"
+],
+"beam_velocity": [
+"0x1.8cb509f539b9cp-3",
+"0x1.b660e133ea052p-4",
+"0x1.00fb1e8d537d8p-2",
+"0x1.5b9e1298c3601p-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.4465295c5370ep+5",
+"-0x1.9ffb410c618b6p+5",
+"-0x1.9ffb410c618b6p+5",
+"-0x1.4465295c5370ep+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.16190000000000002,
+"vy": -0.2676,
+"vz": 0.2411,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 0.450224659067351,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.19370467929476554,
+"distance": 0.40491294068511025,
+"rssi": -40.54939529542581,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.10702598543014233,
+"distance": 0.5697263780224956,
+"rssi": -51.99768266365702,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.25095794427477136,
+"distance": 0.5697263780224957,
+"rssi": -51.99768266365702,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.3394701867808579,
+"distance": 0.40491294068511025,
+"rssi": -40.54939529542581,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 4680000,
+"time_of_transmission": 4680000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.05c91d14e3bcdp-1",
+"0x1.18fc504816f01p-2",
+"-0x1.4083126e978d5p-3"
+],
+"covariance": [
+"0x1.89cadae1f5f0bp-16",
+"0x1.89cadae1f5f0cp-124",
+"0x1.cd5b436517ecbp-72",
+"0x1.89cadae1f5f0cp-124",
+"0x1.89cadae1f5f0cp-16",
+"0x1.cd5b436517ecdp-72",
+"0x1.cd5b436517ecbp-72",
+"0x1.cd5b436517ecdp-72",
+"0x1.0e41a20c87f01p-19"
+],
+"fom": [
+"0x1.3d81db42ba1abp-8"
+],
+"altitude": [
+"0x1.2e147ae147ae1p+1"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1"
+],
+"beam_velocity": [
+"0x1.113efd59e93b4p-4",
+"-0x1.a8bd30bc91a8fp-3",
+"-0x1.6f1ec2aab80e6p-2",
+"-0x1.4446fe48856d5p-4"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.5113,
+"vy": 0.27440000000000003,
+"vz": -0.1565,
+"fom": 0.004844776182587311,
+"covariance": [
+[
+2.3471856259365267e-05,
+7.232824131242328e-38,
+3.816251498884968e-22
+],
+[
+7.232824131242328e-38,
+2.347185625936527e-05,
+3.8162514988849688e-22
+],
+[
+3.816251498884968e-22,
+3.8162514988849688e-22,
+2.013566932981717e-06
+]
+],
+"altitude": 2.36,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.06671046223944083,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.20739210200754996,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.35851577918039224,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.07916926698120659,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 4810000,
+"time_of_transmission": 4810000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.f212d77318fc5p-9",
+"-0x1.59ce075f6fd22p-1",
+"0x1.d70a3d70a3d71p-5"
+],
+"covariance": [
+"0x1.2966fb84a75f6p-16",
+"0x1.2966fb84a75f7p-124",
+"0x1.5c6dae2b31af2p-72",
+"0x1.2966fb84a75f7p-124",
+"0x1.2966fb84a75f7p-16",
+"0x1.5c6dae2b31af3p-72",
+"0x1.5c6dae2b31af2p-72",
+"0x1.5c6dae2b31af3p-72",
+"0x1.98359534527dep-20"
+],
+"fom": [
+"0x1.13ecf98e3c70ap-8"
+],
+"altitude": [
+"0x1.bb60b50d39d2bp-1"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.daa15ae9b68b8p-1",
+"0x1.cc9482d04aa26p-1",
+"0x1.e46da7da4a330p-1",
+"0x1.f3feeadc9172bp-1"
+],
+"beam_velocity": [
+"-0x1.0517301193c54p-3",
+"-0x1.0df9ecfbb5cbfp-3",
+"0x1.e345379f16f27p-3",
+"0x1.e2d2ad404dedap-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.902815b37abc1p+5",
+"-0x1.315e5358e64cbp+5",
+"-0x1.a9a96d2912cd2p+5",
+"-0x1.b1bcc5feee3d5p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0038,
+"vy": -0.6754,
+"vz": 0.0575,
+"fom": 0.0042102917925477355,
+"covariance": [
+[
+1.7726556978394822e-05,
+5.462417103292338e-38,
+2.8821324948203485e-22
+],
+[
+5.462417103292338e-38,
+1.7726556978394825e-05,
+2.882132494820349e-22
+],
+[
+2.8821324948203485e-22,
+2.882132494820349e-22,
+1.5206981745668442e-06
+]
+],
+"altitude": 0.8659721926350462,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.12748563340798802,
+"distance": 0.927012291936328,
+"rssi": -50.01957264154726,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.13182435172232052,
+"distance": 0.8995705489408621,
+"rssi": -38.171057409790215,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.2359718652177147,
+"distance": 0.946149106404027,
+"rssi": -53.20772773827197,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.23575339653483846,
+"distance": 0.9765542406318891,
+"rssi": -54.21717452206182,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 4940000,
+"time_of_transmission": 4940000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.d652bd3c36114p-2",
+"-0x1.5844d013a92a3p-2",
+"0x1.00b780346dc5ep-2"
+],
+"covariance": [
+"0x1.3f6fb6fa5ae03p-14",
+"0x1.3f6fb6fa5ae04p-122",
+"0x1.763e35925bf00p-70",
+"0x1.3f6fb6fa5ae04p-122",
+"0x1.3f6fb6fa5ae04p-14",
+"0x1.763e35925bf01p-70",
+"0x1.763e35925bf00p-70",
+"0x1.763e35925bf01p-70",
+"0x1.b673f4c0087eap-18"
+],
+"fom": [
+"0x1.1df6ebb4c6b41p-7"
+],
+"altitude": [
+"0x1.a17bf57d69c06p+0"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.7a6bca5c20aa4p+0",
+"0x1.7a6bca5c20aa3p+0",
+"0x1.143c9d358fb49p+1",
+"0x1.f23602208fd3ap+0"
+],
+"beam_velocity": [
+"0x1.332b454560445p-6",
+"0x1.0ce47abbdc7bcp-2",
+"0x1.cc09f95c738c3p-2",
+"0x1.9157fc503debep-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.105884a38489cp+6",
+"-0x1.105884a38489cp+6",
+"-0x1.ea66990ed605bp+5",
+"-0x1.66ee4f1086b1cp+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.45930000000000004,
+"vy": -0.3362,
+"vz": 0.25070000000000003,
+"fom": 0.008726945010086974,
+"covariance": [
+[
+7.615956920908194e-05,
+2.346847918262449e-37,
+1.2382662322781798e-21
+],
+[
+2.346847918262449e-37,
+7.615956920908196e-05,
+1.23826623227818e-21
+],
+[
+1.2382662322781798e-21,
+1.23826623227818e-21,
+6.533458133646859e-06
+]
+],
+"altitude": 1.6307977133926683,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.018748109481297588,
+"distance": 1.47820725201806,
+"rssi": -68.08644347664307,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.26259032985319286,
+"distance": 1.4782072520180598,
+"rssi": -68.08644347664307,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.4492567980459052,
+"distance": 2.158099795487406,
+"rssi": -61.300096622377815,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.1959686004627112,
+"distance": 1.9461366014000547,
+"rssi": -44.8663617411714,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 5070000,
+"time_of_transmission": 5070000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.59b3d07c84b5ep-4",
+"-0x1.32617c1bda512p-1",
+"0x1.6f0068db8bac7p-5"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.68f84b64426c6p-3"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.7f4cc52cc1deep-3",
+"0x1.d64e7ee5b5056p-3",
+"0x1.614020356b437p-3",
+"0x1.63fcad56fbf28p-3"
+],
+"beam_velocity": [
+"-0x1.23c308117c582p-3",
+"-0x1.94015ee3b9cdcp-4",
+"0x1.d113edf7f4e17p-3",
+"0x1.6fc14c90f883ep-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.70d5c3bdb0a7dp+5",
+"-0x1.b96fbb73f7847p+5",
+"-0x1.5dd4272156982p+5",
+"-0x1.642e019441244p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.0844,
+"vy": -0.5984,
+"vz": 0.0448,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 0.17625483417241677,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.14246183684694463,
+"distance": 0.18715814631308042,
+"rssi": -46.10437725253448,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.09863411966545094,
+"distance": 0.22964190615187147,
+"rssi": -55.17955675696481,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.22708879387811073,
+"distance": 0.17248559153577656,
+"rssi": -43.72859025998606,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.17956790749946266,
+"distance": 0.17382178708748453,
+"rssi": -44.52246394943043,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 5200000,
+"time_of_transmission": 5200000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.6bedfa43fe5c9p-3",
+"-0x1.01a36e2eb1c43p-2",
+"-0x1.cded288ce703bp-2"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.2bd988ba96884p+2"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.49bd6e030649dp+2",
+"0x1.49bd6e030649dp+2",
+"0x1.49bd6e030649dp+2",
+"0x1.35000dd00c0cbp+2"
+],
+"beam_velocity": [
+"-0x1.bee478e2c0e91p-2",
+"-0x1.1100a7dd49fe3p-1",
+"-0x1.95e53c379fb14p-2",
+"-0x1.34175374aad79p-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.08491ac9a427ap+6",
+"-0x1.08491ac9a427ap+6",
+"-0x1.08491ac9a427ap+6",
+"-0x1.24078a54d5ea1p+6"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.1777,
+"vy": -0.2516,
+"vz": -0.4511,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 4.68515222760664,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.4364184273146999,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.533208127749273,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.39638227548123095,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.3008702316244221,
+"distance": 4.82812829320046,
+"rssi": -73.00736362987165,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 5330000,
+"time_of_transmission": 5330000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.577318fc50482p-2",
+"0x1.049ba5e353f7dp-1",
+"-0x1.03e425aee6320p-3"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.7354b025a8daap-3"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.67141ae30a0e0p-3",
+"0x1.67141ae30a0e0p-3",
+"0x1.bcc5ca24edd37p-3",
+"0x1.bcc5ca24edd38p-3"
+],
+"beam_velocity": [
+"0x1.c8710a85cf0dfp-4",
+"-0x1.20adffe61eeb1p-4",
+"-0x1.61daa09460432p-2",
+"-0x1.50c74c7387275p-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.62b61af60027dp+4",
+"-0x1.62b61af60027dp+4",
+"-0x1.52407f33a427dp+5",
+"-0x1.52407f33a427dp+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.33540000000000003,
+"vy": 0.509,
+"vz": -0.1269,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 0.1813138734333795,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.1114359293978313,
+"distance": 0.17533131604546437,
+"rssi": -22.169459305705903,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.07047843895446239,
+"distance": 0.17533131604546437,
+"rssi": -22.169459305705903,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.3455605593263186,
+"distance": 0.21717412877272022,
+"rssi": -42.28149261803353,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.16444263198436074,
+"distance": 0.21717412877272024,
+"rssi": -42.28149261803353,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 5460000,
+"time_of_transmission": 5460000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"covariance": [
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0"
+],
+"fom": [
+"inf"
+],
+"altitude": [
+"nan"
+],
+"valid": false,
+"n_good": 0,
+"beam_range": [
+"nan",
+"nan",
+"nan",
+"nan"
+],
+"beam_velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"beam_valid": [
+false,
+false,
+false,
+false
+],
+"rssi": [
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0,
+"vy": 0.0,
+"vz": 0.0,
+"fom": Infinity,
+"covariance": [
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+]
+],
+"altitude": NaN,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 1,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 2,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 3,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+}
+],
+"velocity_valid": false,
+"status": 0,
+"time_of_validity": 5590000,
+"time_of_transmission": 5590000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"covariance": [
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0"
+],
+"fom": [
+"inf"
+],
+"altitude": [
+"nan"
+],
+"valid": false,
+"n_good": 0,
+"beam_range": [
+"nan",
+"nan",
+"nan",
+"nan"
+],
+"beam_velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"beam_valid": [
+false,
+false,
+false,
+false
+],
+"rssi": [
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0,
+"vy": 0.0,
+"vz": 0.0,
+"fom": Infinity,
+"covariance": [
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+]
+],
+"altitude": NaN,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 1,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 2,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 3,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+}
+],
+"velocity_valid": false,
+"status": 0,
+"time_of_validity": 5720000,
+"time_of_transmission": 5720000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.495182a9930bep-3",
+"-0x1.46dc5d638865ap-5",
+"-0x1.7404ea4a8c155p-2"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.cd07b16a3026ap-2"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.9ea17f77e1029p-2",
+"0x1.23b32d028ce0bp-1",
+"0x1.23b32d028ce0cp-1",
+"0x1.9ea17f77e1029p-2"
+],
+"beam_velocity": [
+"-0x1.35661acbbda40p-2",
+"-0x1.901c1af83d6afp-2",
+"-0x1.7860e86e614cfp-2",
+"-0x1.20dfd08235057p-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.4465295c5370ep+5",
+"-0x1.9ffb410c618b6p+5",
+"-0x1.9ffb410c618b6p+5",
+"-0x1.4465295c5370ep+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.1608,
+"vy": -0.039900000000000005,
+"vz": -0.3633,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 0.450224659067351,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.30214731091055924,
+"distance": 0.40491294068511025,
+"rssi": -40.54939529542581,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.3907322134030932,
+"distance": 0.5697263780224956,
+"rssi": -51.99768266365702,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.36755717443186325,
+"distance": 0.5697263780224957,
+"rssi": -51.99768266365702,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.28210378451081425,
+"distance": 0.40491294068511025,
+"rssi": -40.54939529542581,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 5850000,
+"time_of_transmission": 5850000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.8793dd97f62b7p-3",
+"-0x1.d7dbf487fcb93p-4",
+"-0x1.29ba5e353f7cfp-1"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.2e147ae147ae1p+1"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1"
+],
+"beam_velocity": [
+"-0x1.08baa53996181p-1",
+"-0x1.3d535a15f1c99p-1",
+"-0x1.1dc9c68562da2p-1",
+"-0x1.d0e333770e2dfp-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.1912,
+"vy": -0.11520000000000001,
+"vz": -0.5815,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 2.36,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.5170489914699347,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.6197765495097826,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.5581800496888045,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.45399170316845344,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 5980000,
+"time_of_transmission": 5980000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.6c8b439581063p-4",
+"0x1.8e219652bd3c4p-6",
+"0x1.26b50b0f27bb3p-3"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.bb60b50d39d2bp-1"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.daa15ae9b68b8p-1",
+"0x1.cc9482d04aa26p-1",
+"0x1.e46da7da4a330p-1",
+"0x1.f3feeadc9172bp-1"
+],
+"beam_velocity": [
+"0x1.4f6fdc36b8a82p-3",
+"0x1.d8350f348c4dep-4",
+"0x1.a3d8d97e2e70bp-4",
+"0x1.33cb772894c8fp-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.902815b37abc1p+5",
+"-0x1.315e5358e64cbp+5",
+"-0x1.a9a96d2912cd2p+5",
+"-0x1.b1bcc5feee3d5p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.08900000000000001,
+"vy": 0.024300000000000002,
+"vz": 0.1439,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 0.8659721926350462,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.1637875751685734,
+"distance": 0.927012291936328,
+"rssi": -50.01957264154726,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.11528497638279897,
+"distance": 0.8995705489408621,
+"rssi": -38.171057409790215,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.10250172575151965,
+"distance": 0.946149106404027,
+"rssi": -53.20772773827197,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.15029042332262008,
+"distance": 0.9765542406318891,
+"rssi": -54.21717452206182,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 6110000,
+"time_of_transmission": 6110000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.13404ea4a8c16p-3",
+"0x1.7df3b645a1cacp-3",
+"-0x1.49d495182a993p-2"
+],
+"covariance": [
+"0x1.9b6843c5ee5dep-16",
+"0x1.9b6843c5ee5e0p-124",
+"0x1.e1fe5d89b8566p-72",
+"0x1.9b6843c5ee5e0p-124",
+"0x1.9b6843c5ee5e0p-16",
+"0x1.e1fe5d89b8568p-72",
+"0x1.e1fe5d89b8566p-72",
+"0x1.e1fe5d89b8568p-72",
+"0x1.1a58670f27e1ep-19"
+],
+"fom": [
+"0x1.4487e4fddf846p-8"
+],
+"altitude": [
+"0x1.a17bf57d69c06p+0"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.7a6bca5c20aa4p+0",
+"0x1.7a6bca5c20aa3p+0",
+"0x1.143c9d358fb49p+1",
+"0x1.f23602208fd3ap+0"
+],
+"beam_velocity": [
+"-0x1.b25da6904daa4p-3",
+"-0x1.20e9ae0cb09a8p-2",
+"-0x1.8afc3dd427e99p-2",
+"-0x1.3dc44ef118846p-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.105884a38489cp+6",
+"-0x1.105884a38489cp+6",
+"-0x1.ea66990ed605bp+5",
+"-0x1.66ee4f1086b1cp+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.13440000000000002,
+"vy": 0.1865,
+"vz": -0.3221,
+"fom": 0.004951947599577683,
+"covariance": [
+[
+2.4521785028963165e-05,
+7.556358412337087e-38,
+3.9869577351717433e-22
+],
+[
+7.556358412337087e-38,
+2.4521785028963172e-05,
+3.9869577351717442e-22
+],
+[
+3.9869577351717433e-22,
+3.9869577351717442e-22,
+2.1036365818875204e-06
+]
+],
+"altitude": 1.6307977133926683,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.21209268691901173,
+"distance": 1.47820725201806,
+"rssi": -68.08644347664307,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.2821414180035853,
+"distance": 1.4782072520180598,
+"rssi": -68.08644347664307,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.38572785003086946,
+"distance": 2.158099795487406,
+"rssi": -61.300096622377815,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.31031916948825644,
+"distance": 1.9461366014000547,
+"rssi": -44.8663617411714,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 6240000,
+"time_of_transmission": 6240000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.acd9e83e425afp-4",
+"0x1.624dd2f1a9fbfp-4",
+"-0x1.2c710cb295e9ep-3"
+],
+"covariance": [
+"0x1.60e45c69d2630p-15",
+"0x1.60e45c69d2632p-123",
+"0x1.9d7051049550cp-71",
+"0x1.60e45c69d2632p-123",
+"0x1.60e45c69d2632p-15",
+"0x1.9d7051049550ep-71",
+"0x1.9d7051049550cp-71",
+"0x1.9d7051049550ep-71",
+"0x1.e45fa4d6176dbp-19"
+],
+"fom": [
+"0x1.a910c7e61ce37p-8"
+],
+"altitude": [
+"0x1.68f84b64426c6p-3"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.7f4cc52cc1deep-3",
+"0x1.d64e7ee5b5056p-3",
+"0x1.614020356b437p-3",
+"0x1.63fcad56fbf28p-3"
+],
+"beam_velocity": [
+"-0x1.1c0df801e1486p-3",
+"-0x1.5e58dc07683c0p-4",
+"-0x1.07dcef1fbece2p-3",
+"-0x1.831f2c9882ff2p-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.70d5c3bdb0a7dp+5",
+"-0x1.b96fbb73f7847p+5",
+"-0x1.5dd4272156982p+5",
+"-0x1.642e019441244p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.1047,
+"vy": 0.08650000000000001,
+"vz": -0.1467,
+"fom": 0.006485985568463407,
+"covariance": [
+[
+4.206800879431557e-05,
+1.2963206054034873e-37,
+6.839770141841958e-22
+],
+[
+1.2963206054034873e-37,
+4.206800879431558e-05,
+6.839770141841959e-22
+],
+[
+6.839770141841958e-22,
+6.839770141841959e-22,
+3.6088646125216417e-06
+]
+],
+"altitude": 0.17625483417241677,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.1386985183309301,
+"distance": 0.18715814631308042,
+"rssi": -46.10437725253448,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.08553396176149786,
+"distance": 0.22964190615187147,
+"rssi": -55.17955675696481,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.1288393670618922,
+"distance": 0.17248559153577656,
+"rssi": -43.72859025998606,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.18902430382183827,
+"distance": 0.17382178708748453,
+"rssi": -44.52246394943043,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 6370000,
+"time_of_transmission": 6370000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.f4f0d844d013bp-2",
+"0x1.c84b5dcc63f14p-2",
+"-0x1.425aee631f8a1p-3"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.2bd988ba96884p+2"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.49bd6e030649dp+2",
+"0x1.49bd6e030649dp+2",
+"0x1.49bd6e030649dp+2",
+"0x1.35000dd00c0cbp+2"
+],
+"beam_velocity": [
+"-0x1.405a86ac2a57ep-3",
+"0x1.b54447e22bed8p-4",
+"-0x1.0ffe80b5f17a6p-3",
+"-0x1.98c3e5ccb937ep-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.08491ac9a427ap+6",
+"-0x1.08491ac9a427ap+6",
+"-0x1.08491ac9a427ap+6",
+"-0x1.24078a54d5ea1p+6"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.4892,
+"vy": 0.4456,
+"vz": -0.1574,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 4.68515222760664,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.15642266476542582,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.10675457076535666,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.13280964427229697,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.39918479024918685,
+"distance": 4.82812829320046,
+"rssi": -73.00736362987165,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 6500000,
+"time_of_transmission": 6500000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.374bc6a7ef9dbp-6",
+"-0x1.d59b3d07c84b6p-2",
+"0x1.f141205bc01a4p-4"
+],
+"covariance": [
+"0x1.f81ce154ecf80p-17",
+"0x1.f81ce154ecf83p-125",
+"0x1.274d6d4d30d4ep-72",
+"0x1.f81ce154ecf83p-125",
+"0x1.f81ce154ecf83p-17",
+"0x1.274d6d4d30d4fp-72",
+"0x1.274d6d4d30d4ep-72",
+"0x1.274d6d4d30d4fp-72",
+"0x1.59f7e515d2c6ep-20"
+],
+"fom": [
+"0x1.fc0a8599fd05dp-9"
+],
+"altitude": [
+"0x1.7354b025a8daap-3"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.67141ae30a0e0p-3",
+"0x1.67141ae30a0e0p-3",
+"0x1.bcc5ca24edd37p-3",
+"0x1.bcc5ca24edd38p-3"
+],
+"beam_velocity": [
+"-0x1.7a905573856f5p-8",
+"-0x1.2925c855761d7p-6",
+"0x1.db71f7be2585bp-3",
+"0x1.ec2a94cba44aap-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.62b61af60027dp+4",
+"-0x1.62b61af60027dp+4",
+"-0x1.52407f33a427dp+5",
+"-0x1.52407f33a427dp+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.019,
+"vy": -0.4586,
+"vz": 0.12140000000000001,
+"fom": 0.0038760459983624832,
+"covariance": [
+[
+1.5023732581421817e-05,
+4.629545032804229e-38,
+2.4426846070097905e-22
+],
+[
+4.629545032804229e-38,
+1.5023732581421822e-05,
+2.442684607009791e-22
+],
+[
+2.4426846070097905e-22,
+2.442684607009791e-22,
+1.2888324980194426e-06
+]
+],
+"altitude": 0.1813138734333795,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.005776425230143313,
+"distance": 0.17533131604546437,
+"rssi": -22.169459305705903,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.018136449469098394,
+"distance": 0.17533131604546437,
+"rssi": -22.169459305705903,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.23215096997290882,
+"distance": 0.21717412877272022,
+"rssi": -42.28149261803353,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.24031559225526183,
+"distance": 0.21717412877272024,
+"rssi": -42.28149261803353,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 6630000,
+"time_of_transmission": 6630000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"covariance": [
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0"
+],
+"fom": [
+"inf"
+],
+"altitude": [
+"nan"
+],
+"valid": false,
+"n_good": 0,
+"beam_range": [
+"nan",
+"nan",
+"nan",
+"nan"
+],
+"beam_velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"beam_valid": [
+false,
+false,
+false,
+false
+],
+"rssi": [
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0,
+"vy": 0.0,
+"vz": 0.0,
+"fom": Infinity,
+"covariance": [
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+]
+],
+"altitude": NaN,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 1,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 2,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 3,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+}
+],
+"velocity_valid": false,
+"status": 0,
+"time_of_validity": 6760000,
+"time_of_transmission": 6760000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"covariance": [
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0"
+],
+"fom": [
+"inf"
+],
+"altitude": [
+"nan"
+],
+"valid": false,
+"n_good": 0,
+"beam_range": [
+"nan",
+"nan",
+"nan",
+"nan"
+],
+"beam_velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"beam_valid": [
+false,
+false,
+false,
+false
+],
+"rssi": [
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0,
+"vy": 0.0,
+"vz": 0.0,
+"fom": Infinity,
+"covariance": [
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+]
+],
+"altitude": NaN,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 1,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 2,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 3,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+}
+],
+"velocity_valid": false,
+"status": 0,
+"time_of_validity": 6890000,
+"time_of_transmission": 6890000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.e1b089a027526p-6",
+"-0x1.182a9930be0dfp-6",
+"0x1.07c84b5dcc63fp-2"
+],
+"covariance": [
+"0x1.10be018ae757dp-14",
+"0x1.10be018ae757fp-122",
+"0x1.3f89917fc050ep-70",
+"0x1.10be018ae757fp-122",
+"0x1.10be018ae757fp-14",
+"0x1.3f89917fc050fp-70",
+"0x1.3f89917fc050ep-70",
+"0x1.3f89917fc050fp-70",
+"0x1.765c7fa6c7c83p-18"
+],
+"fom": [
+"0x1.083d10f53eb69p-7"
+],
+"altitude": [
+"0x1.cd07b16a3026ap-2"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.9ea17f77e1029p-2",
+"0x1.23b32d028ce0bp-1",
+"0x1.23b32d028ce0cp-1",
+"0x1.9ea17f77e1029p-2"
+],
+"beam_velocity": [
+"0x1.d1febdd75236cp-3",
+"0x1.e9aae3a38635ap-3",
+"0x1.02ca856ace63dp-2",
+"0x1.dc08bd29d0531p-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.4465295c5370ep+5",
+"-0x1.9ffb410c618b6p+5",
+"-0x1.9ffb410c618b6p+5",
+"-0x1.4465295c5370ep+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.029400000000000003,
+"vy": -0.0171,
+"vz": 0.2576,
+"fom": 0.008063920288341202,
+"covariance": [
+[
+6.502681041672082e-05,
+2.003793301912872e-37,
+1.0572604909400986e-21
+],
+[
+2.003793301912872e-37,
+6.502681041672084e-05,
+1.0572604909400988e-21
+],
+[
+1.0572604909400986e-21,
+1.0572604909400988e-21,
+5.578418415890594e-06
+]
+],
+"altitude": 0.450224659067351,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.22753666222913738,
+"distance": 0.40491294068511025,
+"rssi": -40.54939529542581,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.23909547655855584,
+"distance": 0.5697263780224956,
+"rssi": -51.99768266365702,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.2527256819190347,
+"distance": 0.5697263780224957,
+"rssi": -51.99768266365702,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.23243854316573612,
+"distance": 0.40491294068511025,
+"rssi": -40.54939529542581,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 7020000,
+"time_of_transmission": 7020000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.8dab9f559b3d1p-1",
+"0x1.9374bc6a7ef9ep-2",
+"-0x1.b21ff2e48e8a7p-1"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.2e147ae147ae1p+1"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1"
+],
+"beam_velocity": [
+"-0x1.de1fc34cb9065p-2",
+"-0x1.c5f6293b31ecep-1",
+"-0x1.19b95bb24884dp+0",
+"-0x1.5bee0e82b8a7ap-1"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.7767000000000001,
+"vy": 0.394,
+"vz": -0.8479,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 2.36,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.46691804080751914,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.8866436848411128,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -1.100484591509047,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.679550603348914,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 7150000,
+"time_of_transmission": 7150000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.837b4a2339c0fp-5",
+"0x1.20c49ba5e3540p-1",
+"0x1.21e4f765fd8aep-2"
+],
+"covariance": [
+"0x1.9d3547f1e349ap-14",
+"0x1.9d3547f1e349cp-122",
+"0x1.e41a7ac5165d3p-70",
+"0x1.9d3547f1e349cp-122",
+"0x1.9d3547f1e349cp-14",
+"0x1.e41a7ac5165d5p-70",
+"0x1.e41a7ac5165d3p-70",
+"0x1.e41a7ac5165d5p-70",
+"0x1.1b94cb4ccc4e4p-17"
+],
+"fom": [
+"0x1.453d8726ad191p-7"
+],
+"altitude": [
+"0x1.bb60b50d39d2bp-1"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.daa15ae9b68b8p-1",
+"0x1.cc9482d04aa26p-1",
+"0x1.e46da7da4a330p-1",
+"0x1.f3feeadc9172bp-1"
+],
+"beam_velocity": [
+"0x1.9dc4fcff4da41p-2",
+"0x1.b27522a10a70cp-2",
+"0x1.fda736748085bp-4",
+"0x1.7ee56bd188e41p-4"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.902815b37abc1p+5",
+"-0x1.315e5358e64cbp+5",
+"-0x1.a9a96d2912cd2p+5",
+"-0x1.b1bcc5feee3d5p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.0473,
+"vy": 0.5640000000000001,
+"vz": 0.2831,
+"fom": 0.009925547591912916,
+"covariance": [
+[
+9.851649499932822e-05,
+3.0357738837645064e-37,
+1.6017639063210874e-21
+],
+[
+3.0357738837645064e-37,
+9.851649499932825e-05,
+1.6017639063210878e-21
+],
+[
+1.6017639063210874e-21,
+1.6017639063210878e-21,
+8.451379153481165e-06
+]
+],
+"altitude": 0.8659721926350462,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.4040717631172904,
+"distance": 0.927012291936328,
+"rssi": -50.01957264154726,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.424274960593366,
+"distance": 0.8995705489408621,
+"rssi": -38.171057409790215,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.12442704459684377,
+"distance": 0.946149106404027,
+"rssi": -53.20772773827197,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.0934805118236506,
+"distance": 0.9765542406318891,
+"rssi": -54.21717452206182,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 7280000,
+"time_of_transmission": 7280000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.26809d495182bp-3",
+"0x1.a0c49ba5e3540p-2",
+"0x1.50b0f27bb2fedp-3"
+],
+"covariance": [
+"0x1.142d7c3497073p-16",
+"0x1.142d7c3497074p-124",
+"0x1.438ff138df9bbp-72",
+"0x1.142d7c3497074p-124",
+"0x1.142d7c3497074p-16",
+"0x1.438ff138df9bcp-72",
+"0x1.438ff138df9bbp-72",
+"0x1.438ff138df9bcp-72",
+"0x1.7b13a82244a3fp-20"
+],
+"fom": [
+"0x1.09e5c322ba852p-8"
+],
+"altitude": [
+"0x1.a17bf57d69c06p+0"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.7a6bca5c20aa4p+0",
+"0x1.7a6bca5c20aa3p+0",
+"0x1.143c9d358fb49p+1",
+"0x1.f23602208fd3ap+0"
+],
+"beam_velocity": [
+"0x1.35388edec2d6bp-2",
+"0x1.c6958251ef136p-3",
+"0x1.00c50f0a133acp-8",
+"0x1.45c6a4e79df25p-4"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.105884a38489cp+6",
+"-0x1.105884a38489cp+6",
+"-0x1.ea66990ed605bp+5",
+"-0x1.66ee4f1086b1cp+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.1438,
+"vy": 0.40700000000000003,
+"vz": 0.16440000000000002,
+"fom": 0.004057273998777049,
+"covariance": [
+[
+1.6461472301152303e-05,
+5.072582789358446e-38,
+2.676444404266503e-22
+],
+[
+5.072582789358446e-38,
+1.6461472301152307e-05,
+2.6764444042665034e-22
+],
+[
+2.676444404266503e-22,
+2.6764444042665034e-22,
+1.4121710668098256e-06
+]
+],
+"altitude": 1.6307977133926683,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.3019735644781664,
+"distance": 1.47820725201806,
+"rssi": -68.08644347664307,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.2219648534063567,
+"distance": 1.4782072520180598,
+"rssi": -68.08644347664307,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.003917995616643671,
+"distance": 2.158099795487406,
+"rssi": -61.300096622377815,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.07953514495772802,
+"distance": 1.9461366014000547,
+"rssi": -44.8663617411714,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 7410000,
+"time_of_transmission": 7410000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.a36e2eb1c432dp-4",
+"-0x1.bdd97f62b6ae8p-3",
+"-0x1.63bcd35a8587ap-3"
+],
+"covariance": [
+"0x1.f1c845fc8a037p-17",
+"0x1.f1c845fc8a039p-125",
+"0x1.239818f37297fp-72",
+"0x1.f1c845fc8a039p-125",
+"0x1.f1c845fc8a039p-17",
+"0x1.239818f372980p-72",
+"0x1.239818f37297fp-72",
+"0x1.239818f372980p-72",
+"0x1.559fafa96cb1bp-20"
+],
+"fom": [
+"0x1.f8d753032f2d6p-9"
+],
+"altitude": [
+"0x1.68f84b64426c6p-3"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.7f4cc52cc1deep-3",
+"0x1.d64e7ee5b5056p-3",
+"0x1.614020356b437p-3",
+"0x1.63fcad56fbf28p-3"
+],
+"beam_velocity": [
+"-0x1.f7ee0b0779f19p-3",
+"-0x1.8aaaf380aeec4p-3",
+"-0x1.2a40334a5e356p-4",
+"-0x1.0aecefb7cffe1p-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.70d5c3bdb0a7dp+5",
+"-0x1.b96fbb73f7847p+5",
+"-0x1.5dd4272156982p+5",
+"-0x1.642e019441244p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.1024,
+"vy": -0.2177,
+"vz": -0.17370000000000002,
+"fom": 0.003851632006983112,
+"covariance": [
+[
+1.4835069117216753e-05,
+4.5714086143843307e-38,
+2.412010116671169e-22
+],
+[
+4.5714086143843307e-38,
+1.4835069117216756e-05,
+2.4120101166711697e-22
+],
+[
+2.412010116671169e-22,
+2.4120101166711697e-22,
+1.272647731514939e-06
+]
+],
+"altitude": 0.17625483417241677,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.24605949989858614,
+"distance": 0.18715814631308042,
+"rssi": -46.10437725253448,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.1927088760038399,
+"distance": 0.22964190615187147,
+"rssi": -55.17955675696481,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.07281513247825208,
+"distance": 0.17248559153577656,
+"rssi": -43.72859025998606,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.1303347328157534,
+"distance": 0.17382178708748453,
+"rssi": -44.52246394943043,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 7540000,
+"time_of_transmission": 7540000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.8793dd97f62b7p-3",
+"-0x1.4395810624dd3p-4",
+"0x1.449ba5e353f7dp-2"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.2bd988ba96884p+2"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.49bd6e030649dp+2",
+"0x1.49bd6e030649dp+2",
+"0x1.49bd6e030649dp+2",
+"0x1.35000dd00c0cbp+2"
+],
+"beam_velocity": [
+"0x1.4b9da982ce393p-2",
+"0x1.c0a70613c8005p-3",
+"0x1.0d6f5abd8b607p-2",
+"0x1.761c8b6fe2728p-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.08491ac9a427ap+6",
+"-0x1.08491ac9a427ap+6",
+"-0x1.08491ac9a427ap+6",
+"-0x1.24078a54d5ea1p+6"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.1912,
+"vy": -0.079,
+"vz": 0.317,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 4.68515222760664,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.3238436208808306,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.21906857250087355,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.26312009603393033,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.36534326429738195,
+"distance": 4.82812829320046,
+"rssi": -73.00736362987165,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 7670000,
+"time_of_transmission": 7670000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.e69ad42c3c9efp-6",
+"0x1.b645a1cac0832p-4",
+"0x1.f53f7ced91688p-2"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.7354b025a8daap-3"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.67141ae30a0e0p-3",
+"0x1.67141ae30a0e0p-3",
+"0x1.bcc5ca24edd37p-3",
+"0x1.bcc5ca24edd38p-3"
+],
+"beam_velocity": [
+"0x1.e4ee4bef0407fp-2",
+"0x1.f49a457b84166p-2",
+"0x1.ba0fe0014bc60p-2",
+"0x1.a8ddaea66227ap-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.62b61af60027dp+4",
+"-0x1.62b61af60027dp+4",
+"-0x1.52407f33a427dp+5",
+"-0x1.52407f33a427dp+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.0297,
+"vy": 0.10700000000000001,
+"vz": 0.48950000000000005,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 0.1813138734333795,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.4735652794488558,
+"distance": 0.17533131604546437,
+"rssi": -22.169459305705903,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.4888697487486041,
+"distance": 0.17533131604546437,
+"rssi": -22.169459305705903,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.43170118339452834,
+"distance": 0.21717412877272022,
+"rssi": -42.28149261803353,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.4149081505825404,
+"distance": 0.21717412877272024,
+"rssi": -42.28149261803353,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 7800000,
+"time_of_transmission": 7800000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"covariance": [
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0"
+],
+"fom": [
+"inf"
+],
+"altitude": [
+"nan"
+],
+"valid": false,
+"n_good": 0,
+"beam_range": [
+"nan",
+"nan",
+"nan",
+"nan"
+],
+"beam_velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"beam_valid": [
+false,
+false,
+false,
+false
+],
+"rssi": [
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0,
+"vy": 0.0,
+"vz": 0.0,
+"fom": Infinity,
+"covariance": [
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+]
+],
+"altitude": NaN,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 1,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 2,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 3,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+}
+],
+"velocity_valid": false,
+"status": 0,
+"time_of_validity": 7930000,
+"time_of_transmission": 7930000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"covariance": [
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0"
+],
+"fom": [
+"inf"
+],
+"altitude": [
+"nan"
+],
+"valid": false,
+"n_good": 0,
+"beam_range": [
+"nan",
+"nan",
+"nan",
+"nan"
+],
+"beam_velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"beam_valid": [
+false,
+false,
+false,
+false
+],
+"rssi": [
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0,
+"vy": 0.0,
+"vz": 0.0,
+"fom": Infinity,
+"covariance": [
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+]
+],
+"altitude": NaN,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 1,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 2,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 3,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+}
+],
+"velocity_valid": false,
+"status": 0,
+"time_of_validity": 8060000,
+"time_of_transmission": 8060000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.4a2339c0ebee0p-4",
+"-0x1.f212d77318fc5p-7",
+"0x1.d59b3d07c84b6p-3"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.cd07b16a3026ap-2"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.9ea17f77e1029p-2",
+"0x1.23b32d028ce0bp-1",
+"0x1.23b32d028ce0cp-1",
+"0x1.9ea17f77e1029p-2"
+],
+"beam_velocity": [
+"0x1.d686dadc59eb5p-3",
+"0x1.7c4ab7fbb0915p-3",
+"0x1.8e20c25922b43p-3",
+"0x1.e674234fd4695p-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.4465295c5370ep+5",
+"-0x1.9ffb410c618b6p+5",
+"-0x1.9ffb410c618b6p+5",
+"-0x1.4465295c5370ep+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0806,
+"vy": -0.0152,
+"vz": 0.2293,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 0.450224659067351,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.22974940285643233,
+"distance": 0.40491294068511025,
+"rssi": -40.54939529542581,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.18568938958021222,
+"distance": 0.5697263780224956,
+"rssi": -51.99768266365702,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.19439842066307209,
+"distance": 0.5697263780224957,
+"rssi": -51.99768266365702,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.23752620303507813,
+"distance": 0.40491294068511025,
+"rssi": -40.54939529542581,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 8190000,
+"time_of_transmission": 8190000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.094467381d7dcp-1",
+"-0x1.6113404ea4a8cp-5",
+"0x1.350b0f27bb2ffp-2"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.2e147ae147ae1p+1"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1",
+"0x1.46f812bc01eedp+1"
+],
+"beam_velocity": [
+"0x1.a23148d222db3p-2",
+"0x1.02004c06f8839p-3",
+"0x1.35da25093a148p-3",
+"0x1.b806faaac3536p-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5",
+"-0x1.dfd1e77582d38p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.5181,
+"vy": -0.0431,
+"vz": 0.3018,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 2.36,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.40839113028115576,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.1259771289470011,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.15129498419197263,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.4297141234136065,
+"distance": 2.55444559269005,
+"rssi": -59.97749225430965,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 8320000,
+"time_of_transmission": 8320000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.02de00d1b7176p-6",
+"0x1.ed288ce703afcp-4",
+"0x1.7df3b645a1cacp-3"
+],
+"covariance": [
+"0x1.628c3a4393e45p-15",
+"0x1.628c3a4393e47p-123",
+"0x1.9f60e8372fe5cp-71",
+"0x1.628c3a4393e47p-123",
+"0x1.628c3a4393e47p-15",
+"0x1.9f60e8372fe5ep-71",
+"0x1.9f60e8372fe5cp-71",
+"0x1.9f60e8372fe5ep-71",
+"0x1.e6a56f9ce00b4p-19"
+],
+"fom": [
+"0x1.aa0fc29242ef0p-8"
+],
+"altitude": [
+"0x1.bb60b50d39d2bp-1"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.daa15ae9b68b8p-1",
+"0x1.cc9482d04aa26p-1",
+"0x1.e46da7da4a330p-1",
+"0x1.f3feeadc9172bp-1"
+],
+"beam_velocity": [
+"0x1.b00441638dc66p-3",
+"0x1.974b1aa6c421dp-3",
+"0x1.1916c9c87bb13p-3",
+"0x1.23669d244f664p-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.902815b37abc1p+5",
+"-0x1.315e5358e64cbp+5",
+"-0x1.a9a96d2912cd2p+5",
+"-0x1.b1bcc5feee3d5p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0158,
+"vy": 0.12040000000000001,
+"vz": 0.1865,
+"fom": 0.006501183512465522,
+"covariance": [
+[
+4.226538706275351e-05,
+1.3024027928843822e-37,
+6.871861558236563e-22
+],
+[
+1.3024027928843822e-37,
+4.226538706275352e-05,
+6.871861558236564e-22
+],
+[
+6.871861558236563e-22,
+6.871861558236564e-22,
+3.6257969910358997e-06
+]
+],
+"altitude": 0.8659721926350462,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.2109456165796672,
+"distance": 0.927012291936328,
+"rssi": -50.01957264154726,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.19887371846608995,
+"distance": 0.8995705489408621,
+"rssi": -38.171057409790215,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.13725049632145012,
+"distance": 0.946149106404027,
+"rssi": -53.20772773827197,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.14228556410846516,
+"distance": 0.9765542406318891,
+"rssi": -54.21717452206182,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 8450000,
+"time_of_transmission": 8450000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.010624dd2f1aap-1",
+"-0x1.69d495182a993p-1",
+"0x1.10cb295e9e1b1p-3"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.a17bf57d69c06p+0"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.7a6bca5c20aa4p+0",
+"0x1.7a6bca5c20aa3p+0",
+"0x1.143c9d358fb49p+1",
+"0x1.f23602208fd3ap+0"
+],
+"beam_velocity": [
+"0x1.1823a6481f385p-4",
+"-0x1.a3738b798145ap-3",
+"0x1.6ef599cc32615p-3",
+"0x1.cc283dfe448a1p-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.105884a38489cp+6",
+"-0x1.105884a38489cp+6",
+"-0x1.ea66990ed605bp+5",
+"-0x1.66ee4f1086b1cp+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.502,
+"vy": -0.7067,
+"vz": 0.1332,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 1.6307977133926683,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.06839337304877631,
+"distance": 1.47820725201806,
+"rssi": -68.08644347664307,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.20481022800973642,
+"distance": 1.4782072520180598,
+"rssi": -68.08644347664307,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.17917938379677936,
+"distance": 2.158099795487406,
+"rssi": -61.300096622377815,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.44937226166178773,
+"distance": 1.9461366014000547,
+"rssi": -44.8663617411714,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 8580000,
+"time_of_transmission": 8580000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.f559b3d07c84cp-4",
+"0x1.e12d77318fc51p-2",
+"0x1.b020c49ba5e36p-4"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.68f84b64426c6p-3"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.7f4cc52cc1deep-3",
+"0x1.d64e7ee5b5056p-3",
+"0x1.614020356b437p-3",
+"0x1.63fcad56fbf28p-3"
+],
+"beam_velocity": [
+"0x1.07b58916ca547p-2",
+"0x1.8883dccd9c61dp-3",
+"-0x1.0231456d64e08p-4",
+"0x1.d4314ac7629b9p-9"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.70d5c3bdb0a7dp+5",
+"-0x1.b96fbb73f7847p+5",
+"-0x1.5dd4272156982p+5",
+"-0x1.642e019441244p+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.12240000000000001,
+"vy": 0.46990000000000004,
+"vz": 0.10550000000000001,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 0.17625483417241677,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.2575284404907347,
+"distance": 0.18715814631308042,
+"rssi": -46.10437725253448,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.1916577577826936,
+"distance": 0.22964190615187147,
+"rssi": -55.17955675696481,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.06303526992842745,
+"distance": 0.17248559153577656,
+"rssi": -43.72859025998606,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.0035720256598256975,
+"distance": 0.17382178708748453,
+"rssi": -44.52246394943043,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 8710000,
+"time_of_transmission": 8710000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.3edfa43fe5c92p-3",
+"-0x1.1758e219652bdp-4",
+"-0x1.faacd9e83e426p-3"
+],
+"covariance": [
+"0x1.0a741a106f483p-15",
+"0x1.0a741a106f484p-123",
+"0x1.382b72c0699cep-71",
+"0x1.0a741a106f484p-123",
+"0x1.0a741a106f484p-15",
+"0x1.382b72c0699cfp-71",
+"0x1.382b72c0699cep-71",
+"0x1.382b72c0699cfp-71",
+"0x1.6dbac57fd2a57p-19"
+],
+"fom": [
+"0x1.715b41c4b2ee9p-8"
+],
+"altitude": [
+"0x1.2bd988ba96884p+2"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.49bd6e030649dp+2",
+"0x1.49bd6e030649dp+2",
+"0x1.49bd6e030649dp+2",
+"0x1.35000dd00c0cbp+2"
+],
+"beam_velocity": [
+"-0x1.a6c3b46fc7c2bp-3",
+"-0x1.2691da193db4cp-2",
+"-0x1.03e0812a9a2a6p-2",
+"-0x1.54e2b39778e11p-3"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.08491ac9a427ap+6",
+"-0x1.08491ac9a427ap+6",
+"-0x1.08491ac9a427ap+6",
+"-0x1.24078a54d5ea1p+6"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.1557,
+"vy": -0.0682,
+"vz": -0.2474,
+"fom": 0.005635932499625553,
+"covariance": [
+[
+3.1763735140335536e-05,
+9.787956584377171e-38,
+5.164414799580433e-22
+],
+[
+9.787956584377171e-38,
+3.176373514033554e-05,
+5.164414799580434e-22
+],
+[
+5.164414799580433e-22,
+5.164414799580434e-22,
+2.7248976834139235e-06
+]
+],
+"altitude": 4.68515222760664,
+"transducers": [
+{
+"id": 0,
+"velocity": -0.2064279648411412,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": -0.28766575602587774,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": -0.25378610441706895,
+"distance": 5.152186873391796,
+"rssi": -66.07139124931737,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": -0.16644802385336324,
+"distance": 4.82812829320046,
+"rssi": -73.00736362987165,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 8840000,
+"time_of_transmission": 8840000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x1.a6b50b0f27bb3p-6",
+"-0x1.95182a9930be1p-3",
+"0x1.c63f141205bc0p-2"
+],
+"covariance": [
+"0x1.1b39a9e88ce76p-16",
+"0x1.1b39a9e88ce77p-124",
+"0x1.4bd1ab3cf1bf7p-72",
+"0x1.1b39a9e88ce77p-124",
+"0x1.1b39a9e88ce77p-16",
+"0x1.4bd1ab3cf1bf8p-72",
+"0x1.4bd1ab3cf1bf7p-72",
+"0x1.4bd1ab3cf1bf8p-72",
+"0x1.84c00aa326c0ap-20"
+],
+"fom": [
+"0x1.0d44cd48bb502p-8"
+],
+"altitude": [
+"0x1.7354b025a8daap-3"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.67141ae30a0e0p-3",
+"0x1.67141ae30a0e0p-3",
+"0x1.bcc5ca24edd37p-3",
+"0x1.bcc5ca24edd38p-3"
+],
+"beam_velocity": [
+"0x1.751d2713f9b03p-2",
+"0x1.6488d29d68425p-2",
+"0x1.d46d11aeec8a1p-2",
+"0x1.e07394d687bcep-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.62b61af60027dp+4",
+"-0x1.62b61af60027dp+4",
+"-0x1.52407f33a427dp+5",
+"-0x1.52407f33a427dp+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0258,
+"vy": -0.1978,
+"vz": 0.4436,
+"fom": 0.0041087151700882635,
+"covariance": [
+[
+1.6881540348913424e-05,
+5.202026250456594e-38,
+2.744742595052433e-22
+],
+[
+5.202026250456594e-38,
+1.6881540348913427e-05,
+2.7447425950524334e-22
+],
+[
+2.744742595052433e-22,
+2.7447425950524334e-22,
+1.4482072081881407e-06
+]
+],
+"altitude": 0.1813138734333795,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.3643690210287078,
+"distance": 0.17533131604546437,
+"rssi": -22.169459305705903,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.34817818723428423,
+"distance": 0.17533131604546437,
+"rssi": -22.169459305705903,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.45744731550360923,
+"distance": 0.21717412877272022,
+"rssi": -42.28149261803353,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.4691909080447062,
+"distance": 0.21717412877272024,
+"rssi": -42.28149261803353,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 8970000,
+"time_of_transmission": 8970000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"covariance": [
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0"
+],
+"fom": [
+"inf"
+],
+"altitude": [
+"nan"
+],
+"valid": false,
+"n_good": 0,
+"beam_range": [
+"nan",
+"nan",
+"nan",
+"nan"
+],
+"beam_velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"beam_valid": [
+false,
+false,
+false,
+false
+],
+"rssi": [
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6",
+"-0x1.7c00000000000p+6"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0,
+"vy": 0.0,
+"vz": 0.0,
+"fom": Infinity,
+"covariance": [
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+]
+],
+"altitude": NaN,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 1,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 2,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 3,
+"velocity": 0.0,
+"distance": null,
+"rssi": -95.0,
+"nsd": -95.0,
+"beam_valid": false
+}
+],
+"velocity_valid": false,
+"status": 0,
+"time_of_validity": 9100000,
+"time_of_transmission": 9100000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"covariance": [
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0",
+"-0x1.0000000000000p+0"
+],
+"fom": [
+"inf"
+],
+"altitude": [
+"nan"
+],
+"valid": false,
+"n_good": 0,
+"beam_range": [
+"nan",
+"nan",
+"nan",
+"nan"
+],
+"beam_velocity": [
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0",
+"0x0.0p+0"
+],
+"beam_valid": [
+false,
+false,
+false,
+false
+],
+"rssi": [
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4",
+"-0x1.28a33bf6d5726p+4"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": 0.0,
+"vy": 0.0,
+"vz": 0.0,
+"fom": Infinity,
+"covariance": [
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+],
+[
+-1.0,
+-1.0,
+-1.0
+]
+],
+"altitude": NaN,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 1,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 2,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+},
+{
+"id": 3,
+"velocity": 0.0,
+"distance": null,
+"rssi": -18.53985210818714,
+"nsd": -95.0,
+"beam_valid": false
+}
+],
+"velocity_valid": false,
+"status": 0,
+"time_of_validity": 9230000,
+"time_of_transmission": 9230000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+},
+{
+"velocity": [
+"-0x1.083126e978d50p-4",
+"-0x1.257a786c22681p-1",
+"0x1.cfaacd9e83e43p-3"
+],
+"covariance": [
+"0x1.ca3f7c17a2255p-17",
+"0x1.ca3f7c17a2257p-125",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.ca3f7c17a2257p-125",
+"0x1.ca3f7c17a2257p-17",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.0c6f7a0b5ed8dp-72",
+"0x1.0c6f7a0b5ed8ep-72",
+"0x1.3a7ddffc6e314p-20"
+],
+"fom": [
+"0x1.e46103054887bp-9"
+],
+"altitude": [
+"0x1.cd07b16a3026ap-2"
+],
+"valid": true,
+"n_good": 4,
+"beam_range": [
+"0x1.9ea17f77e1029p-2",
+"0x1.23b32d028ce0bp-1",
+"0x1.23b32d028ce0cp-1",
+"0x1.9ea17f77e1029p-2"
+],
+"beam_velocity": [
+"0x1.2b177b94d0859p-5",
+"0x1.2548758f06f08p-4",
+"0x1.86cc98b346b01p-2",
+"0x1.6338c8ff4be99p-2"
+],
+"beam_valid": [
+true,
+true,
+true,
+true
+],
+"rssi": [
+"-0x1.4465295c5370ep+5",
+"-0x1.9ffb410c618b6p+5",
+"-0x1.9ffb410c618b6p+5",
+"-0x1.4465295c5370ep+5"
+],
+"beam_unit_vec": [
+"0x1.1517a7bdb3895p-2",
+"0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3894p-2",
+"0x1.1517a7bdb3895p-2",
+"0x1.d906bcf328d46p-1",
+"-0x1.1517a7bdb3896p-2",
+"-0x1.1517a7bdb3894p-2",
+"0x1.d906bcf328d46p-1",
+"0x1.1517a7bdb3894p-2",
+"-0x1.1517a7bdb3896p-2",
+"0x1.d906bcf328d46p-1"
+],
+"json": {
+"time": 130.0,
+"vx": -0.0645,
+"vy": -0.5732,
+"vz": 0.22640000000000002,
+"fom": 0.003695518130045148,
+"covariance": [
+[
+1.365685424949238e-05,
+4.208343127236712e-38,
+2.220446049250313e-22
+],
+[
+4.208343127236712e-38,
+1.3656854249492383e-05,
+2.2204460492503135e-22
+],
+[
+2.220446049250313e-22,
+2.2204460492503135e-22,
+1.17157287525381e-06
+]
+],
+"altitude": 0.450224659067351,
+"transducers": [
+{
+"id": 0,
+"velocity": 0.0365102208802603,
+"distance": 0.40491294068511025,
+"rssi": -40.54939529542581,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 1,
+"velocity": 0.07160230561606451,
+"distance": 0.5697263780224956,
+"rssi": -51.99768266365702,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 2,
+"velocity": 0.3816398486539328,
+"distance": 0.5697263780224957,
+"rssi": -51.99768266365702,
+"nsd": -95.0,
+"beam_valid": true
+},
+{
+"id": 3,
+"velocity": 0.3468963056393278,
+"distance": 0.40491294068511025,
+"rssi": -40.54939529542581,
+"nsd": -95.0,
+"beam_valid": true
+}
+],
+"velocity_valid": true,
+"status": 0,
+"time_of_validity": 9360000,
+"time_of_transmission": 9360000,
+"format": "json_v3.3",
+"type": "velocity"
+}
+}
+]
+}

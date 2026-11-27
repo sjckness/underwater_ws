@@ -301,7 +301,8 @@ def test_the_latched_meta_leaks_no_ground_truth(scene):
 
 @pytest.mark.parametrize("override, match", [
     ("dvl.beams.tilt_deg=95", "tilt_deg"),
-    ("dvl.beams.azimuths_deg=[0, 90, 180]", "azimuths_deg"),
+    ("dvl.beams.azimuths_deg=[0, 180]", "azimuths_deg"),             # three beams at least (M12: N beams)
+    ("dvl.beams.tilt_deg=[22.5, 22.5]", "tilt_deg"),                 # one tilt per beam, or one for all
     ("dvl.version=deluxe", "version"),
     ("dvl.rate_hz=[15, 2]", "rate_hz"),
     ("dvl.min_altitude_m=60", "min_altitude_m"),
@@ -373,3 +374,59 @@ def test_the_loop_block_runs_end_to_end_over_a_trajectory(scene):
     for _, r in lost:
         assert np.array_equal(r.covariance, np.full((3, 3), -1.0))
         assert not np.isfinite(r.fom)
+
+
+# -------------------------------------------------------------------- N beams (M12 P5): the A50 unchanged
+
+GOLDEN_A50 = __import__("pathlib").Path(__file__).with_name("data") / "a50_reports_golden.json"
+GOLDEN_POSES = [((5.0, 5.0, 2.5), (0, 0, 0)), ((3.0, 6.0, 1.0), (5, -3, 40)), ((9.6, 5.0, 2.0), (0, 10, 90)),
+                ((6.5, 6.5, 0.6), (-4, 2, 200)), ((5.0, 5.0, 4.9), (0, 0, 10)), ((0.4, 0.4, 0.3), (20, 0, 135)),
+                ((5.0, 5.0, 2.0), (180, 0, 0)), ((5.0, 5.0, 0.16), (0, 0, 0)), ((9.9, 9.9, 0.5), (0, 30, 45))]
+
+
+def test_the_a50_reports_did_not_change():
+    """The pool's A50, 72 reports over poses that lock, lose beams, look up and sit below the minimum
+    altitude: bit for bit what the 4-beam model gave before it learnt N beams (tests/rov/data/)."""
+    import json
+    from uw.pool_geometry import PoolBottom
+    from uw.rov import frames as F
+    gold = json.loads(GOLDEN_A50.read_text())["pool"]
+    cfg = config.load(config.POOL_CONFIG, presets=["pool10"],          # the tank the golden was written in,
+                      overrides=["pool.objects=[]"])                    #   before the COCO objects
+    d = D.from_config(cfg, PoolBottom(cfg))
+    rng = np.random.default_rng(11)
+    t = 0.0
+    hexes = lambda a: [float(x).hex() for x in np.asarray(a, float).ravel()]        # noqa: E731
+    for k, g in enumerate(gold):
+        pos, rpy = GOLDEN_POSES[k % len(GOLDEN_POSES)]
+        t += 0.13
+        r = d.sample(t, np.array(pos), F.rot_from_rpy_deg(rpy), rng.normal(0, 0.3, 3), rng.normal(0, 0.2, 3))
+        for key, val in (("velocity", r.velocity), ("covariance", r.covariance), ("fom", [r.fom]),
+                         ("altitude", [r.altitude]), ("beam_range", r.beam_range), ("beam_velocity", r.beam_velocity),
+                         ("rssi", r.rssi_dbm), ("beam_unit_vec", r.beam_unit_vec)):
+            assert hexes(val) == g[key], (k, key)
+        assert (r.velocity_valid, r.num_good_beams, [bool(x) for x in r.beam_valid]) == (g["valid"], g["n_good"],
+                                                                                          g["beam_valid"]), k
+        assert json.loads(json.dumps(r.as_json())) == g["json"], k
+
+
+def test_three_beams_need_all_three_and_tilts_may_differ():
+    """A three-beam DVL (the Nucleus1000's layout, M12 P5): every beam must return, and a per-beam tilt reaches
+    the beam axes and the altitude."""
+    from uw.pool_geometry import PoolBottom
+    cfg = config.load(config.POOL_CONFIG, overrides=["dvl.beams.azimuths_deg=[0, 120, 240]",
+                                                     "dvl.beams.tilt_deg=[25, 25, 30]", "dvl.beams.min_good=3",
+                                                     "dvl.noise=false", "dvl.dropout=false"])
+    d = D.from_config(cfg, PoolBottom(cfg))
+    assert d.beams.shape == (3, 3)
+    assert np.degrees(np.arccos(d.beams[:, 2])) == pytest.approx([25.0, 25.0, 30.0])
+    v = np.array([0.2, -0.1, 0.05])
+    r = d.sample(0.0, np.array([5.0, 5.0, 2.0]), LEVEL, v, np.zeros(3))
+    assert r.velocity_valid and r.num_good_beams == 3 and len(r.as_json()["transducers"]) == 3
+    assert np.allclose(r.velocity, D.Mount(np.zeros(3), np.eye(3)).rot_body_to_dvl @ v, atol=2e-4)
+    assert r.altitude == pytest.approx(2.0 - 0.14, abs=1e-6)      # the mount is 0.14 m below the CG
+    # one beam on a wall at a grazing angle and lost: no fix with 3 of 3 required
+    near = d.sample(0.1, np.array([0.12, 5.0, 3.5]), LEVEL, v, np.zeros(3))
+    assert near.num_good_beams == 3 or not near.velocity_valid
+    with pytest.raises(config.ConfigError, match="min_good"):
+        D.params_from_config(config.load(config.POOL_CONFIG, overrides=["dvl.beams.min_good=5"]))

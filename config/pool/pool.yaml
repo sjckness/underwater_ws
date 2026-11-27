@@ -159,6 +159,7 @@ dvl:                              # Water Linked DVL A50 under the Heavy: the mo
     tilt_deg: 22.5
     azimuths_deg: [45.0, 135.0, 225.0, 315.0]
     width_deg: 4.4
+    min_good: 3                   # of 4 (uw/rov/dvl.py: N beams, M12)
   min_altitude_m: 0.05
   max_altitude_m: 50.0
   max_speed_mps: 3.75
@@ -187,6 +188,57 @@ dvl:                              # Water Linked DVL A50 under the Heavy: the mo
     dead_reckoning_hz: 5.0        # position_local reports. VERIFIED ("the expected update rate is 5 Hz")
     temperature_c: 30.0           # what /api/v1/about/status reports (the extension warns above 45). GUESS
     yaw_drift_deg_per_h: 0.0      # the A50's own gyro, in its dead reckoning only. UNVERIFIED: off
+
+nucleus:                          # Nortek Nucleus1000 (M12 P5): off by default; --preset nucleus puts it in place of
+                                  #   the A50, --preset both_dvl next to it. The beam model is uw/rov/dvl.py's (same
+                                  #   keys as dvl:), the network side uw/rov/nucleus.py. Values from Nortek's datasheet
+                                  #   where published; the rest UNVERIFIED like the A50's
+  enabled: false
+  model: Nortek Nucleus1000
+  version: standard
+  mount:                          # body FRD from the CG: beside the A50 under the hull. UNVERIFIED
+    position_frd_m: [0.0, 0.0, 0.14]
+    roll_deg: 0.0
+    pitch_deg: 0.0
+    rotation_offset_deg: 0.0
+  beams:
+    tilt_deg: 25.0                # three slanted beams 25 deg off the vertical. UNVERIFIED
+    azimuths_deg: [0.0, 120.0, 240.0]   # 120 deg apart, the first forward. UNVERIFIED
+    width_deg: 3.0                # UNVERIFIED
+    min_good: 3                   # three beams: all of them for a 3-D velocity
+  min_altitude_m: 0.2             # UNVERIFIED (datasheet: bottom track from a few decimetres)
+  max_altitude_m: 50.0
+  max_speed_mps: 5.0
+  resolution_mps: 0.0001
+  rate_hz: [1.0, 8.0]             # the trigger frequency's range (SETTRIG FREQ 1-8 Hz); the device sets it, not the
+  rate_altitude_m: 3.0            #   altitude
+  rate_jitter: 0.0
+  scale_sigma:
+    standard: 0.003               # long-term accuracy +-0.3 % (datasheet, as recalled). UNVERIFIED
+  beam_noise_mps: 0.003
+  bias_sigma_mps: 0.001
+  bias_time_s: 120.0
+  rssi_ref_dbm: 0.0
+  nsd_dbm: -95.0
+  snr_threshold_db: 6.0
+  noise: true
+  dropout: true
+  device:                         # the network side (uw/rov/nucleus.py)
+    enabled: true
+    bind: 0.0.0.0                 # the Nortek extension reaches it from its bridge (linus: 172.31.250.1)
+    cmd_port: 9000                # the device's command port (password); VERIFIED (driver, manual)
+    data_port: 9002               # data only; VERIFIED
+    password: nortek              # the factory default; VERIFIED
+    serial_number: 900002
+    trig_hz: 8.0                  # SETTRIG FREQ: the acoustic pings per second (bottom track + altimeter)
+    alti_every: 4                 # every 4th ping is the vertical altimeter
+    ahrs_hz: 20.0                 # SETAHRS FREQ: evenly at >= 20 Hz keeps the extension's "streaming" detector steady
+    nav_hz: 10.0                  # SETNAV FREQ: the INS output (the extension sends it as VISION_POSITION_ESTIMATE)
+    ins: true                     # the INS licence: a Nucleus with navigation output
+    roll_pitch_sigma_deg: 0.1     # AHRS white noise. UNVERIFIED
+    heading_sigma_deg: 0.3
+    heading_bias_sigma_deg: 1.0   # a slow heading error (magnetometer), correlation heading_bias_time_s. UNVERIFIED
+    heading_bias_time_s: 300.0
 
 physics:                          # uw.rov.physics_proc: the ArduSub JSON server in its own process
   port: 9002                      # UDP; ArduSub SITL --model JSON sends here

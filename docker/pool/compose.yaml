@@ -11,6 +11,10 @@
 #   linus, all local:        BLUEOS_HOST=172.31.250.2 docker compose -f docker/pool/compose.yaml --profile blueos-local up -d
 #   Work, all in WSL2:       bash hil/win/pool/stack.sh up    (= docker compose ... --profile work up -d)
 #   stop:                    docker compose -f docker/pool/compose.yaml --profile blueos --profile blueos-local --profile work down
+#
+# M12: the Nortek Nucleus1000 instead of the A50 (uw/rov/nucleus.py, `uw pool --preset nucleus`): profile "nucleus"
+# adds Nortek's BlueOS extension next to blueos-local; stop the Water Linked one (`stop dvl`) and boot SITL with the
+# Nortek EKF parameters (SITL_PARAM_FILES=...,/params/nucleus.parm SITL_WIPE=1). docs/pool.md, "Nucleus1000".
 name: uw-pool
 
 # The extension's start, shared by its two services: its settings file gets the defaults a vehicle's operator would
@@ -30,6 +34,21 @@ x-dvl-entrypoint: &dvl-entrypoint
     os.chdir("/home/pi/dvl-a50")
     os.execv("/home/pi/dvl-a50/main.py", ["/home/pi/dvl-a50/main.py"])
 
+# Nortek's extension: its settings file gets the emulated Nucleus's address and autoconnect/autostart at every start
+# (as an operator would set them on its page), then its own flask_app.py, unmodified.
+x-nucleus-entrypoint: &nucleus-entrypoint
+  - python
+  - -c
+  - |
+    import json, os
+    f = os.environ["NUCLEUS_SETTINGS_PATH"]
+    os.makedirs(os.path.dirname(f), exist_ok=True)
+    d = json.load(open(f)) if os.path.exists(f) else {}
+    d.update(hostname=os.environ["NUCLEUS_HOST"], port=9000, autoconnect=True, autostart=True)
+    json.dump(d, open(f, "w"))
+    os.chdir("/opt/nucleus_extension")
+    os.execvp("python", ["python", "src/nucleus_extension/flask_app.py"])
+
 services:
   sitl:
     # ArduSub-4.5.7 (docker/ardusub_sitl/README.md); built here on first use.
@@ -46,7 +65,8 @@ services:
       # MAVLink to BlueOS's "Manual" board (its default master endpoint is udpin 0.0.0.0:14551). An IPv4 literal:
       # ardusub's udpclient silently sends nothing to a host name.
       MAVLINK_OUT: udpclient:${BLUEOS_HOST:-127.0.0.1}:14551
-      PARAM_FILES: /opt/ardupilot/default_params/sub-6dof.parm,/params/pool.parm
+      # ,/params/nucleus.parm for the Nucleus1000 (with SITL_WIPE=1: the eeprom would keep the A50's EKF sources)
+      PARAM_FILES: ${SITL_PARAM_FILES:-/opt/ardupilot/default_params/sub-6dof.parm,/params/pool.parm}
       WIPE: ${SITL_WIPE:-0}
       HOME_LOC: ${HOME_LOC:-45.0703,7.6869,0,0}
     # a second MAVLink output for the local tools (tools/pool_smoke.py, a QGC on the sim host)
@@ -205,6 +225,27 @@ services:
     volumes:
       - ./dvl_gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
 
+  nucleus:
+    # BlueOS's Nortek Nucleus1000 extension (2.0.11), unmodified, for the Nucleus the physics process emulates on the
+    # host (uw/rov/nucleus.py, TCP 9000). It posts VISION_POSITION_DELTA (bottom track), VISION_POSITION_ESTIMATE (the
+    # INS) and DISTANCE_SENSOR (the altimeter) to mavlink2rest at BLUEOS_URL: dvl-gateway, which forwards them to
+    # BlueOS and answers its cable_guy check. Its page: http://172.31.250.7
+    profiles: [nucleus]
+    image: nortekgroup/blueos_nucleus:2.0.11@sha256:1b8a8cd92cfc19437390f63eefad4e8a81b13a01023a03abf1364590e7c8a711
+    container_name: uw-pool-nucleus
+    restart: "no"
+    networks:
+      blueos_local:
+        ipv4_address: 172.31.250.7
+    extra_hosts:
+      - "host.docker.internal:172.31.250.3"
+    environment:
+      NUCLEUS_HOST: ${NUCLEUS_HOST:-172.31.250.1}
+      BLUEOS_URL: http://172.31.250.3
+    entrypoint: *nucleus-entrypoint
+    volumes:
+      - nucleus_settings:/opt/nucleus_extension/config
+
 networks:
   blueos_local:
     name: uw-pool-blueos
@@ -217,3 +258,4 @@ volumes:
   sitl_eeprom:
   blueos_local_config:
   dvl_settings:
+  nucleus_settings:

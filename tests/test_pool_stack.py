@@ -110,3 +110,27 @@ def test_a_stale_heartbeat_is_not_a_vehicle(mavlink2rest, monkeypatch):
     monkeypatch.setattr(setup.time, "sleep", lambda s: None)
     with pytest.raises(SystemExit, match="no live heartbeat"):
         setup.wait_vehicle(f"http://127.0.0.1:{mavlink2rest.server_port}", timeout_s=0.3)
+
+
+# ------------------------------------------------------------------------------- Nucleus1000 (M12 P5)
+
+def test_the_nucleus_extension_reaches_the_gateway_and_the_emulated_device():
+    n = SERVICES["nucleus"]
+    assert n["profiles"] == ["nucleus"]
+    assert _ip("nucleus") not in {_ip(s) for s in ("blueos-local", "dvl", "dvl-gateway")}
+    assert n["environment"]["BLUEOS_URL"] == f"http://{_ip('dvl-gateway')}"
+    assert "host.docker.internal:" + _ip("dvl-gateway") in n["extra_hosts"]
+    host = n["environment"]["NUCLEUS_HOST"].split(":-")[-1].rstrip("}")
+    assert host == COMPOSE["networks"]["blueos_local"]["ipam"]["config"][0]["gateway"]      # the host, where it runs
+    cfg = config.load(config.POOL_CONFIG, presets=["nucleus"])
+    assert cfg["nucleus"]["device"]["cmd_port"] == 9000 and cfg["nucleus"]["device"]["bind"] == "0.0.0.0"
+    assert cfg["dvl"]["enabled"] is False and cfg["nucleus"]["enabled"] is True
+    assert "@sha256:" in n["image"]
+
+
+def test_the_nucleus_parameters_take_position_velocity_and_yaw_from_external_navigation():
+    parm = dict(line.split()[:2] for line in (ROOT / "docker/ardusub_sitl/params/nucleus.parm").read_text().splitlines()
+                if line.strip() and not line.startswith("#"))
+    assert parm["EK3_SRC1_POSXY"] == parm["EK3_SRC1_VELXY"] == parm["EK3_SRC1_YAW"] == "6"
+    assert parm["VISO_TYPE"] == "1"
+    assert "SITL_PARAM_FILES" in SERVICES["sitl"]["environment"]["PARAM_FILES"]

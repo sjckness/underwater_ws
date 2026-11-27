@@ -1,0 +1,11 @@
+# M12: ArduSub with the Nortek Nucleus1000 instead of the A50 (docs/pool.md "Nucleus1000"), loaded after pool.parm:
+#   SITL_PARAM_FILES=/opt/ardupilot/default_params/sub-6dof.parm,/params/pool.parm,/params/nucleus.parm SITL_WIPE=1
+# The values Nortek's extension README asks the operator to set (nortekgroup/blueos_nucleus 2.0.11; the extension
+# itself sets none): position, velocity AND yaw from external navigation (the Nucleus's INS, sent as
+# VISION_POSITION_ESTIMATE), the compass as the second yaw source.
+EK3_SRC1_POSXY 6
+EK3_SRC1_VELXY 6
+EK3_SRC1_YAW 6
+EK3_SRC2_YAW 1
+VISO_TYPE 1
+RNGFND1_TYPE 10

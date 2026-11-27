@@ -1,4 +1,7 @@
-"""Water Linked DVL A50: a four-beam convex Janus bottom-track log, in plain numpy.
+"""Water Linked DVL A50: a four-beam convex Janus bottom-track log, in plain numpy. Also any N-beam (N >= 3)
+bottom-track DVL with the same physics (M12: the Nortek Nucleus1000's three beams, ``uw/rov/nucleus.py``): the
+beam count is the length of ``beams.azimuths_deg``, the tilt may differ per beam, and ``min_good_beams`` says how
+many must return for a velocity.
 
 The model produces the device's own *velocity-and-transducer report*, field for field, so the interface
 downstream of it is the same in simulation and on hardware: ``ros/dvl_relay`` turns a report into
@@ -34,7 +37,6 @@ from ..config import ConfigError, get
 from . import frames as fr
 
 Z_WATER_MRAYL = 1.5              # nominal; only sets where the reflection coefficient lands
-BEAMS = 4
 
 
 # ------------------------------------------------------------------------------------------ parameters
@@ -42,7 +44,7 @@ BEAMS = 4
 @dataclass(frozen=True)
 class Params:
     """Everything the model needs from ``config/tank.yaml``'s ``dvl:`` section, already resolved."""
-    tilt_deg: float
+    tilt_deg: float                  # the first beam's (all of them, for the A50)
     azimuths_deg: tuple
     width_deg: float
     min_altitude_m: float
@@ -63,10 +65,21 @@ class Params:
     sound_speed_mps: float
     noise: bool = True
     dropout: bool = True
+    tilts_deg: tuple = ()            # per beam; empty: tilt_deg for every beam
+    min_good_beams: int = 3          # beams that must return for a velocity (3 of 4 for the A50, 3 of 3 for 3 beams)
+    model: str = "Water Linked DVL A50"
 
     @property
     def tilt_rad(self) -> float:
         return math.radians(self.tilt_deg)
+
+    @property
+    def n_beams(self) -> int:
+        return len(self.azimuths_deg)
+
+    @property
+    def uniform_tilt(self) -> bool:
+        return not self.tilts_deg or all(t == self.tilt_deg for t in self.tilts_deg)
 
 
 @dataclass(frozen=True)
@@ -76,25 +89,34 @@ class Mount:
     rot_body_to_dvl: np.ndarray      # (3, 3) body FRD -> instrument FRD
 
 
-def params_from_config(cfg: dict) -> Params:
-    """Validate and resolve ``dvl:``. Raises ``ConfigError`` on a value outside the datasheet."""
+def params_from_config(cfg: dict, section: str = "dvl") -> Params:
+    """Validate and resolve ``dvl:`` (or another section of the same shape, e.g. ``nucleus:``). Raises
+    ``ConfigError`` on a value outside the datasheet."""
     from .. import water
-    d = get(cfg, "dvl")
+    d = get(cfg, section)
     version = str(d["version"])
     if version not in d["scale_sigma"]:
-        raise ConfigError(f"dvl.version '{version}' not in dvl.scale_sigma {sorted(d['scale_sigma'])}")
+        raise ConfigError(f"{section}.version '{version}' not in {section}.scale_sigma {sorted(d['scale_sigma'])}")
     b = d["beams"]
-    tilt = float(b["tilt_deg"])
-    if not 0.0 < tilt < 90.0:
-        raise ConfigError(f"dvl.beams.tilt_deg {tilt} must be between 0 and 90 (from the vertical)")
     az = tuple(float(a) for a in b["azimuths_deg"])
-    if len(az) != BEAMS:
-        raise ConfigError(f"dvl.beams.azimuths_deg needs {BEAMS} angles, got {len(az)}")
+    if len(az) < 3:
+        raise ConfigError(f"{section}.beams.azimuths_deg needs at least 3 beams, got {len(az)}")
+    raw = b["tilt_deg"]
+    tilts = tuple(float(t) for t in raw) if isinstance(raw, (list, tuple)) else (float(raw),) * len(az)
+    if len(tilts) != len(az):
+        raise ConfigError(f"{section}.beams.tilt_deg: {len(tilts)} tilts for {len(az)} beams")
+    for tilt in tilts:
+        if not 0.0 < tilt < 90.0:
+            raise ConfigError(f"{section}.beams.tilt_deg {tilt} must be between 0 and 90 (from the vertical)")
+    tilt = tilts[0]
+    min_good = int(b.get("min_good", 3))
+    if not 3 <= min_good <= len(az):
+        raise ConfigError(f"{section}.beams.min_good {min_good} must be 3..{len(az)} (three beams fix 3-D velocity)")
     lo, hi = (float(x) for x in d["rate_hz"])
     if not 0.0 < lo <= hi:
-        raise ConfigError(f"dvl.rate_hz {d['rate_hz']} must be [min, max] with 0 < min <= max")
+        raise ConfigError(f"{section}.rate_hz {d['rate_hz']} must be [min, max] with 0 < min <= max")
     if float(d["min_altitude_m"]) >= float(d["max_altitude_m"]):
-        raise ConfigError(f"dvl.min_altitude_m {d['min_altitude_m']} exceeds max_altitude_m "
+        raise ConfigError(f"{section}.min_altitude_m {d['min_altitude_m']} exceeds max_altitude_m "
                           f"{d['max_altitude_m']}")
     c = float(water.sound_speed(float(get(cfg, "water.temperature_c")),
                                 float(get(cfg, "water.salinity_psu"))))
@@ -107,13 +129,14 @@ def params_from_config(cfg: dict) -> Params:
         beam_noise_mps=float(d["beam_noise_mps"]), bias_sigma_mps=float(d["bias_sigma_mps"]),
         bias_time_s=float(d["bias_time_s"]), rssi_ref_dbm=float(d["rssi_ref_dbm"]),
         nsd_dbm=float(d["nsd_dbm"]), snr_threshold_db=float(d["snr_threshold_db"]),
-        sound_speed_mps=c, noise=bool(d["noise"]), dropout=bool(d["dropout"]))
+        sound_speed_mps=c, noise=bool(d["noise"]), dropout=bool(d["dropout"]), tilts_deg=tilts,
+        min_good_beams=min_good, model=str(d.get("model", "Water Linked DVL A50")))
 
 
-def mount_from_config(cfg: dict) -> Mount:
+def mount_from_config(cfg: dict, section: str = "dvl") -> Mount:
     """The mount. ``rotation_offset_deg`` is Water Linked's ``mounting_rotation_offset``, measured
     clockwise about z (which points down in FRD), hence the sign against a right-handed yaw."""
-    m = get(cfg, "dvl.mount")
+    m = get(cfg, f"{section}.mount")
     rot_dvl_to_body = fr.rot_from_rpy_deg([float(m["roll_deg"]), float(m["pitch_deg"]),
                                           -float(m["rotation_offset_deg"])])
     return Mount(position_frd_m=np.asarray(m["position_frd_m"], float),
@@ -121,10 +144,18 @@ def mount_from_config(cfg: dict) -> Mount:
 
 
 def beam_directions(params: Params) -> np.ndarray:
-    """(4, 3) unit beam axes in the instrument frame (FRD, so +z is down and every beam has +z > 0)."""
-    th = params.tilt_rad
+    """(n, 3) unit beam axes in the instrument frame (FRD, so +z is down and every beam has +z > 0)."""
+    n = params.n_beams
+    th = params.tilt_rad if params.uniform_tilt else np.radians(np.asarray(params.tilts_deg, float))
     az = np.radians(np.asarray(params.azimuths_deg, float))
-    return np.stack([np.sin(th) * np.cos(az), np.sin(th) * np.sin(az), np.full(BEAMS, np.cos(th))], 1)
+    return np.stack([np.sin(th) * np.cos(az), np.sin(th) * np.sin(az), np.full(n, np.cos(th))], 1)
+
+
+def beam_cosines(params: Params):
+    """cos(tilt) of each beam: a scalar when they all share one tilt (the A50), else an (n,) array."""
+    if params.uniform_tilt:
+        return math.cos(params.tilt_rad)
+    return np.cos(np.radians(np.asarray(params.tilts_deg, float)))
 
 
 # ---------------------------------------------------------------------------------------- the report
@@ -142,12 +173,12 @@ class Report:
     velocity_valid: bool
     status: int
     num_good_beams: int
-    beam_unit_vec: np.ndarray        # (4, 3) instrument FRD
-    beam_range: np.ndarray           # (4,) [m], nan where the beam did not return
-    beam_velocity: np.ndarray        # (4,) [m/s] along each beam
-    beam_valid: np.ndarray           # (4,) bool
-    rssi_dbm: np.ndarray             # (4,)
-    nsd_dbm: np.ndarray              # (4,)
+    beam_unit_vec: np.ndarray        # (n, 3) instrument FRD
+    beam_range: np.ndarray           # (n,) [m], nan where the beam did not return
+    beam_velocity: np.ndarray        # (n,) [m/s] along each beam
+    beam_valid: np.ndarray           # (n,) bool
+    rssi_dbm: np.ndarray             # (n,)
+    nsd_dbm: np.ndarray              # (n,)
     sound_speed: float
 
     def as_json(self) -> dict:
@@ -168,7 +199,7 @@ class Report:
                               else float(self.beam_range[i])),
                  "rssi": float(self.rssi_dbm[i]), "nsd": float(self.nsd_dbm[i]),
                  "beam_valid": bool(self.beam_valid[i])}
-                for i in range(BEAMS)],
+                for i in range(len(self.beam_range))],
             "velocity_valid": bool(self.velocity_valid),
             "status": int(self.status),
             "time_of_validity": int(round(self.stamp * 1e6)),
@@ -189,11 +220,11 @@ class _BiasField:
     construction is the one ``uw.geometry.SandField`` uses for the sand relief.
     """
 
-    def __init__(self, sigma: float, tau: float, seed: int, n: int = 6):
+    def __init__(self, sigma: float, tau: float, seed: int, n: int = 6, beams: int = 4):
         rng = np.random.default_rng([int(seed), 4478540])
         self.a = sigma * math.sqrt(2.0 / n)
-        self.w = 2 * np.pi / (max(tau, 1e-6) * rng.uniform(1.0 / 3.0, 3.0, (BEAMS, n)))
-        self.ph = rng.uniform(0, 2 * np.pi, (BEAMS, n))
+        self.w = 2 * np.pi / (max(tau, 1e-6) * rng.uniform(1.0 / 3.0, 3.0, (beams, n)))
+        self.ph = rng.uniform(0, 2 * np.pi, (beams, n))
 
     def at(self, t: float) -> np.ndarray:
         return self.a * np.sum(np.sin(self.w * float(t) + self.ph), 1)
@@ -235,7 +266,8 @@ class Dvl:
         self.seq = 0
         self._alt = None                     # last altitude, which sets the next period
         self._last_stamp = None
-        self._bias = _BiasField(params.bias_sigma_mps, params.bias_time_s, self.seed)
+        self.n = params.n_beams
+        self._bias = _BiasField(params.bias_sigma_mps, params.bias_time_s, self.seed, beams=self.n)
         # one scale factor per run, drawn once: +-1.01 % is a long-term accuracy, not a per-ping error
         self._scale = 1.0 + float(np.random.default_rng([self.seed, 5456451]).normal(0.0,
                                                                                      params.scale_sigma))
@@ -278,7 +310,7 @@ class Dvl:
     # -- measurement ---------------------------------------------------------------------------------
 
     def geometry_at(self, position_tank, rot_flu_enu):
-        """The acoustic centre and the four beam axes, in tank ENU."""
+        """The acoustic centre and the beam axes, in tank ENU."""
         rot = np.asarray(rot_flu_enu, float)
         origin = np.asarray(position_tank, float) + rot @ fr.vec_flu_frd(self.mount.position_frd_m)
         body = self.beams @ self.mount.rot_body_to_dvl                 # instrument -> body FRD
@@ -295,8 +327,8 @@ class Dvl:
         that ``rssi_ref_dbm`` already absorbs.
         """
         half = math.radians(self.p.width_deg) / 2.0
-        out = np.full(BEAMS, -np.inf)
-        for i in range(BEAMS):
+        out = np.full(self.n, -np.inf)
+        for i in range(self.n):
             if not np.isfinite(ranges[i]) or cos_i[i] <= 1e-3:
                 continue
             m = self._role_material.get(roles[i] or "", "sand")
@@ -326,12 +358,13 @@ class Dvl:
         rot = np.asarray(rot_flu_enu, float)
         origin, dirs = self.geometry_at(position_tank, rot)
 
-        cos_t = math.cos(p.tilt_rad)
-        ranges, normals, roles = self.bottom.ray_bottom(origin, dirs, t_max=p.max_altitude_m / max(cos_t, 1e-6))
+        cos_t = beam_cosines(p)
+        ranges, normals, roles = self.bottom.ray_bottom(origin, dirs,
+                                                        t_max=p.max_altitude_m / max(float(np.min(cos_t)), 1e-6))
         altitudes = ranges * cos_t
         cos_i = np.abs(np.einsum("ij,ij->i", normals, dirs))
         rssi = self._echo(ranges, cos_i, roles)
-        nsd = np.full(BEAMS, p.nsd_dbm)
+        nsd = np.full(self.n, p.nsd_dbm)
         snr = rssi - nsd
         in_gate = (np.isfinite(ranges) & (altitudes >= p.min_altitude_m)
                    & (altitudes <= p.max_altitude_m))
@@ -341,18 +374,18 @@ class Dvl:
         v_inst = self.mount.rot_body_to_dvl @ (np.asarray(v_body_frd, float)
                                                + fr.cross3(w_body_frd, self.mount.position_frd_m))
         vb = self.beams @ v_inst
-        sigma_i = np.full(BEAMS, p.beam_noise_mps)
+        sigma_i = np.full(self.n, p.beam_noise_mps)
         if p.noise:
             # a degraded beam is a noisier beam: its noise floor rises as the echo approaches it
             gain = np.clip(10 ** (-(snr - p.snr_threshold_db) / 20.0), 1.0, 1e3)
             sigma_i = p.beam_noise_mps * np.where(np.isfinite(gain), gain, 1.0)
-            vb = self._scale * vb + self._bias.at(t) + rng.normal(0.0, 1.0, BEAMS) * sigma_i
+            vb = self._scale * vb + self._bias.at(t) + rng.normal(0.0, 1.0, self.n) * sigma_i
 
         n_good = int(valid.sum())
         velocity = np.zeros(3)
         cov = np.full((3, 3), -1.0)
         fom = float("inf")
-        velocity_valid = n_good >= 3
+        velocity_valid = n_good >= max(3, p.min_good_beams)
         if velocity_valid:
             h = self.beams[valid]
             y = vb[valid]
@@ -388,7 +421,7 @@ class Dvl:
         ``docs/ros_hil.md`` 2.5 rule 1 keeps ground truth out of latched metadata."""
         p = self.p
         return {
-            "model": "Water Linked DVL A50",
+            "model": p.model,
             "beam_unit_vec": self.beams.tolist(),
             "tilt_deg": p.tilt_deg,
             "azimuths_deg": list(p.azimuths_deg),
@@ -455,10 +488,16 @@ class BodyMotion:
         return p, rot, fr.vec_flu_frd(rot.T @ v_enu), fr.angvel_flu_frd(omega_flu)
 
 
-def from_config(cfg: dict, scene):
-    """The configured DVL, or ``None`` when ``dvl.enabled`` is false. ``scene`` is the tank's ``uw.geometry``
-    scene, or already a bottom (anything with ``ray_bottom``, e.g. ``uw.pool_geometry.PoolBottom``)."""
-    if not bool(get(cfg, "dvl.enabled")):
+def from_config(cfg: dict, scene, section: str = "dvl"):
+    """The configured DVL, or ``None`` when ``<section>.enabled`` is false. ``scene`` is the tank's
+    ``uw.geometry`` scene, or already a bottom (anything with ``ray_bottom``, e.g. ``uw.pool_geometry.PoolBottom``).
+    A section other than ``dvl`` (a second instrument, ``nucleus``) gets its own seed, so that two DVLs on one
+    vehicle do not share their errors; ``dvl`` keeps the run's seed."""
+    if not bool(get(cfg, f"{section}.enabled")):
         return None
     bottom = scene if hasattr(scene, "ray_bottom") else TankBottom(scene, cfg)
-    return Dvl(params_from_config(cfg), mount_from_config(cfg), bottom, seed=int(cfg["seed"]))
+    seed = int(cfg["seed"])
+    if section != "dvl":
+        import zlib
+        seed += zlib.crc32(section.encode())
+    return Dvl(params_from_config(cfg, section), mount_from_config(cfg, section), bottom, seed=seed)

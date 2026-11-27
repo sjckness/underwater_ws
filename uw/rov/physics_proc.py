@@ -43,6 +43,7 @@ PWM = slice(26, 42)             # the last servo packet's 16 channels [us]
 DVL_REPORTS, DVL_LOCKED, DVL_CLIENTS = 42, 43, 44     # the emulated A50 (uw/rov/a50.py), when dvl.device is on
 DVL_TCP_PORT, DVL_HTTP_PORT = 45, 46                  # its ports (0: no DVL)
 CTL_PORT, CTL_CLIENTS = 47, 48                        # the control channel (uw/rov/simctl.py; 0: off)
+NUC_REPORTS, NUC_LOCKED, NUC_CLIENTS, NUC_PORT = 49, 50, 51, 52   # the emulated Nucleus1000 (uw/rov/nucleus.py)
 SIZE = 64
 STARTING, RUNNING, FAILED, STOPPED = 0.0, 1.0, -1.0, 2.0
 
@@ -73,9 +74,10 @@ def make_pool_server(cfg: dict, on_step=None):
 class _Writer:
     """The child's side of the seqlock: one consistent record per servo packet."""
 
-    def __init__(self, arr: np.ndarray, device=None):
+    def __init__(self, arr: np.ndarray, device=None, nucleus=None):
         self.a = arr
         self.device = device
+        self.nucleus = nucleus
         self.server = None                      # set once the server exists: its stall count
         self.control = None                     # the control channel, once it exists: its client count
 
@@ -99,26 +101,33 @@ class _Writer:
             a[DVL_CLIENTS] = self.device.clients
         if self.control is not None:
             a[CTL_CLIENTS] = self.control.clients
+        if self.nucleus is not None:
+            a[NUC_REPORTS] = self.nucleus.count["bottom_track"]
+            a[NUC_LOCKED] = self.nucleus.count["locked"]
+            a[NUC_CLIENTS] = self.nucleus.clients
         a[SEQ] += 1.0
 
 
 class _Steps:
-    """What runs at every servo packet in the child: the emulated DVL, then the shared-memory record. A DVL that
-    raises is switched off with its traceback logged, so that the vehicle keeps flying without it."""
+    """What runs at every servo packet in the child: the emulated DVLs, then the shared-memory record. A DVL that
+    raises is switched off with its traceback logged, so that the vehicle (and the other DVL) keeps going."""
 
-    def __init__(self, writer, device):
+    def __init__(self, writer, devices: dict):
         self.writer = writer
-        self.device = device
+        self.devices = dict(devices)
 
     def __call__(self, state, pwm, pose) -> None:
-        if self.device is not None:
+        for name, dev in list(self.devices.items()):
             try:
-                self.device.step(state.t, pose, state)
+                dev.step(state.t, pose, state)
             except Exception:  # noqa: BLE001 - the physics must not die of its sensor
-                log.exception("physics: the DVL failed and is off from now on")
-                self.device = None
+                log.exception("physics: the %s failed and is off from now on", name)
+                del self.devices[name]
                 if self.writer is not None:
-                    self.writer.device = None
+                    if self.writer.device is dev:
+                        self.writer.device = None
+                    if self.writer.nucleus is dev:
+                        self.writer.nucleus = None
         if self.writer is not None:
             self.writer.write(state, pwm, pose)
 
@@ -157,21 +166,25 @@ def child_main(argv=None) -> int:
         arr = np.ndarray((SIZE,), np.float64, shm.buf)
     else:
         cfg = config.from_args(args, config.POOL_CONFIG)
-    device = control = None
+    device = control = nuc = None
+    devices: dict = {}
     try:
-        from . import simctl
+        from . import nucleus, simctl
         from .a50 import pool_device
         device = pool_device(cfg)                # None when dvl.enabled or dvl.device.enabled is off
         if device is not None:
-            device.start()
-        writer = _Writer(arr, device) if arr is not None else None
-        server = make_pool_server(cfg, on_step=_Steps(writer, device))
+            devices["a50"] = device.start()
+        nuc = nucleus.pool_device(cfg)           # None unless nucleus.enabled (--preset nucleus | both_dvl)
+        if nuc is not None:
+            devices["nucleus"] = nuc.start()
+        writer = _Writer(arr, device, nuc) if arr is not None else None
+        server = make_pool_server(cfg, on_step=_Steps(writer, devices))
         if writer:
             writer.server = server
         if writer:
             writer.write(server.state, server.pwm, server.body_pose())
             arr[PACKETS] = 0.0
-        control = simctl.from_config(cfg, server, {"a50": device} if device is not None else {})
+        control = simctl.from_config(cfg, server, devices)
         if control is not None:
             control.start()
             if writer:
@@ -181,8 +194,8 @@ def child_main(argv=None) -> int:
         log.exception("physics: could not start")
         if control is not None:
             control.close()
-        if device is not None:
-            device.close()
+        for dev in devices.values():
+            dev.close()
         if arr is not None:
             arr[STATUS] = FAILED
             del arr
@@ -194,6 +207,8 @@ def child_main(argv=None) -> int:
             arr[DVL_TCP_PORT], arr[DVL_HTTP_PORT] = device.tcp_port, device.http_port
         if control is not None and control.listening:
             arr[CTL_PORT] = control.port
+        if nuc is not None:
+            arr[NUC_PORT] = nuc.tcp_port
         arr[STATUS] = RUNNING
     try:
         if arr is not None:
@@ -209,16 +224,19 @@ def child_main(argv=None) -> int:
                          t, server.packets, np.round(p, 2).tolist(), float(get_depth(cfg, p)),
                          float(np.linalg.norm(v)), float(np.degrees(np.arctan2(r[1, 0], r[0, 0]))),
                          float(np.hypot(vc[0], vc[1])),
-                         "" if device is None else "; DVL %d reports (%d locked), %d clients" % (
+                         ("" if device is None else "; DVL %d reports (%d locked), %d clients" % (
                              device.count["velocity"], device.count["locked"], device.clients))
+                         + ("" if nuc is None else "; Nucleus %d BT (%d locked), %d AHRS, %d clients%s" % (
+                             nuc.count["bottom_track"], nuc.count["locked"], nuc.count["ahrs"], nuc.clients,
+                             "" if nuc.measuring else ", not started")))
     except KeyboardInterrupt:
         pass
     finally:
         if control is not None:
             control.close()
         server.close()
-        if device is not None:
-            device.close()
+        for dev in devices.values():
+            dev.close()
         if arr is not None:
             arr[STATUS] = STOPPED if server.error is None else FAILED
             del arr
@@ -321,7 +339,9 @@ class PhysicsProcess:
         return {"t": float(s[T]), "packets": int(s[PACKETS]), "stalls": int(s[STALLS]),
                 "age_s": (time.time() - float(s[WALL])) if s[WALL] else None,
                 "dvl": {"reports": int(s[DVL_REPORTS]), "locked": int(s[DVL_LOCKED]), "clients": int(s[DVL_CLIENTS])},
-                "control": {"port": int(s[CTL_PORT]), "clients": int(s[CTL_CLIENTS])}}
+                "control": {"port": int(s[CTL_PORT]), "clients": int(s[CTL_CLIENTS])},
+                "nucleus": ({"port": int(s[NUC_PORT]), "bottom_track": int(s[NUC_REPORTS]), "locked": int(s[NUC_LOCKED]),
+                             "clients": int(s[NUC_CLIENTS])} if s[NUC_PORT] else None)}
 
     def close(self, timeout_s: float = 5.0) -> None:
         if self.proc is not None:
