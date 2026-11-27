@@ -30,6 +30,12 @@ from .remote import Remote, RemoteError, require_disarmed
 WS = targets.WS
 
 
+def qpath(p: str) -> str:
+    """Shell-quote a path for the target, leaving a leading ~/ to the target's shell."""
+    p = str(p)
+    return "~/" + shlex.quote(p[2:]) if p.startswith("~/") else shlex.quote(p)
+
+
 def confirm(question: str, yes: bool) -> bool:
     if yes:
         return True
@@ -112,12 +118,12 @@ def deploy_rov(t: dict, args) -> int:
 def deploy_pull(t: dict, args) -> int:
     """work / thor: they never commit; they fast-forward to origin/main (or the target's branch)."""
     r = Remote(t, dry_run=args.dry_run)
-    repo = t["repo"]
+    repo = qpath(t["repo"])
     branch = t.get("branch", "main")
-    steps = [f"git -C {shlex.quote(repo)} fetch --prune",
-             f"git -C {shlex.quote(repo)} checkout {shlex.quote(branch)}",
-             f"git -C {shlex.quote(repo)} pull --ff-only"]
-    steps += [f"cd {shlex.quote(repo)} && {s}" for s in t.get("after_pull", [])]
+    steps = [f'test "$(git -C {repo} branch --show-current)" = {shlex.quote(branch)} '
+             f'|| {{ echo "{t["repo"]} is not on {branch}: switch it by hand"; exit 1; }}',
+             f"git -C {repo} pull --ff-only"]
+    steps += [f"cd {repo} && {s}" for s in t.get("after_pull", [])]
     print(f"uw deploy {t['name']}: {r.where()}, {repo} -> {branch}")
     for s in steps:
         print(f"  {s}")
