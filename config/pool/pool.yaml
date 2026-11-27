@@ -46,6 +46,20 @@ water:
   turbidity_veil: [0.10, 0.12, 0.09]  # the veiling light of water so full of particles that they alone count: the
                                   #   lit particle cloud, linear RGB (greenish grey: silt and algae). GUESS, by eye
 
+current:                          # the water's motion, in the vehicle dynamics only (uw/rov/current.py, Fossen 2021
+                                  #   10.3): horizontal, uniform in x and y. Presets: --preset light | strong | gusty
+                                  #   (config/pool/presets/current/); while running: the control channel (P2)
+  speed_mps: 0.0                  # at the surface; 0 = still water
+  direction_deg: 0.0              # ENU azimuth the water flows TOWARDS: 0 = +x, 90 = +y (as vehicle.start's heading)
+  profile: uniform                # uniform | power (1/7 law above the floor) | linear | table, all 1 at the surface
+  power_exponent: 0.142857
+  bottom_factor: 0.5              # linear: the factor at the floor
+  table: []                       # table: [[depth_m, factor], ...], increasing depths
+  gust:                           # a fixed random spectrum on speed and direction (deterministic for a seed)
+    sigma_mps: 0.0
+    time_s: 20.0                  # correlation time, order of magnitude
+    dir_sigma_deg: 0.0
+
 lights:
   ceiling:                        # rect lights above the water (an indoor test hall), facing down
     height_m: 2.5                 # above the free surface

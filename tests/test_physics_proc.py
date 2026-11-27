@@ -118,3 +118,23 @@ def test_without_a_dvl_the_child_has_no_ports(cfg):
         assert proc.dvl_ports is None and proc.stats()["dvl"]["reports"] == 0
     finally:
         proc.close()
+
+
+def test_the_current_reaches_the_child_and_carries_the_vehicle(cfg):
+    """config current: -> stdin JSON -> make_pool_server -> the Fossen model: a disarmed vehicle at the surface
+    drifts with the water (0.3 m/s towards +y), and the DVL's velocity source (the body twist) sees it."""
+    cfg["dvl"]["enabled"] = False
+    cfg["current"].update(speed_mps=0.3, direction_deg=90.0)
+    proc = PhysicsProcess(cfg).start()
+    try:
+        p0, _ = proc.body_pose()
+        fly(proc.port, [1500] * 8, 8000)                    # 20 s, neutral PWM: thrusters off
+        p1, r1 = proc.body_pose()
+        v, _, t = proc.body_twist()
+        v_tank = r1 @ (v * np.array([1.0, -1.0, -1.0]))     # FRD -> FLU, then into the tank
+        assert t == pytest.approx(20.0)
+        assert v_tank[1] > 0.25 and abs(v_tank[0]) < 0.02, v_tank
+        assert p1[1] - p0[1] > 3.0 and abs(p1[0] - p0[0]) < 0.3
+    finally:
+        proc.close()
+    assert proc.proc.returncode == 0

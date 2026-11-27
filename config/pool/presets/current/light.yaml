@@ -1,0 +1,4 @@
+# A light steady current along +y (towards the far wall from the start): 0.10 m/s, uniform.
+current:
+  speed_mps: 0.10
+  direction_deg: 90.0

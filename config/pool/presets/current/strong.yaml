@@ -1,0 +1,5 @@
+# A strong steady current across the pool (+x): 0.40 m/s, uniform. The BlueROV2 Heavy still holds station
+# against it, with a good part of its horizontal thrust.
+current:
+  speed_mps: 0.40
+  direction_deg: 0.0

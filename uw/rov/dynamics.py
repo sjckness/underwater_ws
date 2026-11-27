@@ -25,12 +25,28 @@ with ``nu = [v; omega]`` the body-frame twist, and
 * ``tau = T f``, with the 6x8 allocation ``T`` built from the thruster geometry: column i is
   ``[axis_i ; r_i x axis_i]``. It is never written out by hand.
 
+**Water current** (M12, ``uw.rov.current``). ``nu`` stays the twist relative to the ground, and the position is
+still integrated from it. With a current ``v_c`` (earth NED, irrotational) the hydrodynamic terms see the
+velocity relative to the water, ``nu_r = nu - [R' v_c; 0]``, as in Fossen (2021) section 10.3:
+
+    M_RB nu_dot + C_RB(nu) nu + M_A nu_r_dot + C_A(nu_r) nu_r + D(nu_r) nu_r + g(eta) = tau
+
+    =>  M nu_dot = tau - C_RB(nu) nu - C_A(nu_r) nu_r - D(nu_r) nu_r - g(eta) + M_A nu_c_dot + m_disp R' a_c
+
+with ``nu_c_dot = [R' a_c - omega x R' v_c; 0]``, the rate of the current seen in the rotating body, and
+``a_c`` the current's acceleration along the vehicle's path. The last term is the Froude-Krylov force of an
+accelerating flow (the pressure gradient that accelerates the water itself, ``m_disp`` the displaced mass): zero
+for a steady current, needed so that a neutrally buoyant body follows gusts as the water does. The rigid-body
+terms keep the absolute ``nu``, which is exact for any parametrisation of ``C_RB``. Without a current the
+expression is the one above, operation for operation (``tests/rov/test_current.py`` pins it).
+
 **Energy.** With ``C`` skew-symmetric, ``d/dt (0.5 nu' M nu) = nu' (tau - D nu - g)``, so the total
 
     E = 0.5 nu' M nu + (B - W) p_D + B (R r_b)_D
 
 is non-increasing for ``tau = 0`` and exactly conserved if the damping is zeroed. ``energy()`` returns it and
-step 1 test (f) checks both statements over 10 simulated minutes.
+step 1 test (f) checks both statements over 10 simulated minutes. Only in still water: a current feeds the
+vehicle energy through the damping, so ``E`` is then no Lyapunov function.
 
 **Integration.** Fixed step, RK4 by default (``integrator.method``), 400 Hz (``integrator.rate_hz``) to match
 ArduSub's ``MAIN_LOOP_RATE`` so that one physics step is one JSON frame. The quaternion is carried in the state
@@ -46,6 +62,7 @@ from __future__ import annotations
 
 import logging
 import math
+import threading
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
@@ -357,22 +374,25 @@ def coriolis(params: Params, nu: np.ndarray) -> np.ndarray:
     return c
 
 
-def coriolis_nu(params: Params, nu: np.ndarray) -> np.ndarray:
-    """``C(nu) nu`` as four cross products instead of a 6x6 matrix product.
+def coriolis_nu(params: Params, nu: np.ndarray, nu_r: np.ndarray | None = None) -> np.ndarray:
+    """``C_RB(nu) nu + C_A(nu_r) nu_r`` as four cross products instead of a 6x6 matrix product.
 
-    Multiplying out Fossen's skew-symmetric ``C``:
+    Multiplying out Fossen's skew-symmetric ``C`` (``v_r`` the linear part of ``nu_r``; the current is
+    irrotational, so the angular parts agree):
 
-        top    = m (w x v) + w x (A1 v)
-        bottom = v x (A1 v) + w x (I w) + w x (A2 w)
+        top    = m (w x v) + w x (A1 v_r)
+        bottom = v_r x (A1 v_r) + w x (I w) + w x (A2 w)
 
-    This is what the integrator calls; ``coriolis`` builds the matrix itself, for the skew-symmetry test and
-    for anyone who wants to look at it.
+    ``nu_r`` defaults to ``nu`` (still water), with the same operations in the same order. This is what the
+    integrator calls; ``coriolis`` builds the matrix itself, for the skew-symmetry test and for anyone who wants
+    to look at it.
     """
     v, w = nu[:3], nu[3:]
-    a1v = params.added_mass[:3] * v
+    v_r = v if nu_r is None else nu_r[:3]
+    a1v = params.added_mass[:3] * v_r
     a2w = params.added_mass[3:] * w
     top = params.mass_kg * frames.cross3(w, v) + frames.cross3(w, a1v)
-    bot = frames.cross3(v, a1v) + frames.cross3(w, params.inertia @ w) + frames.cross3(w, a2w)
+    bot = frames.cross3(v_r, a1v) + frames.cross3(w, params.inertia @ w) + frames.cross3(w, a2w)
     out = np.empty(6)
     out[:3] = top
     out[3:] = bot
@@ -410,10 +430,14 @@ class Vehicle:
     ``bounds`` is the soft tank bound (``None``, or when ``bound.enabled`` is false, means pure Fossen).
     ``water_level`` is only needed to place the NED origin on the free surface, so that ``position_ned[2]`` is
     the depth ArduSub's simulated barometer reads.
+
+    ``current``: the water's motion (``uw.rov.current``), ``None`` for still water. It is evaluated once per
+    ``step`` at the step's start (time and depth); only its rotation into the body follows the RK4 stages.
+    ``set_current`` changes it from any thread; the change is picked up by the next ``step``.
     """
 
     def __init__(self, params: Params, water_level: float = 2.9, bounds: TankBounds | None = None,
-                 surface_model: bool = False):
+                 surface_model: bool = False, current=None):
         self.params = params
         self.water_level = float(water_level)
         self.bounds = bounds if params.bound_enabled else None
@@ -428,6 +452,48 @@ class Vehicle:
                                             #   the derivative 4x per step, so this is ~4x the step count.
         self.bound_max_penetration_m = 0.0
         self._last_bound_log_t = -1e18
+        self.current = None if current is None or current.is_still else current
+        self.current_ned = np.zeros(3)      # the water velocity at the vehicle at the last step [m/s, NED]
+        self._pending = None                # (current, ramp_s) from set_current, for the next step
+        self._pending_lock = threading.Lock()
+        self.m_disp = params.buoyancy_n / G     # the displaced water's mass: the Froude-Krylov term
+
+    # ---- the water current
+
+    def set_current(self, current, ramp_s: float = 0.0) -> None:
+        """Replace the current (``None`` or a still one: still water), blended in over ``ramp_s`` simulated
+        seconds from the step that picks it up. Thread-safe: the physics thread applies it, nobody else writes."""
+        with self._pending_lock:
+            self._pending = (current, float(ramp_s))
+
+    def _take_pending(self, t: float) -> None:
+        with self._pending_lock:
+            pending, self._pending = self._pending, None
+        if pending is None:
+            return
+        from .current import STILL, Ramped
+        new, ramp_s = pending
+        new = STILL if new is None else new
+        old = STILL if self.current is None else self.current
+        if ramp_s > 0.0 and not (old.is_still and new.is_still):
+            self.current = Ramped(old, new, float(t), ramp_s)
+        else:
+            self.current = None if new.is_still else new
+        log.info("current: %s%s", new.describe(), " over %.1f s" % ramp_s if ramp_s > 0.0 else "")
+
+    def _current_at(self, state: State):
+        """(v_c, a_c) in earth NED at ``state``, or (None, None) in still water. A finished ramp collapses to
+        its target here, so a ramp costs nothing once it is over."""
+        cur = self.current
+        if cur is None:
+            return None, None
+        if getattr(cur, "done", None) is not None and cur.done(state.t):
+            cur = self.current = None if cur.new.is_still else cur.new
+            if cur is None:
+                return None, None
+        depth = float(state.position_ned[2])
+        w_down = float((state.rot_frd_ned @ state.velocity_frd)[2])
+        return cur.velocity_ned(state.t, depth), cur.accel_ned(state.t, depth, w_down)
 
     # ---- the public API asked for in the design: step(state, thruster_cmd, dt) -> state
 
@@ -444,23 +510,28 @@ class Vehicle:
         if u.shape != (self.params.n_thrusters,):
             raise VehicleError(f"thruster_cmd must have {self.params.n_thrusters} entries, got {u.shape}")
 
+        if self._pending is not None:
+            self._take_pending(state.t)
+        vc, ac = self._current_at(state)                    # once per step: the water at the step's start
+        self.current_ned = np.zeros(3) if vc is None else vc
         y0 = state.pack()
         steady = self.params.t200.thrust_of_command(u)      # constant over the step: hoisted out of RK4
         if self.params.method == "rk4":
-            k1 = self._deriv(y0, steady)
-            k2 = self._deriv(y0 + 0.5 * dt * k1, steady)
-            k3 = self._deriv(y0 + 0.5 * dt * k2, steady)
-            k4 = self._deriv(y0 + dt * k3, steady)
+            k1 = self._deriv(y0, steady, vc, ac)
+            k2 = self._deriv(y0 + 0.5 * dt * k1, steady, vc, ac)
+            k3 = self._deriv(y0 + 0.5 * dt * k2, steady, vc, ac)
+            k4 = self._deriv(y0 + dt * k3, steady, vc, ac)
             y = y0 + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
         else:
-            y = y0 + dt * self._deriv(y0, steady)
+            y = y0 + dt * self._deriv(y0, steady, vc, ac)
         y[3:7] = frames.quat_normalize(y[3:7])      # once per completed step, not inside the stages
         return State.unpack(y, state.t + dt)
 
     def derivative(self, state: State, thruster_cmd) -> np.ndarray:
         """The packed state derivative: exposed so tests can inspect accelerations directly."""
         u = np.clip(np.asarray(thruster_cmd, float), -1.0, 1.0)
-        return self._deriv(state.pack(), self.params.t200.thrust_of_command(u))
+        vc, ac = self._current_at(state)
+        return self._deriv(state.pack(), self.params.t200.thrust_of_command(u), vc, ac)
 
     def acceleration(self, state: State, thruster_cmd) -> np.ndarray:
         """``nu_dot`` (6,): body linear and angular acceleration [m/s^2, rad/s^2]."""
@@ -490,9 +561,12 @@ class Vehicle:
 
     # ---- internals
 
-    def _deriv(self, y: np.ndarray, steady_thrust: np.ndarray) -> np.ndarray:
+    def _deriv(self, y: np.ndarray, steady_thrust: np.ndarray, vc_ned: np.ndarray | None = None,
+               ac_ned: np.ndarray | None = None) -> np.ndarray:
         """The packed derivative. ``steady_thrust`` is the thrust the current command asks for, already
-        converted, because it is constant across the four RK4 stages."""
+        converted, because it is constant across the four RK4 stages. ``vc_ned``/``ac_ned``: the water's
+        velocity and acceleration at the vehicle (``None``: still water), constant over the step and rotated into
+        this stage's attitude."""
         p = self.params
         # Unit length only, NOT quat_normalize's w >= 0 representative: an RK4 stage whose quaternion has crossed
         # w = 0 (a level vehicle heading through south) would otherwise get the derivative of -q, of the opposite
@@ -505,8 +579,20 @@ class Vehicle:
 
         tau = p.allocation @ thrust
         if self.bounds is not None:
-            tau = tau + self._bound_wrench(y[0:3], rot, nu[:3])
-        nu_dot = p.M_inv @ (tau - coriolis_nu(p, nu) - damping(p, nu) - restoring(p, rot, self.submerged(y[2])))
+            tau = tau + self._bound_wrench(y[0:3], rot, nu[:3])           # the walls are earth-fixed: ground v
+        if vc_ned is None:
+            nu_dot = p.M_inv @ (tau - coriolis_nu(p, nu) - damping(p, nu) - restoring(p, rot, self.submerged(y[2])))
+        else:
+            sub = self.submerged(y[2])
+            vc_b = rot.T @ vc_ned
+            ac_b = rot.T @ ac_ned
+            nu_r = nu.copy()
+            nu_r[:3] -= vc_b
+            rhs = tau - coriolis_nu(p, nu, nu_r) - damping(p, nu_r) - restoring(p, rot, sub)
+            # M_A nu_c_dot, with nu_c_dot = R' a_c - w x R' v_c (the current seen in the rotating body), plus the
+            # Froude-Krylov force of the accelerating water on the displaced volume
+            rhs[:3] += p.added_mass[:3] * (ac_b - frames.cross3(nu[3:], vc_b)) + (self.m_disp * sub) * ac_b
+            nu_dot = p.M_inv @ rhs
 
         d = np.empty_like(y)
         d[0:3] = rot @ nu[:3]
@@ -558,19 +644,19 @@ class Vehicle:
 # ------------------------------------------------------------------------------------------- helpers
 
 def make_vehicle(params_path: str | Path | None = None, tank_size=(3.0, 3.0, 3.0), sand_base: float = 0.3,
-                 water_level: float = 2.9, surface_model: bool = False) -> Vehicle:
+                 water_level: float = 2.9, surface_model: bool = False, current=None) -> Vehicle:
     """A ``Vehicle`` with its soft bound built from the tank geometry.
 
     The three tank numbers are passed in rather than read from ``config/tank.yaml`` here, so that this module
     stays independent of the repo's config layering; the runner wires them from ``tank.size``,
     ``sand.thickness`` and ``tank.water_level``. ``surface_model``: partial-submersion buoyancy and an open
-    top (see ``Vehicle``), off by default so the tank scenes keep their bound.
+    top (see ``Vehicle``), off by default so the tank scenes keep their bound. ``current``: see ``Vehicle``.
     """
     params = load_params(params_path)
     k, c, ks, cs = params.bound_gains
     bounds = TankBounds.from_tank(tank_size, sand_base, water_level, params.bound_margin_m,
                                  params.bound_sand_extra_m, k, c, ks, cs, open_surface=surface_model)
-    return Vehicle(params, water_level=water_level, bounds=bounds, surface_model=surface_model)
+    return Vehicle(params, water_level=water_level, bounds=bounds, surface_model=surface_model, current=current)
 
 
 @dataclass(frozen=True)

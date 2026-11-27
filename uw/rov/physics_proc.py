@@ -48,14 +48,19 @@ STARTING, RUNNING, FAILED, STOPPED = 0.0, 1.0, -1.0, 2.0
 
 def make_pool_server(cfg: dict, on_step=None):
     """The physics server for the pool config (config/pool/pool.yaml): the vehicle file, the pool's soft bound
-    and free surface, the start pose ``vehicle.start`` and the SITL home ``vehicle.home``."""
+    and free surface, the water current ``current``, the start pose ``vehicle.start`` and the SITL home
+    ``vehicle.home``."""
     from ..config import WS, get
     from ..physics_udp import PhysicsServer
-    from . import dynamics, frames
+    from . import current, dynamics, frames
 
     wl = float(get(cfg, "pool.water_level"))
+    cur = current.from_config(cfg, water_depth_m=wl)
+    if not cur.is_still:
+        log.info("physics: water current %s", cur.describe())
     veh = dynamics.make_vehicle(Path(WS) / str(get(cfg, "vehicle.params")), tank_size=get(cfg, "pool.size"),
-                                sand_base=0.0, water_level=wl, surface_model=bool(get(cfg, "physics.surface_model")))
+                                sand_base=0.0, water_level=wl, surface_model=bool(get(cfg, "physics.surface_model")),
+                                current=cur)
     x, y, z, yaw = (float(v) for v in get(cfg, "vehicle.start"))
     p_ned, q_ned = frames.pose_tank_to_ned(np.array([x, y, z]), frames.quat_from_rpy_deg((0.0, 0.0, yaw)), wl)
     state = dynamics.State.rest(veh.params.n_thrusters, p_ned, q_ned)
@@ -184,9 +189,12 @@ def child_main(argv=None) -> int:
                 time.sleep(2.0)
                 p, r = server.body_pose()
                 v, w, t = server.body_twist()
-                log.info("t %.1f s, %d packets, CG %s m (depth %.2f m), speed %.2f m/s, heading %.0f deg ENU%s",
+                vc = server.vehicle.current_ned
+                log.info("t %.1f s, %d packets, CG %s m (depth %.2f m), speed %.2f m/s, heading %.0f deg ENU, "
+                         "water %.2f m/s%s",
                          t, server.packets, np.round(p, 2).tolist(), float(get_depth(cfg, p)),
                          float(np.linalg.norm(v)), float(np.degrees(np.arctan2(r[1, 0], r[0, 0]))),
+                         float(np.hypot(vc[0], vc[1])),
                          "" if device is None else "; DVL %d reports (%d locked), %d clients" % (
                              device.count["velocity"], device.count["locked"], device.clients))
     except KeyboardInterrupt:

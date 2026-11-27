@@ -1,0 +1,10 @@
+# A moderate current along +x with gusts: 0.25 m/s +- 0.08 (1 sigma), direction +- 15 deg, over ~15 s, and a
+# 1/7-law profile (slower near the floor).
+current:
+  speed_mps: 0.25
+  direction_deg: 0.0
+  profile: power
+  gust:
+    sigma_mps: 0.08
+    time_s: 15.0
+    dir_sigma_deg: 15.0
