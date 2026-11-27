@@ -19,11 +19,13 @@ sites are unchanged. No ROS here: /gt/sonar_pose is published by the sink from t
 """
 from __future__ import annotations
 
+import collections
 import logging
 import socket
 import struct
 import threading
 import time
+from dataclasses import replace
 
 import numpy as np
 
@@ -87,6 +89,10 @@ class PhysicsServer:
         self.peer = None
         self.rate_hz = 0
         self.error = None
+        self.last_packet_wall = None             # time.monotonic() of the last servo packet
+        self.step_ms = collections.deque(maxlen=4000)     # per packet: integration + on_step [ms], for stats
+        self._requests = []                      # (kind, payload): applied by the thread before the next step
+        self._requests_lock = threading.Lock()
         self._pose = self._body_pose(state)
 
     # ---- lifecycle
@@ -144,6 +150,46 @@ class PhysicsServer:
             state = self.state
         return state.velocity_frd.copy(), state.rate_frd.copy(), float(state.t)
 
+    def snapshot(self):
+        """(state, last thruster command, last pwm, pose) of the latest step, one consistent set."""
+        with self.lock:
+            return self.state, self.cmd, self.pwm, self._pose
+
+    def sitl_alive(self, within_s: float = 2.0) -> bool:
+        """True if a servo packet arrived in the last ``within_s`` seconds."""
+        t = self.last_packet_wall
+        return t is not None and time.monotonic() - t < within_s
+
+    # ---- requests from other threads (the control channel): applied by the physics thread, between steps
+    def request_reposition(self, xy_tank) -> None:
+        """Move the vehicle horizontally to ``xy_tank`` at the next step, depth and attitude kept, twist and thrust
+        zeroed. ArduSub's EKF does not notice: the baro, the compass, the gyros and the DVL see no change."""
+        x, y = (float(v) for v in xy_tank)
+        b = self.vehicle.bounds
+        if b is not None and not (b.lo[0] <= x <= b.hi[0] and b.lo[1] <= y <= b.hi[1]):
+            raise ValueError(f"reposition ({x:.2f}, {y:.2f}) is outside the soft bound "
+                             f"x {b.lo[0]:.2f}..{b.hi[0]:.2f}, y {b.lo[1]:.2f}..{b.hi[1]:.2f}")
+        with self._requests_lock:
+            self._requests.append(("reposition", (x, y)))
+        if not self.sitl_alive(0.5):             # no SITL stepping the physics: nobody would pick it up
+            self._apply_requests()
+
+    def _apply_requests(self) -> None:
+        with self._requests_lock:
+            reqs, self._requests = self._requests, []
+        for kind, payload in reqs:
+            if kind == "reposition":
+                fr = self.frames
+                state = self.state
+                p_tank = fr.position_ned_to_tank(state.position_ned, self.water_level)
+                p_tank[0], p_tank[1] = payload
+                state = replace(state, position_ned=fr.position_tank_to_ned(p_tank, self.water_level),
+                                velocity_frd=np.zeros(3), rate_frd=np.zeros(3), thrust_n=np.zeros_like(state.thrust_n))
+                pose = self._body_pose(state)
+                with self.lock:
+                    self.state, self._pose = state, pose
+                log.info("physics: repositioned to (%.2f, %.2f) m at sim t %.2f s", payload[0], payload[1], state.t)
+
     # ---- the thread
     def _frame(self, state, cmd) -> bytes:
         fr = self.frames
@@ -177,12 +223,18 @@ class PhysicsServer:
                     self.peer, self.rate_hz = addr, rate_hz
                     log.info("physics: servo packets from %s:%d, %d channels, frame_rate %d Hz", addr[0], addr[1],
                              len(pwm), rate_hz)
+                self.last_packet_wall = time.monotonic()
+                self.rate_hz = rate_hz                   # SITL's frame rate of this packet (its first ones differ)
+                if self._requests:
+                    self._apply_requests()
+                t_step = time.perf_counter()
                 cmd = self.vehicle.params.t200.command_of_pwm(np.array([pwm[c] for c in self.channels], float))
                 frame_dt = 1.0 / (rate_hz or self.vehicle.params.rate_hz)
                 n = max(1, int(round(frame_dt / dt)))
                 state = self.state
                 for _ in range(n):
                     state = self.vehicle.step(state, cmd, frame_dt / n)
+                busy = time.perf_counter() - t_step
                 if self.rtf > 0:
                     if wall0 is None:
                         wall0 = time.monotonic() - state.t / self.rtf
@@ -198,8 +250,10 @@ class PhysicsServer:
                 pose = self._body_pose(state)
                 with self.lock:
                     self.state, self.cmd, self._pose, self.pwm = state, cmd, pose, pwm
+                t_on = time.perf_counter()
                 if self.on_step is not None:
                     self.on_step(state, pwm, pose)
+                self.step_ms.append(1e3 * (busy + time.perf_counter() - t_on))
                 self.sock.sendto(self._frame(state, cmd), addr)
                 self.packets += 1
                 self.steps += n

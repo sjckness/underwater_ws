@@ -14,6 +14,9 @@ vehicle the right way; the depth ArduSub estimates from its baro matches the sim
 With --dvl (the emulated A50 feeding ArduSub through BlueOS's DVL extension, docs/pool.md), after ALT_HOLD: the EKF
 has a horizontal velocity, POSHOLD engages and holds the vehicle in place, a stick input moves it and it holds the
 new place, and ArduSub's dead-reckoned track (LOCAL_POSITION_NED) follows the true one.
+With --current SPEED (and --dvl): in POSHOLD, the water starts flowing at SPEED m/s (--current-dir, ramped over 3 s,
+through the simulator's control channel, uw/rov/simctl.py) and POSHOLD must keep the vehicle within
+--current-tol of its place over the last 10 s of 30; then still water again.
 Exit code 0 only if every check passed.
 """
 from __future__ import annotations
@@ -182,6 +185,41 @@ def dvl_checks(p: Pilot, tol: float) -> None:
     p.pump(2.0)
 
 
+def current_checks(p: Pilot, addr: str, speed: float, direction: float, tol: float) -> None:
+    """POSHOLD against a current switched on while it holds. Starts and ends in ALT_HOLD, sticks centred."""
+    from uw.rov.simctl_client import SimCtl, SimCtlError
+    try:
+        sim = SimCtl(addr).connect()
+    except OSError as exc:
+        p.check(f"POSHOLD against {speed:.2f} m/s", False, f"no control channel at {addr} ({exc})")
+        return
+    with sim:
+        p.set_mode("POSHOLD")
+        p.pump(3.0)
+        a = p.truth()
+        try:
+            sim.set_current(speed_mps=speed, direction_deg=direction, ramp_s=3.0)
+        except SimCtlError as exc:
+            p.check(f"POSHOLD against {speed:.2f} m/s", False, str(exc))
+            return
+        track = []
+        for _ in range(30):
+            p.pump(1.0)
+            track.append(p.truth())
+        water = sim.state()["v_water_enu"]
+        sim.still(ramp_s=3.0)
+        peak = max(horizontal(a, b) for b in track)
+        steady = max(horizontal(a, b) for b in track[-10:])
+        p.pump(10.0)
+        back = horizontal(a, p.truth())
+    p.check(f"POSHOLD against {speed:.2f} m/s", steady < tol,
+            f"water {math.hypot(water[0], water[1]):.2f} m/s towards {direction:.0f} deg ENU: {100 * peak:.1f} cm "
+            f"peak, within {100 * steady:.1f} cm over the last 10 s of 30; {100 * back:.1f} cm off 10 s after still "
+            "water")
+    p.set_mode("ALT_HOLD")
+    p.pump(2.0)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--url", default="udpin:0.0.0.0:14560", help="pymavlink connection (default: %(default)s)")
@@ -193,6 +231,13 @@ def main(argv=None) -> int:
     ap.add_argument("--dvl", action="store_true", help="also check POSHOLD on the DVL (docs/pool.md)")
     ap.add_argument("--poshold-tol", type=float, default=0.25,
                     help="POSHOLD, the most the vehicle may wander from its place [m] (default %(default)s)")
+    ap.add_argument("--current", type=float, default=None, metavar="SPEED",
+                    help="with --dvl: POSHOLD against a water current of SPEED m/s switched on live")
+    ap.add_argument("--current-dir", type=float, default=0.0,
+                    help="where the water flows towards, ENU azimuth [deg] (default %(default)s: +x)")
+    ap.add_argument("--current-tol", type=float, default=0.25,
+                    help="POSHOLD in the current: the most it may be off its place over the last 10 s [m]")
+    ap.add_argument("--simctl", default="127.0.0.1:9020", help="the simulator's control channel (default %(default)s)")
     args = ap.parse_args(argv)
 
     p = Pilot(args.url)
@@ -247,6 +292,8 @@ def main(argv=None) -> int:
             f"baro {p.depth_estimate():.3f} m, sim {b[2]:.3f} m")
     if args.dvl:
         dvl_checks(p, args.poshold_tol)
+        if args.current is not None:
+            current_checks(p, args.simctl, args.current, args.current_dir, args.current_tol)
 
     a = p.truth()
     p.pump(4.0, x=600)

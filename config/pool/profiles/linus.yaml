@@ -1,4 +1,5 @@
-# Pool hardware profile "linus": RTX 5050 8 GB, shared with other GPU processes. The default.
+# Pool hardware profile "linus": RTX 3080 10 GB (nvidia-smi, 2026-11-26; older notes say RTX 5050 8 GB), shared with
+# other GPU processes. The default.
 # workstation.yaml sets exactly the same keys (tests/test_pool.py checks it).
 profile:
   name: linus
@@ -15,3 +16,7 @@ dvl:
   device:
     bind: 0.0.0.0                 # the emulated A50 (uw/rov/a50.py): the DVL extension reaches it from its bridge,
                                   #   at 172.31.250.1
+physics:
+  control:
+    bind: [127.0.0.1, 172.31.250.1]   # + the docker bridge uw-pool-blueos (docker/pool/compose.yaml): the ROS
+                                      #   container and the bench reach the control channel there

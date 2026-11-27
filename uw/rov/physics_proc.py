@@ -42,7 +42,8 @@ RATE = slice(23, 26)            # body FRD angular velocity [rad/s]
 PWM = slice(26, 42)             # the last servo packet's 16 channels [us]
 DVL_REPORTS, DVL_LOCKED, DVL_CLIENTS = 42, 43, 44     # the emulated A50 (uw/rov/a50.py), when dvl.device is on
 DVL_TCP_PORT, DVL_HTTP_PORT = 45, 46                  # its ports (0: no DVL)
-SIZE = 48
+CTL_PORT, CTL_CLIENTS = 47, 48                        # the control channel (uw/rov/simctl.py; 0: off)
+SIZE = 64
 STARTING, RUNNING, FAILED, STOPPED = 0.0, 1.0, -1.0, 2.0
 
 
@@ -76,6 +77,7 @@ class _Writer:
         self.a = arr
         self.device = device
         self.server = None                      # set once the server exists: its stall count
+        self.control = None                     # the control channel, once it exists: its client count
 
     def write(self, state, pwm, pose) -> None:
         a = self.a
@@ -95,6 +97,8 @@ class _Writer:
             a[DVL_REPORTS] = self.device.count["velocity"]
             a[DVL_LOCKED] = self.device.count["locked"]
             a[DVL_CLIENTS] = self.device.clients
+        if self.control is not None:
+            a[CTL_CLIENTS] = self.control.clients
         a[SEQ] += 1.0
 
 
@@ -153,8 +157,9 @@ def child_main(argv=None) -> int:
         arr = np.ndarray((SIZE,), np.float64, shm.buf)
     else:
         cfg = config.from_args(args, config.POOL_CONFIG)
-    device = None
+    device = control = None
     try:
+        from . import simctl
         from .a50 import pool_device
         device = pool_device(cfg)                # None when dvl.enabled or dvl.device.enabled is off
         if device is not None:
@@ -166,9 +171,16 @@ def child_main(argv=None) -> int:
         if writer:
             writer.write(server.state, server.pwm, server.body_pose())
             arr[PACKETS] = 0.0
+        control = simctl.from_config(cfg, server, {"a50": device} if device is not None else {})
+        if control is not None:
+            control.start()
+            if writer:
+                writer.control = control
         server.start()
     except Exception:  # noqa: BLE001 - reported to the parent through STATUS, the traceback on stderr
         log.exception("physics: could not start")
+        if control is not None:
+            control.close()
         if device is not None:
             device.close()
         if arr is not None:
@@ -180,6 +192,8 @@ def child_main(argv=None) -> int:
         arr[PORT] = server.port
         if device is not None:
             arr[DVL_TCP_PORT], arr[DVL_HTTP_PORT] = device.tcp_port, device.http_port
+        if control is not None and control.listening:
+            arr[CTL_PORT] = control.port
         arr[STATUS] = RUNNING
     try:
         if arr is not None:
@@ -200,6 +214,8 @@ def child_main(argv=None) -> int:
     except KeyboardInterrupt:
         pass
     finally:
+        if control is not None:
+            control.close()
         server.close()
         if device is not None:
             device.close()
@@ -289,6 +305,12 @@ class PhysicsProcess:
         return float(self.snapshot()[PWM][int(servo) - 1])
 
     @property
+    def control_port(self):
+        """The control channel's TCP port (uw/rov/simctl.py), or None when it is off."""
+        s = self.snapshot()
+        return int(s[CTL_PORT]) if s[CTL_PORT] else None
+
+    @property
     def dvl_ports(self):
         """(TCP, HTTP) port of the emulated A50, or None without one."""
         s = self.snapshot()
@@ -298,7 +320,8 @@ class PhysicsProcess:
         s = self.snapshot()
         return {"t": float(s[T]), "packets": int(s[PACKETS]), "stalls": int(s[STALLS]),
                 "age_s": (time.time() - float(s[WALL])) if s[WALL] else None,
-                "dvl": {"reports": int(s[DVL_REPORTS]), "locked": int(s[DVL_LOCKED]), "clients": int(s[DVL_CLIENTS])}}
+                "dvl": {"reports": int(s[DVL_REPORTS]), "locked": int(s[DVL_LOCKED]), "clients": int(s[DVL_CLIENTS])},
+                "control": {"port": int(s[CTL_PORT]), "clients": int(s[CTL_CLIENTS])}}
 
     def close(self, timeout_s: float = 5.0) -> None:
         if self.proc is not None:

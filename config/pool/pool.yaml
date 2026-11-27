@@ -170,6 +170,11 @@ physics:                          # uw.rov.physics_proc: the ArduSub JSON server
   bind: 127.0.0.1                 # Work with SITL in WSL2: the address SITL reaches Windows on (docs/pool.md)
   rtf: 1.0                        # paced to the wall clock: SITL, BlueOS and the pilot see real time
   surface_model: true             # partial-submersion buoyancy: the vehicle floats at the surface
+  control:                        # the control channel (uw/rov/simctl.py, tools/simctl.py): the current, the true
+    enabled: true                 #   state, repositioning, the DVL on/off, without restarting physics and SITL
+    port: 9020                    # TCP, newline-delimited JSON (uwsim/1)
+    bind: [127.0.0.1]             # a list; addresses this host does not have yet are skipped (profiles add the
+                                  #   docker bridge on linus, where the ROS container lives)
 
 render:
   translucency: true              # needed for the water surface (refraction, total internal reflection)
