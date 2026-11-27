@@ -1,0 +1,8 @@
+# rosbag2_storage_mcap writer options for the Pi: NO compression (zstd costs the Pi 4's CPU while it also runs
+# MAVROS), chunks of 1 MiB so a power cut loses at most one chunk, message index and summary kept so the file can
+# be read and seeked offline. Keys: rosbag2_storage_mcap's McapWriterOptions.
+compression: "None"
+chunkSize: 1048576
+noChunkCRC: false
+noMessageIndex: false
+noSummary: false
