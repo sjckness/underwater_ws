@@ -1,0 +1,6 @@
+# linus: development (Ubuntu, RTX GPU, Isaac in Docker). Nothing is deployed here: this file only says where the
+# data lives, for the tools that need it.
+kind: dev
+host: localhost
+data_root: /HDD2T/underwater_data        # = uw/runtime.yaml data_root
+rov_logs: /HDD2T/underwater_data/rov_logs

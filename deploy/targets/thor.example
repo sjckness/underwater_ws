@@ -1,0 +1,8 @@
+# Jetson AGX Thor (HIL, ROS 2 Jazzy, arm64). It only pulls (docs/MIGRATION.md).
+kind: thor
+host: 192.168.200.10          # the HIL cable; or the LAN name of the Thor (~/.ssh/config: jetson-thor)
+user: TODO
+repo: ~/underwater_ws         # TODO: the checkout's path on the Thor
+branch: main
+after_pull:                   # run in the checkout after the pull
+  - docker compose -f deploy/docker/compose.stack.yaml build

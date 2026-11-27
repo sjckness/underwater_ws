@@ -1,0 +1,39 @@
+# The real BlueROV2: Raspberry Pi 4 + Navigator, BlueOS, the ROS 2 extension (robot/bluerov2/README.md).
+# Copy what differs into rov.local (not in git); `uw deploy rov --discover` writes container and persistent_host.
+kind: rov
+host: 192.168.2.2
+user: pi
+ssh_port: 22
+blueos_url: http://192.168.2.2          # mavlink2rest: the armed check (read-only HTTP)
+docker: docker                          # how pi runs docker on the Pi ("sudo -n docker" if pi is not in the group)
+sudo: sudo -n                           # for writing under /usr/blueos/extensions (root-owned)
+
+extension_image: blueos-ros2            # --discover picks the running container whose image matches this
+container: extension-itskalvikblueosros2010     # BlueOS kraken's name for itskalvik/blueos-ros2:0.1.0: VERIFY
+persistent_host: /usr/blueos/extensions/ros2    # host side of...
+persistent_container: /root/persistent_ws       # ...this, inside the extension
+workspace: ros2_ws                      # our colcon workspace under the persistent folder
+packages: [rov_bringup, link_monitor]   # what goes on the vehicle (folders of ros/src)
+colcon_args: [--parallel-workers, "1", --event-handlers, console_direct-]   # the Pi 4 has 2 CPUs in the extension
+
+vehicle: rov1                           # topic namespace /rov1/mavros (docs/topic_map.md)
+fcu_url: tcp://127.0.0.1:5777           # BlueOS's internal MAVLink link (the extension is in the Pi's host network)
+ros_domain_id: 73
+
+smoke:
+  duration_s: 5
+  wait_s: 5
+  cpu_max_percent: 80
+  temp_max_c: 75
+  topics:                               # minimum Hz; {vehicle} = vehicle above
+    /{vehicle}/mavros/state: 0.5
+    /{vehicle}/mavros/imu/data: 10
+    /{vehicle}/mavros/imu/static_pressure: 2
+    /{vehicle}/mavros/rc/out: 2
+
+logs:
+  bin_dir: /root/.config/blueos/ardupilot-manager/firmware/logs   # ArduSub .BIN (derived from BlueOS source: verify)
+  bin_sudo: true
+  bag_dir: /usr/blueos/extensions/ros2/bags                        # rov_bringup's recordings
+  bag_sudo: true
+  dest: /HDD2T/underwater_data/rov_logs # TODO: the "home" logs disk, if it is not linus's /HDD2T

@@ -1,0 +1,41 @@
+# rov-sim: the vehicle's stand-in on linus (docs/ARCHITECTURE.md, "Ambiente di prova").
+#   vehicle  = the M11 pool stack: ArduSub SITL + BlueOS core at 172.31.250.2 (deploy/docker/pool/compose.yaml,
+#              profile blueos-local)
+#   the "Pi" = linus itself (transport: local: commands run here, not over SSH)
+#   extension = deploy/docker/compose.rov-sim.yaml (same image and container name as on the Pi)
+kind: rov
+transport: local
+host: localhost
+blueos_url: http://172.31.250.2
+docker: docker
+sudo: ""
+
+extension_image: blueos-ros2
+container: extension-itskalvikblueosros2010
+persistent_host: ~/.cache/uw_rov_sim/extensions/ros2     # = UW_ROV_SIM_ROOT/extensions/ros2 of the compose file
+persistent_container: /root/persistent_ws
+workspace: ros2_ws
+packages: [rov_bringup, link_monitor]
+colcon_args: [--event-handlers, console_direct-]
+
+vehicle: rov1
+fcu_url: udp://:14560@                  # SITL's second output (--serial1 udpclient:127.0.0.1:14560)
+ros_domain_id: 73
+
+smoke:
+  duration_s: 5
+  wait_s: 10
+  cpu_max_percent: 95                   # linus, not a Pi: the number only proves the check runs
+  temp_max_c: 95
+  topics:
+    /{vehicle}/mavros/state: 0.5
+    /{vehicle}/mavros/imu/data: 5
+    /{vehicle}/mavros/imu/static_pressure: 2
+    /{vehicle}/mavros/rc/out: 1
+
+logs:
+  bin_dir: ~/.cache/uw_rov_sim/ardupilot_logs   # SITL's .BIN, copied out of the SITL container (ARCHITECTURE.md)
+  bin_sudo: false
+  bag_dir: ~/.cache/uw_rov_sim/extensions/ros2/bags
+  bag_sudo: false
+  dest: ~/.cache/uw_rov_sim/pulled

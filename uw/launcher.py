@@ -5,12 +5,17 @@ venv, native Isaac), as uw/runtime.yaml says.
     python -m uw test [pytest args]
     python -m uw sim [--gui] [args]      the Isaac app: USD stage, RTX camera, sonar in the loop, ROS 2
     python -m uw sonar-only [args]
+    python -m uw pool [--gui] [args]     the M11 test pool (sim/pool.py)
 Config options go after the command and reach the Python side unchanged: --profile linus|workstation,
 --preset NAME (repeatable), --set a.b=c (repeatable).
 
 Docker: a one-off container, removed on exit, Ctrl-C, SIGTERM or SIGHUP. With a terminal, Ctrl-C goes straight into
 the container; without one it lands here and stops the container (a second Ctrl-C kills it at once). The target
 side (uw/runner.py) turns Ctrl-C and docker stop into a KeyboardInterrupt.
+
+Host commands run here, on the machine you type them on (they drive Docker, SSH, git):
+
+    python -m uw image dev|thor|rov | promote | list    images tagged with the commit (uw/image.py)
 """
 from __future__ import annotations
 
@@ -27,6 +32,8 @@ from .config import merge
 WS = Path(__file__).resolve().parents[1]
 COMMANDS = ("py", "test", "sim", "sonar-only", "pool")
 STUBS: dict[str, str] = {}                      # command: milestone that implements it
+#: commands that run on this host, not in the Isaac container: command -> module with main(argv) -> int
+HOST = {"image": "uw.image"}
 
 # In the image: what python.sh does, except that Python is exec'd so that signals reach it ($0 = Isaac root); plus
 # the ROS bridge's internal Jazzy libraries (read at process start, so they cannot be added from Python).
@@ -168,8 +175,11 @@ def main(argv: list[str] | None = None) -> int:
         print(__doc__, file=sys.stdout if argv else sys.stderr)
         return 0 if argv else 2
     cmd, args = argv[0], argv[1:]
+    if cmd in HOST:
+        import importlib
+        return int(importlib.import_module(HOST[cmd]).main(args) or 0)
     if cmd not in COMMANDS:
-        print(f"uw: unknown command {cmd!r}; one of {', '.join(COMMANDS)}", file=sys.stderr)
+        print(f"uw: unknown command {cmd!r}; one of {', '.join([*COMMANDS, *HOST])}", file=sys.stderr)
         return 2
     if cmd in STUBS:
         print(f"uw {cmd}: not implemented until {STUBS[cmd]}", file=sys.stderr)

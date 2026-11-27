@@ -1,0 +1,27 @@
+# The BlueROV2's ROS 2 extension with our ros/src built in (`uw image rov`).
+#
+# Base: the BlueOS ROS 2 extension itskalvik/blueos-ros2, the only Jazzy tag (0.1.0, amd64 + arm64), pinned by
+# digest (robot/bluerov2/VERSIONS.md). It brings ROS 2 Jazzy ros-base, MAVROS + extras, rosbag2 with MCAP, foxglove
+# bridge, and its /start.sh (nginx + ttyd terminal, nothing ROS). Its LABELs - BlueOS's install `permissions`
+# (host network, privileged, /usr/blueos/extensions/ros2 -> /root/persistent_ws, 2 CPUs, ~1 GB) - are inherited.
+#
+# Build from the repo root (the context needs ros/src); Dockerfile.rov.dockerignore keeps the rest out:
+#     uw image rov                                   # linux/arm64 (the Pi): needs QEMU binfmt on linus
+#     uw image rov --platform linux/amd64            # the same image for a test on linus
+# Today the vehicle does NOT run this image: `uw deploy rov` builds ros/src inside the store's extension, in
+# /root/persistent_ws/ros2_ws. This image is the step after (robot/bluerov2/blueos/README.md says how to switch).
+ARG BASE=itskalvik/blueos-ros2:0.1.0@sha256:810fb3f0bd310e5c75d8b84873e6afffc06f2b900e8bebc07de82957aef17406
+FROM ${BASE}
+
+# only the packages the vehicle runs: its bringup and the topic-rate monitor `uw smoke rov` uses
+COPY ros/src/rov_bringup /root/uw_ws/src/rov_bringup
+COPY ros/src/link_monitor /root/uw_ws/src/link_monitor
+RUN bash -c "source /opt/ros/jazzy/setup.bash \
+      && cd /root/uw_ws \
+      && colcon build --event-handlers console_direct- --parallel-workers 2" \
+    && rm -rf /root/uw_ws/build /root/uw_ws/log \
+    && echo 'source /root/uw_ws/install/setup.bash' >> /root/.bashrc
+
+ARG UW_REVISION=unknown
+LABEL org.opencontainers.image.revision=${UW_REVISION} \
+      org.opencontainers.image.source="underwater_ws deploy/docker/Dockerfile.rov"
