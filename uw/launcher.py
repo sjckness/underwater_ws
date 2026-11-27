@@ -2,7 +2,7 @@
 venv, native Isaac), as uw/runtime.yaml says.
 
     python -m uw py SCRIPT [args]        also py -m MODULE, py -c CODE
-    python -m uw test [pytest args]
+    python -m uw test [pytest args]      no args: also the ROS 2 stage on the host (--no-ros, --ros, --ros-only)
     python -m uw sim [--gui] [args]      the Isaac app: USD stage, RTX camera, sonar in the loop, ROS 2
     python -m uw sonar-only [args]
     python -m uw pool [--gui] [args]     the M11 test pool (sim/pool.py)
@@ -16,10 +16,16 @@ side (uw/runner.py) turns Ctrl-C and docker stop into a KeyboardInterrupt.
 Host commands run here, on the machine you type them on (they drive Docker, SSH, git):
 
     python -m uw image dev|thor|rov | promote | list    images tagged with the commit (uw/image.py)
+    python -m uw deploy work|thor|rov [--dry-run]      bring a machine to this commit (uw/deploy.py)
+    python -m uw smoke rov                             heartbeat, DISARMED, topic rates, CPU (uw/smoke.py)
+    python -m uw logs pull rov                         .BIN + bags off the vehicle, indexed (uw/logs.py)
+    python -m uw sysid bluerov2_heavy [--write]        logs -> vehicle.yaml (sysid/cli.py, skeleton)
+`rov-sim` is the vehicle's stand-in on linus for all of these (docs/ARCHITECTURE.md).
 """
 from __future__ import annotations
 
 import os
+import shlex
 import signal
 import subprocess
 import sys
@@ -33,7 +39,7 @@ WS = Path(__file__).resolve().parents[1]
 COMMANDS = ("py", "test", "sim", "sonar-only", "pool")
 STUBS: dict[str, str] = {}                      # command: milestone that implements it
 #: commands that run on this host, not in the Isaac container: command -> module with main(argv) -> int
-HOST = {"image": "uw.image"}
+HOST = {"image": "uw.image", "deploy": "uw.deploy", "smoke": "uw.smoke", "logs": "uw.logs", "sysid": "sysid.cli"}
 
 # In the image: what python.sh does, except that Python is exec'd so that signals reach it ($0 = Isaac root); plus
 # the ROS bridge's internal Jazzy libraries (read at process start, so they cannot be added from Python).
@@ -169,6 +175,27 @@ def run_native(rt: dict, cmd: str, args: list[str]) -> int:
             interrupted = True
 
 
+ROS_SETUP = Path("/opt/ros/jazzy/setup.bash")
+#: the tests that need host ROS 2 Jazzy (rclpy, rosbag2, launch, message packages) and a built ros/src
+ROS_TESTS = ["tests/test_rov_bringup.py", "tests/test_uw_ops.py", "tests/test_ros_messages.py", "tests/test_dvl_dr.py",
+             "tests/test_pose_cmd.py"]
+
+
+def run_ros_stage() -> int:
+    """`uw test`, second stage, on the host: colcon build of ros/src (into output/colcon, not in git), then the ROS 2
+    tests with host Jazzy and that build sourced. The first stage (the Isaac container) has no /opt/ros."""
+    out = WS / "output" / "colcon"
+    out.mkdir(parents=True, exist_ok=True)
+    q = shlex.quote
+    script = (f"source {q(str(ROS_SETUP))} && cd {q(str(WS))} && "
+              f"colcon --log-base {q(str(out / 'log'))} build --base-paths ros/src --build-base {q(str(out / 'build'))} "
+              f"--install-base {q(str(out / 'install'))} > {q(str(out / 'build.txt'))} 2>&1; b=$?; tail -2 {q(str(out / 'build.txt'))}; "
+              f"[ $b -eq 0 ] || exit $b; source {q(str(out / 'install' / 'setup.bash'))} && "
+              f"python3 -m pytest -q -p no:cacheprovider {' '.join(ROS_TESTS)}")
+    print("uw test: ROS 2 stage (host Jazzy): colcon build ros/src, then " + " ".join(ROS_TESTS), file=sys.stderr)
+    return subprocess.run(["bash", "-c", script]).returncode
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if not argv or argv[0] in ("-h", "--help", "help"):
@@ -184,10 +211,26 @@ def main(argv: list[str] | None = None) -> int:
     if cmd in STUBS:
         print(f"uw {cmd}: not implemented until {STUBS[cmd]}", file=sys.stderr)
         return 1
+    ros = False
+    if cmd == "test":
+        flags = [a for a in args if a in ("--ros", "--no-ros", "--ros-only")]
+        args = [a for a in args if a not in flags]
+        ros = ("--ros" in flags or "--ros-only" in flags or not args) and "--no-ros" not in flags
+        if ros and not (os.name == "posix" and ROS_SETUP.is_file()):
+            print(f"uw test: no {ROS_SETUP} on this host: the ROS 2 stage is skipped", file=sys.stderr)
+            ros = False
+        if "--ros-only" in flags:
+            return run_ros_stage() if ros else 1
     rt = runtime()
     if rt["mode"] == "docker":
-        return run_docker(rt, cmd, args)
-    if rt["mode"] == "native":
-        return run_native(rt, cmd, args)
-    print(f"uw: runtime mode must be docker or native, got {rt['mode']!r}", file=sys.stderr)
-    return 2
+        rc = run_docker(rt, cmd, args)
+    elif rt["mode"] == "native":
+        rc = run_native(rt, cmd, args)
+    else:
+        print(f"uw: runtime mode must be docker or native, got {rt['mode']!r}", file=sys.stderr)
+        return 2
+    if ros:
+        rc_ros = run_ros_stage()
+        print(f"uw test: suite exit {rc}, ROS 2 stage exit {rc_ros}", file=sys.stderr)
+        rc = rc or rc_ros
+    return rc

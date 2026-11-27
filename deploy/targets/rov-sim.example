@@ -39,3 +39,4 @@ logs:
   bag_dir: ~/.cache/uw_rov_sim/extensions/ros2/bags
   bag_sudo: false
   dest: ~/.cache/uw_rov_sim/pulled
+  index: ~/.cache/uw_rov_sim/pulled/INDEX.md     # not the real vehicle's index in robot/

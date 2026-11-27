@@ -8,6 +8,9 @@
 # `rc_io` is the one plugin with a write path: it would send RC_CHANNELS_OVERRIDE if someone published on
 # `rc/override`. It is here for `rc/out` (SERVO_OUTPUT_RAW: the PWM ArduSub sends to the eight motors), which the
 # sysid needs. Nothing in this repo publishes `rc/override`; `uw smoke rov` fails if anything does.
+#
+# Expected at start: `VER: command plugin service call failed!` and `switched to default capabilities` from
+# sys_status - it asks for AUTOPILOT_VERSION through the `command` plugin, which is not loaded. Harmless.
 /**:
   ros__parameters:
     plugin_denylist: ["*"]
