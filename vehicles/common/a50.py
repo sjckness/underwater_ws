@@ -1,12 +1,12 @@
 """The Water Linked DVL A50's network side, emulated (M11 pool): its TCP JSON protocol and the HTTP API.
 
-The beams, the noise and the bottom lock are ``uw.rov.dvl`` (docs/dvl.md); this module is what a client on the
+The beams, the noise and the bottom lock are ``vehicles.common.dvl`` (docs/dvl.md); this module is what a client on the
 vehicle's network sees of the device, so that the software that drives a real A50 drives the simulated one
 unmodified: BlueOS's Water Linked DVL extension (which turns the reports into VISION_POSITION_DELTA for ArduSub,
 github.com/bluerobotics/BlueOS-Water-Linked-DVL) and the ``ndahn/dvl_a50`` ROS driver.
 
     TCP 16171, newline-delimited JSON, format json_v3.3 (docs.waterlinked.com/dvl/dvl-json-protocol, VERIFIED):
-      -> {"type": "velocity", ...}          every velocity report, 2-15 Hz with the altitude (uw.rov.dvl)
+      -> {"type": "velocity", ...}          every velocity report, 2-15 Hz with the altitude (vehicles.common.dvl)
       -> {"type": "position_local", ...}    the device's own dead reckoning, 5 Hz
       <- {"command": "get_config" | "set_config" | "reset_dead_reckoning" | "calibrate_gyro" | "trigger_ping"
                      | "get_version_info" | "get_time_status" | ..., "parameters": {...}}
@@ -19,7 +19,7 @@ github.com/bluerobotics/BlueOS-Water-Linked-DVL) and the ``ndahn/dvl_a50`` ROS d
     JSON stand-ins this emulator uses for the model's "no value" (fom, altitude, distance -1).
 
 Time: the real device stamps Unix time; so does this one (wall clock: the physics process is paced to it), so a
-client sees what it would see on the vehicle. The model's own reports (``uw.rov.dvl.Report``) carry simulated time.
+client sees what it would see on the vehicle. The model's own reports (``vehicles.common.dvl.Report``) carry simulated time.
 
 Threads. ``step`` runs in the physics thread at every servo packet and never blocks: it samples when a report is
 due and puts the JSON on a queue. A sender thread writes it to every client; one thread per client reads
@@ -40,7 +40,7 @@ import time
 
 import numpy as np
 
-from ..config import get
+from uw.config import get
 from . import frames as fr
 
 log = logging.getLogger("uw.a50")
@@ -109,7 +109,7 @@ class A50:
     def _frames(self, rot_flu_enu, offset_deg: float):
         """(instrument -> NED, output frame -> NED, output <- instrument). The output frame is the instrument's
         turned by the mounting_rotation_offset setting, as the device reports in (the vehicle's when the setting
-        matches the mount); the rotation follows ``uw.rov.dvl.mount_from_config``'s sign."""
+        matches the mount); the rotation follows ``vehicles.common.dvl.mount_from_config``'s sign."""
         r_inst_ned = E_ENU_NED @ np.asarray(rot_flu_enu, float) @ F_FRD_FLU @ self.dvl.mount.rot_body_to_dvl.T
         r_set = fr.rot_from_rpy_deg([0.0, 0.0, -float(offset_deg)])
         return r_inst_ned, r_inst_ned @ r_set.T, r_set
@@ -380,10 +380,10 @@ class A50:
 
 
 def pool_device(cfg: dict):
-    """The pool's A50 (config/pool/pool.yaml ``dvl``), cast at ``uw.pool_geometry.PoolBottom``; None when
+    """The pool's A50 (sim/config/pool/pool.yaml ``dvl``), cast at ``physics.pool_geometry.PoolBottom``; None when
     ``dvl.enabled`` or ``dvl.device.enabled`` is off."""
     if not (get(cfg, "dvl.enabled") and get(cfg, "dvl.device.enabled")):
         return None
-    from ..pool_geometry import PoolBottom
+    from physics.pool_geometry import PoolBottom
     from . import dvl as dvl_model
     return A50(dvl_model.from_config(cfg, PoolBottom(cfg)), cfg)

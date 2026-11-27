@@ -1,6 +1,6 @@
 """Rate, bandwidth, message age and drops per topic, with the reader's QoS taken from each publisher's.
 
-    ros/link_monitor/run.sh [--duration 30] [--domain 73|74] [--age] [--json FILE] [TOPIC ...]
+    ros/src/link_monitor/run.sh [--duration 30] [--domain 73|74] [--age] [--json FILE] [TOPIC ...]
 
 Why this exists rather than `ros2 topic hz` and `ros2 topic bw`: the sensor topics are published BEST_EFFORT
 (docs/topic_map.md §3), those two commands have no QoS option in Jazzy — `--qos-reliability` is rejected with a
@@ -123,7 +123,7 @@ class Topic:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="ros/link_monitor/run.sh", description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(prog="ros/src/link_monitor/run.sh", description=__doc__.splitlines()[0])
     ap.add_argument("topics", nargs="*", default=None, help=f"default: {' '.join(DEFAULT_TOPICS)}")
     ap.add_argument("--duration", type=float, default=30.0, help="measure for this many wall seconds")
     ap.add_argument("--wait", type=float, default=15.0, help="wait up to this long for the publishers to appear")
@@ -131,7 +131,7 @@ def main(argv=None) -> int:
     ap.add_argument("--json", default="", help="write the report here as well")
     ap.add_argument("--domain", type=int, default=None,
                     help="ROS domain (default: UW_ROS_DOMAIN_ID, else 73). 74 is the ground-truth domain, which "
-                         "ROS_DOMAIN_ID deliberately does not select — see ros/sonar_relay")
+                         "ROS_DOMAIN_ID deliberately does not select — see ros/src/sonar_relay")
     args, ros_args = ap.parse_known_args(argv)
     names = args.topics or DEFAULT_TOPICS
 

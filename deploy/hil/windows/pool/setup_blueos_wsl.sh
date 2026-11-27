@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # M11: prepare an Ubuntu WSL2 distribution on the Work machine for the pool stack (BlueOS, ArduSub SITL, mediamtx,
-# the DVL extension: hil/win/pool/README.md). Run INSIDE the distribution (e.g. `wsl -d Ubuntu-24.04`), from the
-# repo: bash hil/win/pool/setup_blueos_wsl.sh
+# the DVL extension: deploy/hil/windows/pool/README.md). Run INSIDE the distribution (e.g. `wsl -d Ubuntu-24.04`), from the
+# repo: bash deploy/hil/windows/pool/setup_blueos_wsl.sh
 #
 # What it does, and nothing else: enables systemd in /etc/wsl.conf, installs Docker Engine from Docker's apt
 # repository (not Docker Desktop: BlueOS needs real host networking), adds you to the docker group, installs the
@@ -35,7 +35,7 @@ if ! command -v docker >/dev/null 2>&1 || docker version 2>&1 | grep -qi "docker
     sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 fi
 sudo systemctl enable --now docker
-# tools/pool_blueos_setup.py is stdlib only; tools/pool_smoke.py imports uw (numpy, yaml) and installs pymavlink
+# sim/tools/pool_blueos_setup.py is stdlib only; sim/tools/pool_smoke.py imports uw (numpy, yaml) and installs pymavlink
 # with pip --target into ~/.cache/uw_pydeps on first use (uw/deps.py)
 sudo apt-get install -y python3-pip python3-numpy python3-yaml curl
 if ! id -nG "$USER" | grep -qw docker; then
@@ -50,7 +50,7 @@ mkdir -p ~/.config/uw_blueos/{config,etc,bin,extensions,userdata,logs}
 # 4. the checks that matter for scenario B
 mode=$(wslinfo --networking-mode 2>/dev/null || echo "unknown (wslinfo missing)")
 echo "[setup] networking mode: $mode"
-[ "$mode" = mirrored ] || echo "[setup] WARNING: not mirrored: copy hil/win/pool/wslconfig.example to %UserProfile%\.wslconfig, wsl --shutdown"
+[ "$mode" = mirrored ] || echo "[setup] WARNING: not mirrored: copy deploy/hil/windows/pool/wslconfig.example to %UserProfile%\.wslconfig, wsl --shutdown"
 # Ports the WSL side opens (BlueOS's main ones, mediamtx, the DVL extension). In mirrored mode a port Windows
 # already holds cannot be had here either, and `ss` only sees Linux: ask Windows too. Meant for before
 # `stack.sh up`: with the stack running, its own ports may show up on the Windows side as well.
@@ -63,10 +63,10 @@ for p in $ports; do
     fi
 done
 # Line endings: the repo is shared with Windows; a CRLF here breaks the SITL image's entrypoint and these scripts
-for f in docker/ardusub_sitl/entrypoint.sh docker/ardusub_sitl/params/pool.parm docker/pool/compose.yaml \
-         docker/pool/dvl_gateway.conf.template hil/win/pool/stack.sh; do
+for f in deploy/docker/ardusub_sitl/entrypoint.sh deploy/docker/ardusub_sitl/params/pool.parm deploy/docker/pool/compose.yaml \
+         deploy/docker/pool/dvl_gateway.conf.template deploy/hil/windows/pool/stack.sh; do
     if [ -f "$f" ] && grep -q $'\r' "$f"; then
-        echo "[setup] WARNING: $f has CRLF line endings: see hil/win/pool/README.md, 'Fine riga'"
+        echo "[setup] WARNING: $f has CRLF line endings: see deploy/hil/windows/pool/README.md, 'Fine riga'"
     fi
 done
-echo "[setup] done. Next (hil/win/pool/README.md): bash hil/win/pool/stack.sh up"
+echo "[setup] done. Next (deploy/hil/windows/pool/README.md): bash deploy/hil/windows/pool/stack.sh up"

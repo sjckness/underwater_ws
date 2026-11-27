@@ -1,7 +1,7 @@
 # BlueROV2 Heavy (Vectored_6DOF, 8 thrusters): the M8a vehicle, docs/ros_hil.md section 6.3.
 #
 # Units SI. Every vector is in the ArduPilot body frame FRD (x forward, y starboard, z down), because the
-# published Fossen identifications and the ArduPilot JSON link both use it; uw/rov/frames.py is the only
+# published Fossen identifications and the ArduPilot JSON link both use it; vehicles/common/frames.py is the only
 # place that converts to the repo's tank/ENU and body/FLU frames.
 #
 # TAGS, one per value, as docs/validation.md and docs/ros_hil.md tag their numbers:
@@ -27,7 +27,7 @@
 # CORRECTION (M11, 2026-11-25): earlier revisions said the identification was for the STANDARD hull. Opening
 # [BENZON22] shows Table A1 is the HEAVY: mass and volume measured, inertia and CB from CAD, damping from pool
 # tests, added mass from Eidsvik's method on the Heavy's dimensions. So body, added mass and damping below are
-# the Heavy's own published set; config/rov_bluerov2_vectored.yaml (standard hull) is the one that borrows.
+# the Heavy's own published set; vehicles/bluerov2/vehicle.yaml (standard hull) is the one that borrows.
 
 model: BlueROV2 Heavy
 frame: vectored_6dof            # ArduSub FRAME_CONFIG 2. V: the decision in docs/ros_hil.md 6.3
@@ -42,10 +42,10 @@ body:
                                 #   volume "Experimental", fresh water) would make the vehicle 0.98 N NEGATIVE.
                                 #   Blue Robotics ballasts the vehicle slightly positive, so +2.98 N of trim
                                 #   (GUESS: foam/ballast) restores the +2.0 N net the earlier revisions carried.
-                                #   Given as a FORCE: config/tank.yaml's salinity_psu 35 is not applied.
+                                #   Given as a FORCE: sim/config/tank.yaml's salinity_psu 35 is not applied.
   volume_m3: 0.0134             # V [BENZON22]; informational only, nothing reads it.
   hull_height_m: 0.254          # V [BR2]: 457 x 575 x 254 mm. Read only by the partial-submersion surface model
-                                #   (uw.rov.dynamics make_vehicle(surface_model=True), the M11 pool).
+                                #   (vehicles.common.dynamics make_vehicle(surface_model=True), the M11 pool).
   r_g_frd_m: [0.0, 0.0, 0.0]    # V by definition: the body origin IS the centre of gravity, so M_RB is
                                 #   diagonal and the weight makes no moment.
   r_b_frd_m: [0.0, 0.0, -0.01]  # V [BENZON22] ("CAD"): centre of buoyancy 1 cm ABOVE the CG (z down, so
@@ -106,7 +106,7 @@ damping_quadratic:
 # ArduSub's): stick up would have driven the vehicle down. MOTn_DIRECTION must stay 1 in SITL for this to hold.
 #
 # The 45-deg layout reproduces the published yaw arm 0.1888 m from the +-(0.156, 0.111) mounting points, and
-# uw/rov/dynamics.py asserts the arm comes out at that value. Surge, sway, heave, roll, pitch and yaw each
+# vehicles/common/dynamics.py asserts the arm comes out at that value. Surge, sway, heave, roll, pitch and yaw each
 # have a thrust combination (the factor column of AP_Motors6DOF) that excites nothing else.
 thrusters:
   count: 8
@@ -164,13 +164,13 @@ integrator:
 
 # A SOFT, NON-PHYSICAL bound, because there is no PhysX scene and hence no contacts (docs/ros_hil.md 6.5):
 # without it a thrusting vehicle leaves the water, passes through the pipe or exits the tank. The kinematic
-# presets got this free from uw.pose.Bounds clipping; a dynamic body does not. Spring-damper per face, applied
+# presets got this free from sim.pose.Bounds clipping; a dynamic body does not. Spring-damper per face, applied
 # as a pure force at the body origin (no moment - a deliberate simplification, so a vehicle pressed into a wall
 # does not acquire a torque the walls could not produce). Every activation is logged and counted.
 bound:
   enabled: true                 # default ON for dynamic-ROV runs
-  margin_m: 0.2                 # V: the same margin uw.pose.Bounds uses for the kinematic trajectories
-  sand_extra_m: 0.1             # V: uw.pose.Bounds adds 0.1 m over the sand on top of the margin
+  margin_m: 0.2                 # V: the same margin sim.pose.Bounds uses for the kinematic trajectories
+  sand_extra_m: 0.1             # V: sim.pose.Bounds adds 0.1 m over the sand on top of the margin
   stiffness_n_per_m: 2000.0     # GUESS: 0.073 m of penetration at full horizontal thrust (145 N); the
                                 #   resulting 10.6 rad/s contact mode is ~1400 times slower than the 400 Hz step
   damping_n_s_per_m: 300.0      # GUESS: ~0.8 of critical for the 17.9 kg surge mass, so no bouncing

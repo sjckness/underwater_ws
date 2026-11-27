@@ -1,12 +1,12 @@
 """Water Linked DVL A50: a four-beam convex Janus bottom-track log, in plain numpy.
 
 The model produces the device's own *velocity-and-transducer report*, field for field, so the interface
-downstream of it is the same in simulation and on hardware: ``ros/dvl_relay`` turns a report into
+downstream of it is the same in simulation and on hardware: ``ros/src/dvl_relay`` turns a report into
 ``marine_acoustic_msgs/Dvl`` exactly as the real driver would, and on the vehicle the A50 and its driver
 replace this module without anything below them changing (``docs/dvl.md``).
 
 What is verified against Water Linked's documentation and what is assumed is tagged per value in
-``config/tank.yaml``'s ``dvl:`` section. The short version: the 22.5 deg beam tilt, the 4.4 deg beam
+``sim/config/tank.yaml``'s ``dvl:`` section. The short version: the 22.5 deg beam tilt, the 4.4 deg beam
 width, the FRD instrument axes (x forward, y right, z down), the 0.05-50 m altitude envelope, the
 0.1 mm/s resolution, the 2-15 Hz report rate and the +-1.01 % long-term accuracy are published; the beam
 *azimuths* come from a third-party driver, not from Water Linked, and the per-sample noise and the slow
@@ -15,12 +15,12 @@ bias are published nowhere at all.
 Frames. The instrument frame is ArduPilot's body convention, FRD, which is also what
 ``marine_acoustic_msgs/Dvl`` declares for itself ("z-axis in direction DVL is pointing, x-axis aligned
 with vehicle forward"). The single conversion to ROS's FLU happens in the relay, once. Inside here the
-only other frame is the tank's ENU, needed to cast the beams at the sand, and ``uw.rov.frames`` is the
+only other frame is the tank's ENU, needed to cast the beams at the sand, and ``vehicles.common.frames`` is the
 only thing that converts.
 
 Determinism. Every error term is a pure function of the seed and either the sample index or the
 simulated time - never of a wall clock and never of a shared mutable generator - so two runs of the
-same scenario give bit-identical reports, which is the rule the rest of ``uw.rov`` already follows.
+same scenario give bit-identical reports, which is the rule the rest of ``vehicles.common`` already follows.
 """
 from __future__ import annotations
 
@@ -29,8 +29,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .. import geometry as geom
-from ..config import ConfigError, get
+from physics import geometry as geom
+from uw.config import ConfigError, get
 from . import frames as fr
 
 Z_WATER_MRAYL = 1.5              # nominal; only sets where the reflection coefficient lands
@@ -41,7 +41,7 @@ BEAMS = 4
 
 @dataclass(frozen=True)
 class Params:
-    """Everything the model needs from ``config/tank.yaml``'s ``dvl:`` section, already resolved."""
+    """Everything the model needs from ``sim/config/tank.yaml``'s ``dvl:`` section, already resolved."""
     tilt_deg: float
     azimuths_deg: tuple
     width_deg: float
@@ -78,7 +78,7 @@ class Mount:
 
 def params_from_config(cfg: dict) -> Params:
     """Validate and resolve ``dvl:``. Raises ``ConfigError`` on a value outside the datasheet."""
-    from .. import water
+    from physics import water
     d = get(cfg, "dvl")
     version = str(d["version"])
     if version not in d["scale_sigma"]:
@@ -186,7 +186,7 @@ class _BiasField:
     An Ornstein-Uhlenbeck walk would need state carried between samples, so its output would depend on
     which samples were taken. A fixed random spectrum gives the same correlation time with none of that:
     identical for a given seed whatever the schedule, which is what the determinism test needs. The
-    construction is the one ``uw.geometry.SandField`` uses for the sand relief.
+    construction is the one ``physics.geometry.SandField`` uses for the sand relief.
     """
 
     def __init__(self, sigma: float, tau: float, seed: int, n: int = 6):
@@ -202,10 +202,10 @@ class _BiasField:
 # ----------------------------------------------------------------------------------------- the model
 
 class TankBottom:
-    """The tank as the DVL's bottom: ``uw.geometry.ray_bottom`` over the sand and the meshes (the sonar's own
-    occluders), with the materials of config/tank.yaml.
+    """The tank as the DVL's bottom: ``physics.geometry.ray_bottom`` over the sand and the meshes (the sonar's own
+    occluders), with the materials of sim/config/tank.yaml.
 
-    The bottom interface ``Dvl`` needs, which ``uw.pool_geometry.PoolBottom`` also provides: ``ray_bottom(origin,
+    The bottom interface ``Dvl`` needs, which ``physics.pool_geometry.PoolBottom`` also provides: ``ray_bottom(origin,
     directions, t_max)``, ``materials`` (name -> Z or reflection, lambert_db, rms_slope) and ``role_material``
     (what a hit's role is made of)."""
 
@@ -223,7 +223,7 @@ class TankBottom:
 class Dvl:
     """The sensor. ``due(t)`` owns the altitude-dependent schedule, ``sample(...)`` makes one report.
 
-    ``bottom`` is what the beams are cast at: a ``TankBottom`` or a ``uw.pool_geometry.PoolBottom``."""
+    ``bottom`` is what the beams are cast at: a ``TankBottom`` or a ``physics.pool_geometry.PoolBottom``."""
 
     def __init__(self, params: Params, mount: Mount, bottom, seed: int = 0):
         self.p = params
@@ -267,7 +267,7 @@ class Dvl:
         return period
 
     def due(self, t: float) -> bool:
-        """True once per report period of simulated time. Unlike ``uw.main.RateTimer`` the period varies,
+        """True once per report period of simulated time. Unlike ``sim.main.RateTimer`` the period varies,
         so the schedule is carried rather than derived from a fixed grid; the first report is at one
         period, as everywhere else in the loop."""
         if t + 1e-9 < self._next:
@@ -289,8 +289,8 @@ class Dvl:
         """Per-beam received level [dBm] from the same backscatter law the sonar uses.
 
         Monostatic Lambert plus the Kirchhoff term of a rough surface with Gaussian slopes - the
-        reduction of ``uw.sonar.emit`` to a single direction, identical in form to
-        ``uw.surface.boil_kernel`` - over the beam's footprint, spread as 1/r^4. Water absorption is
+        reduction of ``physics.sonar.emit`` to a single direction, identical in form to
+        ``physics.surface.boil_kernel`` - over the beam's footprint, spread as 1/r^4. Water absorption is
         left out: at 1 MHz over the few metres this sensor ever sees in the tank it is a constant offset
         that ``rssi_ref_dbm`` already absorbs.
         """
@@ -316,7 +316,7 @@ class Dvl:
 
         ``position_tank`` / ``rot_flu_enu`` are the vehicle body's pose (tank ENU, body FLU);
         ``v_body_frd`` / ``w_body_frd`` are its twist in ArduPilot body FRD, which is what
-        ``uw.rov.dynamics.State`` carries. The lever arm is applied here, at the source, so the report
+        ``vehicles.common.dynamics.State`` carries. The lever arm is applied here, at the source, so the report
         describes the instrument and not the body - undoing it is the estimator's job.
         """
         p = self.p
@@ -415,13 +415,13 @@ class BodyMotion:
     """The vehicle body's pose and body-FRD twist at a simulated time, from whatever drives the sim.
 
     Two sources, one interface. With ``sonar.pose_source ardusub`` the physics thread integrates the
-    vehicle, so the twist is read out of ``uw.rov.dynamics.State`` rather than reconstructed. Every other
-    pose source carries position and attitude only (``uw.pose`` returns a ``Pose``), so the twist is a
+    vehicle, so the twist is read out of ``vehicles.common.dynamics.State`` rather than reconstructed. Every other
+    pose source carries position and attitude only (``sim.pose`` returns a ``Pose``), so the twist is a
     central difference of the body pose - which is all a kinematic trajectory can honestly offer, there
     being no dynamics behind it.
 
     The pose sources report the *sonar*, so the body pose is recovered by undoing the sonar's mount: the
-    inverse of what ``uw.physics_udp.ArduSubPose.at`` applies. Sources that know their own body pose
+    inverse of what ``vehicles.common.physics_udp.ArduSubPose.at`` applies. Sources that know their own body pose
     (``ScriptPose``, ``ArduSubPose``) are asked for it directly.
     """
 
@@ -456,8 +456,8 @@ class BodyMotion:
 
 
 def from_config(cfg: dict, scene):
-    """The configured DVL, or ``None`` when ``dvl.enabled`` is false. ``scene`` is the tank's ``uw.geometry``
-    scene, or already a bottom (anything with ``ray_bottom``, e.g. ``uw.pool_geometry.PoolBottom``)."""
+    """The configured DVL, or ``None`` when ``dvl.enabled`` is false. ``scene`` is the tank's ``physics.geometry``
+    scene, or already a bottom (anything with ``ray_bottom``, e.g. ``physics.pool_geometry.PoolBottom``)."""
     if not bool(get(cfg, "dvl.enabled")):
         return None
     bottom = scene if hasattr(scene, "ray_bottom") else TankBottom(scene, cfg)

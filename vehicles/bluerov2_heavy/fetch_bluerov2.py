@@ -6,8 +6,8 @@ vehicles/bluerovheavy/"bluerov cleaned decimated.gltf"): the vehicle CAD, cleane
 into assets/ (not in git) instead of being committed. The full-detail STEP of the R4 (cad.bluerobotics.com) is the
 optional next step if more detail is ever wanted.
 
-    python -m uw py tools/fetch_bluerov2.py            # in the container: needs pxr (USD) and network once
-    python -m uw py tools/fetch_bluerov2.py --gltf F   # from a local copy instead of downloading
+    python -m uw py vehicles/bluerov2_heavy/fetch_bluerov2.py            # in the container: needs pxr (USD) and network once
+    python -m uw py vehicles/bluerov2_heavy/fetch_bluerov2.py --gltf F   # from a local copy instead of downloading
 
 The mesh's own axes, found from the geometry (the Lumen lights are at the front, the blue fairings on top) and
 consistent with the glTF node's +90 deg rotation about X: +Y forward, -Z up, +X to port. It is moved to the body
@@ -27,11 +27,11 @@ from pathlib import Path
 
 import numpy as np
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 BLUESIM_COMMIT = "00fa87906fcdfd67805367b1ef2d8643e1e75479"       # bluerobotics/bluesim master, 2026-11-25
 GLTF_PATH = "vehicles/bluerovheavy/bluerov cleaned decimated.gltf"
 URL = f"https://raw.githubusercontent.com/bluerobotics/bluesim/{BLUESIM_COMMIT}/" + urllib.parse.quote(GLTF_PATH)
-OUT = REPO / "assets" / "bluerov2_heavy" / "bluerov2_heavy.usd"
+OUT = REPO / "vehicles" / "bluerov2_heavy" / "assets" / "bluerov2_heavy.usd"
 VEHICLE_MESH = "BROV2-HEAVY-ASM"            # the vehicle mesh's name prefix; the Ping360 mount is not kept
 
 # mesh axes -> body FLU, rows are the body axes in mesh coordinates: x_b = +Y, y_b = +X, z_b = -Z (det +1)

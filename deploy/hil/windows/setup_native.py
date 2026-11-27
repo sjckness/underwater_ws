@@ -1,4 +1,4 @@
-"""Genera config/runtime.local.yaml per far girare underwater_ws in modalita' nativa su Windows.
+"""Genera uw/runtime.local.yaml per far girare underwater_ws in modalita' nativa su Windows.
 
 Rileva da se':
   - isaac_root  : la cartella del pacchetto isaacsim installato con pip
@@ -8,11 +8,11 @@ Rileva da se':
 
 Uso, dalla radice di underwater_ws, con l'ambiente (isaac) attivo:
 
-    python setup_native.py                      mostra cosa ha trovato, senza scrivere
-    python setup_native.py --write               scrive config/runtime.local.yaml
-    python setup_native.py --write --data-root F:/underwater_data
+    python deploy/hil/windows/setup_native.py                      mostra cosa ha trovato, senza scrivere
+    python deploy/hil/windows/setup_native.py --write               scrive uw/runtime.local.yaml
+    python deploy/hil/windows/setup_native.py --write --data-root F:/underwater_data
 
-Scrive un solo file, config/runtime.local.yaml, che e' nel .gitignore del repo.
+Scrive un solo file, uw/runtime.local.yaml, che e' nel .gitignore del repo.
 """
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ import argparse
 import sys
 from pathlib import Path
 
-WS = Path(__file__).resolve().parent
-LOCAL = WS / "config" / "runtime.local.yaml"
+WS = Path(__file__).resolve().parents[3]
+LOCAL = WS / "uw" / "runtime.local.yaml"
 
 
 def isaac_root() -> Path:
@@ -54,7 +54,7 @@ def ros_distros(root: Path) -> list[str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--write", action="store_true", help="scrive config/runtime.local.yaml")
+    ap.add_argument("--write", action="store_true", help="scrive uw/runtime.local.yaml")
     ap.add_argument("--data-root", default="F:/underwater_data",
                     help="dove scrivono i dataset, fuori dal repo (default: F:/underwater_data)")
     args = ap.parse_args()
@@ -82,8 +82,8 @@ def main() -> int:
         return 1
 
     lines = [
-        "# Generato da setup_native.py: modalita' nativa su Windows (Isaac Sim installato con pip).",
-        "# Sovrascrive config/runtime.yaml, che punta a percorsi Linux (+lx64) e alla modalita' docker.",
+        "# Generato da deploy/hil/windows/setup_native.py: modalita' nativa su Windows (Isaac Sim installato con pip).",
+        "# Sovrascrive uw/runtime.yaml, che punta a percorsi Linux (+lx64) e alla modalita' docker.",
         "mode: native",
         "",
         "native:",
@@ -104,7 +104,7 @@ def main() -> int:
     text = "\n".join(lines)
 
     if not args.write:
-        print("Anteprima di config/runtime.local.yaml (rilancia con --write per scriverlo):")
+        print("Anteprima di uw/runtime.local.yaml (rilancia con --write per scriverlo):")
         print()
         print(text)
         return 0

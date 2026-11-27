@@ -1,6 +1,6 @@
 """Validate a COCO _annotations.coco.json the way RF-DETR and pycocotools will read it.
 
-    <venv-with-pycocotools>/bin/python -I tools/verify_coco.py DIR/_annotations.coco.json ...
+    <venv-with-pycocotools>/bin/python -I ml/tools/verify_coco.py DIR/_annotations.coco.json ...
 
 Needs pycocotools, which the repo's own interpreter does not have; on linus the only venv that does is
 /home/andreas/image_processing/datasets_gSEM/autodistill-env. ``COCO(path)`` itself raises on almost nothing --

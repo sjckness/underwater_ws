@@ -1,18 +1,18 @@
 """Frames: the one place that converts between the repo's tank/body frames and ArduPilot's.
 
-Four frames, and no other module in ``uw.rov`` may convert between them by hand.
+Four frames, and no other module in ``vehicles.common`` may convert between them by hand.
 
 * **tank, a.k.a. ``map`` (ENU)** - the repo's world frame: x and y along the tank walls, z up, origin at the
-  inner bottom corner (``config/tank.yaml`` header). ``docs/ros_hil.md`` section 6.2 declares it ENU -
+  inner bottom corner (``sim/config/tank.yaml`` header). ``docs/ros_hil.md`` section 6.2 declares it ENU -
   tank +x = East, +y = North, +z = Up - and fixes the yaw offset between tank +x and true north at 0 deg.
 * **body FLU** - the repo's body frame: x forward, y port, z up (ROS REP-103). This is what
-  ``uw.geometry.rot_rpy_deg`` and ``uw.pose.Pose`` already use.
+  ``physics.geometry.rot_rpy_deg`` and ``sim.pose.Pose`` already use.
 * **earth NED** - ArduPilot's: ``N = y_tank``, ``E = x_tank``, ``D = water_level - z_tank``
   (``docs/ros_hil.md`` 6.2), so the NED origin sits on the free surface directly above the tank's origin
   corner and D is depth below the surface.
 * **body FRD** - ArduPilot's: x forward, y starboard, z down.
 
-**Isaac's world frame is the tank frame.** ``uw/usd_scene.py`` sets ``UsdGeom.SetStageUpAxis(stage, z)`` and
+**Isaac's world frame is the tank frame.** ``sim/usd_scene.py`` sets ``UsdGeom.SetStageUpAxis(stage, z)`` and
 ``SetStageMetersPerUnit(stage, 1.0)``, and the geometry is authored in tank metres, so tank -> Isaac is the
 identity. The ``isaac_*`` helpers below exist to give that seam a name rather than to compute anything; if a
 future stage is Y-up or in centimetres, they are the only things that change.
@@ -27,7 +27,7 @@ Both are involutions (``M @ M == I``), so each direction uses the same matrix - 
 quantity, not two.
 
 **Euler angles.** ``rot_from_rpy_deg`` is the repo's ZYX convention, identical to
-``uw.geometry.rot_rpy_deg`` (a test asserts that). The *same* formula reads differently in the two body
+``physics.geometry.rot_rpy_deg`` (a test asserts that). The *same* formula reads differently in the two body
 frames, because only the z direction differs:
 
 * in FLU/ENU, ``Ry(+pitch)`` tilts forward toward -z, i.e. **pitch positive = nose down** - the repo's
@@ -71,7 +71,7 @@ def skew(v) -> np.ndarray:
 def rot_from_rpy_deg(rpy_deg) -> np.ndarray:
     """Body-to-parent rotation ``Rz(yaw) Ry(pitch) Rx(roll)`` from degrees.
 
-    Identical to ``uw.geometry.rot_rpy_deg`` (duplicated so that ``uw.rov`` depends on nothing in the repo;
+    Identical to ``physics.geometry.rot_rpy_deg`` (duplicated so that ``vehicles.common`` depends on nothing in the repo;
     ``test_frames.py`` asserts the two agree). See the module docstring for what the pitch sign means in each
     body frame.
     """
@@ -283,7 +283,7 @@ def twist_ned_to_tank(v_body_frd, w_body_frd) -> tuple[np.ndarray, np.ndarray]:
 def isaac_position_from_tank(p_tank) -> np.ndarray:
     """Tank metres -> Isaac stage units.
 
-    Identity: ``uw/usd_scene.py`` sets the stage up axis to Z and metersPerUnit to 1.0 and authors the tank in
+    Identity: ``sim/usd_scene.py`` sets the stage up axis to Z and metersPerUnit to 1.0 and authors the tank in
     metres. Named so that a Y-up or centimetre stage changes this function and nothing else.
     """
     return np.asarray(p_tank, float).copy()

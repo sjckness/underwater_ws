@@ -20,8 +20,8 @@ from pathlib import Path
 
 import numpy as np
 
-from .config import get
-from .geometry import rpy_deg_of
+from uw.config import get
+from physics.geometry import rpy_deg_of
 from .sinks import Message
 
 LABELS = {
@@ -82,7 +82,7 @@ def generator_version(model_version: str, cfg: dict) -> str:
     ``+``-joined string impossible to split back into its three parts. None of the parts can contain a slash.
 
     Each part answers a question the other two cannot. The model version says whether the acoustic model
-    changed; the git hash pins the whole tree, including the parts of the pipeline outside `uw/sonar.py`; the
+    changed; the git hash pins the whole tree, including the parts of the pipeline outside `physics/sonar.py`; the
     config hash distinguishes two datasets from identical code with different parameters. A dataset is
     traceable to its generator only if all three are recorded, which is why this goes into every ping rather
     than into the sweep manifest alone -- a ping that gets copied, converted or recompressed keeps it.
@@ -102,7 +102,7 @@ def dvl_message(report, seq: int, cfg: dict, instrument: dict | None = None) -> 
     """One DVL velocity-and-transducer report as a sink Message. Pure: no ROS, no Isaac, no scene.
 
     ``meta["dvl"]`` is the device's own JSON report, which is exactly what ``/sim/dvl/report`` carries and
-    what ``ros/dvl_relay`` consumes, so the recorded stream and the live one are the same bytes. Nothing
+    what ``ros/src/dvl_relay`` consumes, so the recorded stream and the live one are the same bytes. Nothing
     here is ground truth: the report has already been through the noise, the bottom-lock gate and the
     quantisation, which is what makes it a measurement rather than the answer (docs/ros_hil.md 2.5).
     """

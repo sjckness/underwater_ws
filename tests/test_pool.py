@@ -11,7 +11,8 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from uw import camera_uw, config  # noqa: E402
+from sim import camera_uw  # noqa: E402
+from uw import config  # noqa: E402
 
 POOL = Path(config.POOL_CONFIG)
 
@@ -27,7 +28,7 @@ def test_pool_config_loads_with_every_profile():
     for prof in ("linus", "workstation"):
         cfg = config.load(POOL, profile=prof)
         assert cfg["profile"]["name"] == prof
-        assert cfg["vehicle"]["params"] == "config/rov_bluerov2.yaml"
+        assert cfg["vehicle"]["params"] == "vehicles/bluerov2_heavy/vehicle.yaml"
         assert cfg["physics"]["surface_model"] is True
     with pytest.raises(config.ConfigError, match="no such key"):
         config.load(POOL, overrides=["camera.ratehz=10"])
@@ -67,7 +68,7 @@ def test_water_model_attenuates_red_first():
 
 
 def test_tilt_and_lights_follow_the_pwm():
-    from uw.pool import lights_of_pwm, tilt_of_pwm
+    from sim.pool import lights_of_pwm, tilt_of_pwm
     cfg = config.load(POOL)
     lo, hi = cfg["vehicle"]["camera"]["tilt_range_deg"]
     assert tilt_of_pwm(cfg, 1100) == lo and tilt_of_pwm(cfg, 1900) == hi
@@ -82,9 +83,9 @@ def test_pool_is_a_launcher_command():
 
 
 def test_turbidity_adds_particle_scattering_and_greys_the_veil():
-    """uw/camera_uw.py: b_p on both coefficients, the veiling light pulled towards turbidity_veil; 0 is the clear
+    """sim/camera_uw.py: b_p on both coefficients, the veiling light pulled towards turbidity_veil; 0 is the clear
     pool exactly."""
-    from uw import camera_uw
+    from sim import camera_uw
     clear = config.load(config.POOL_CONFIG)
     bd0, bb0, bi0 = camera_uw.coefficients(clear)
     assert np.allclose(bd0, clear["water"]["beta_d"]) and np.allclose(bi0, clear["water"]["b_inf"])
@@ -99,13 +100,13 @@ def test_turbidity_adds_particle_scattering_and_greys_the_veil():
 
 
 def test_turbidity_presets_and_visibility():
-    from uw import camera_uw
+    from sim import camera_uw
     vis = {name: camera_uw.visibility_m(config.load(config.POOL_CONFIG, presets=pre))
            for name, pre in (("clear", []), ("turbid", ["turbid"]), ("murky", ["murky"]))}
     assert vis["clear"] > 40.0 and 5.0 < vis["turbid"] < 7.0 and 2.0 < vis["murky"] < 3.0
 
 
 def test_negative_turbidity_is_refused():
-    from uw import camera_uw
+    from sim import camera_uw
     with pytest.raises(config.ConfigError, match="turbidity"):
         camera_uw.coefficients(config.load(config.POOL_CONFIG, overrides=["water.turbidity_per_m=-0.1"]))

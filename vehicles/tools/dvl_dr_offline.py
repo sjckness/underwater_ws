@@ -1,6 +1,6 @@
 """The DVL dead reckoning against the truth, offline: no Isaac, no Docker, no ROS, no GPU.
 
-This is the rehearsal for `tools/dvl_drift.py`. It flies one of the trajectory presets, runs the real
+This is the rehearsal for `vehicles/tools/dvl_drift.py`. It flies one of the trajectory presets, runs the real
 sensor model over it, and reckons the track with the same functions the live chain uses -
 `dvl_relay`'s FRD-to-FLU flip and `dvl_dr.correct`'s lever arm and baro - then scores it with the same
 `drift()` the live tool scores with. What it gives you is the error budget of the sensor and the
@@ -14,15 +14,15 @@ drift lives in. The number this prints is therefore the number to expect, and if
 worse, the filter is mistuned rather than the sensor being bad.
 
 **The attitude.** On the vehicle it comes from the autopilot's EKF3 over its own noisy IMU, baro and
-compass (`docker/ardusub_sitl/params/hil.parm`). There is no autopilot here, so it is modelled: the
+compass (`deploy/docker/ardusub_sitl/params/hil.parm`). There is no autopilot here, so it is modelled: the
 true attitude plus a constant heading bias, a slow heading walk and tilt noise. The heading bias is the
 point of the exercise - in a metal tank the magnetometer is the least trustworthy thing on the vehicle,
 and a heading error rotates the whole track rather than lengthening it. **The truth is never an input
 to the reckoning**, only to the scoring.
 
-    python tools/dvl_dr_offline.py                              # the default sweep
-    python tools/dvl_dr_offline.py --preset lawnmower --duration 180
-    python tools/dvl_dr_offline.py --yaw-bias 0 2 5 --seeds 5
+    python vehicles/tools/dvl_dr_offline.py                              # the default sweep
+    python vehicles/tools/dvl_dr_offline.py --preset lawnmower --duration 180
+    python vehicles/tools/dvl_dr_offline.py --yaw-bias 0 2 5 --seeds 5
 """
 from __future__ import annotations
 
@@ -34,24 +34,27 @@ from pathlib import Path
 
 import numpy as np
 
-REPO = Path(__file__).resolve().parents[1]
-for extra in (REPO, REPO / "ros" / "dvl_dr", REPO / "tools"):
+REPO = Path(__file__).resolve().parents[2]
+for extra in (REPO, REPO / "ros" / "src" / "dvl_dr", REPO / "vehicles" / "tools"):
     if str(extra) not in sys.path:
         sys.path.insert(0, str(extra))
 
 from dvl_dr.correct import correct_lever_arm, depth_pose            # noqa: E402
 from dvl_drift import drift                                         # noqa: E402
-from uw import config, geometry, physics_udp, pose as pose_mod      # noqa: E402
-from uw.rov import dvl as dvl_model                                 # noqa: E402
-from uw.rov import frames as fr                                     # noqa: E402
+from uw import config      # noqa: E402
+from physics import geometry      # noqa: E402
+from vehicles.common import physics_udp      # noqa: E402
+from sim import pose as pose_mod      # noqa: E402
+from vehicles.common import dvl as dvl_model                                 # noqa: E402
+from vehicles.common import frames as fr                                     # noqa: E402
 
-TICK = 1.0 / 240.0                  # uw/main.py: one loop tick is one bubble substep
+TICK = 1.0 / 240.0                  # sim/main.py: one loop tick is one bubble substep
 
 
 class Ahrs:
     """A stand-in for what the autopilot's EKF3 reports: the truth, degraded the way a real one is.
 
-    A fixed random spectrum rather than a recursion, for the same reason ``uw.rov.dvl._BiasField`` uses
+    A fixed random spectrum rather than a recursion, for the same reason ``vehicles.common.dvl._BiasField`` uses
     one: the output must be a pure function of the seed and the time, not of the sample schedule.
     """
 

@@ -1,20 +1,20 @@
 """M11: configure a BlueOS for the simulated pool vehicle, once, through its REST API. Standard library only, so it
 runs anywhere (linus, Work's Windows Python, WSL).
 
-    python3 tools/pool_blueos_setup.py --blueos http://localhost --rtsp rtsp://<sim host>:8654/rov
+    python3 sim/tools/pool_blueos_setup.py --blueos http://localhost --rtsp rtsp://<sim host>:8654/rov
 
 1. Autopilot board "Manual" (BlueOS >= 1.5.0-beta.3): BlueOS runs no autopilot of its own and takes MAVLink from its
-   master endpoint, by default udpin 0.0.0.0:14551, where the pool's ArduSub SITL sends (docker/pool/compose.yaml,
+   master endpoint, by default udpin 0.0.0.0:14551, where the pool's ArduSub SITL sends (deploy/docker/pool/compose.yaml,
    MAVLINK_OUT=udpclient:<BlueOS IPv4>:14551). Checked against BlueOS 1.5.0-beta.43 on 2026-11-25.
 2. A "Redirect" video stream in the camera manager, pulling the Isaac camera from mediamtx over RTSP; Cockpit then
    gets it over WebRTC like a real camera. An existing stream with the same name is replaced.
 
-3. With --dvl: the Water Linked DVL extension (docker/pool/compose.yaml, service dvl or dvl-host; on a vehicle,
+3. With --dvl: the Water Linked DVL extension (deploy/docker/pool/compose.yaml, service dvl or dvl-host; on a vehicle,
    BlueOS's Extensions page) set up as an operator would on its page: "DVL" parameters (the EKF's horizontal
    position and velocity from the DVL), VISION_POSITION_DELTA messages, the DVL as rangefinder, and the EKF origin
    at the SITL home ("set current position" on its map), which POSHOLD needs. It first waits for ArduSub's
    heartbeat to be live in BlueOS: those settings go to the vehicle, and a restarted SITL needs the origin again.
-   So it can be started together with `uw pool` (hil/win/pool/stack.sh configure does) and does its part once the
+   So it can be started together with `uw pool` (deploy/hil/windows/pool/stack.sh configure does) and does its part once the
    vehicle is up.
 
 Cockpit itself is a BlueOS extension (Extensions -> Cockpit -> Install) or the desktop app; docs/pool.md.
@@ -62,7 +62,7 @@ def set_manual_board(blueos: str, endpoint_port: int) -> None:
     manual = next((b for b in boards if b.get("platform") == "Manual"), None)
     if manual is None:
         raise SystemExit(f"this BlueOS offers no 'Manual' board ({[b.get('name') for b in boards]}): it needs "
-                         "1.5.0-beta.3 or later (docker/pool/compose.yaml pins one)")
+                         "1.5.0-beta.3 or later (deploy/docker/pool/compose.yaml pins one)")
     master = call("GET", f"{ap}/endpoints/manual_board_master_endpoint")
     want = {**master, "connection_type": "udpin", "place": "0.0.0.0", "argument": int(endpoint_port)}
     if (master["connection_type"], master["place"], int(master["argument"])) != ("udpin", "0.0.0.0", endpoint_port):

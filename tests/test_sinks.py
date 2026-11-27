@@ -6,7 +6,7 @@ import zlib
 import numpy as np
 import pytest
 
-from uw import sinks
+from sim import sinks
 
 
 def _read_png(path):

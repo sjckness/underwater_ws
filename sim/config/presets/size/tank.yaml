@@ -1,5 +1,5 @@
 # Size preset "tank": 3 x 3 x 3 m lab test tank, the sonar's near-field regime; fastest.
-# The default: config/tank.yaml has these values (tests/test_config.py checks it). basin.yaml sets the same keys.
+# The default: sim/config/tank.yaml has these values (tests/test_config.py checks it). basin.yaml sets the same keys.
 scene:
   name: tank
 

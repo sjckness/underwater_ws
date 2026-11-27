@@ -4,9 +4,9 @@ follow docs/topic_map.md §4.2; it runs on the sim host, so the bag and the Jets
 
 Runs with the host's ROS 2 Jazzy (ros-jazzy-marine-acoustic-msgs), on the tank sim's own domain:
 
-    ros/sonar_relay/run.sh [--vehicle rov1] [--db] [--topic .../sonar_image]
+    ros/src/sonar_relay/run.sh [--vehicle rov1] [--db] [--topic .../sonar_image]
 
-or, sourced: python3 ros/sonar_relay/sonar_relay/relay.py, or as a colcon package (ros2 run sonar_relay relay).
+or, sourced: python3 ros/src/sonar_relay/sonar_relay/relay.py, or as a colcon package (ros2 run sonar_relay relay).
 The domain is UW_ROS_DOMAIN_ID (default 73), as in the container; a ROS_DOMAIN_ID exported for another stack is
 ignored on purpose.
 

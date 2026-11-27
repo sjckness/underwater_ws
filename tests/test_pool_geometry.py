@@ -1,4 +1,4 @@
-"""uw/pool_geometry.py: the pool's solids and the DVL's ray casting against them (host, numpy only)."""
+"""physics/pool_geometry.py: the pool's solids and the DVL's ray casting against them (host, numpy only)."""
 import math
 import sys
 from pathlib import Path
@@ -9,7 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from uw import config  # noqa: E402
-from uw.pool_geometry import Box, Cylinder, PoolBottom, Quad, solids  # noqa: E402
+from physics.pool_geometry import Box, Cylinder, PoolBottom, Quad, solids  # noqa: E402
 
 DOWN = np.array([[0.0, 0.0, -1.0]])
 
@@ -41,7 +41,7 @@ def test_straight_down_on_the_floor(bottom):
     ((2.0, 9.7, 2.0), (0.0, 1.0, -0.1), (0, -1, 0)),
 ])
 def test_the_walls_stop_a_beam_and_face_the_water(bottom, origin, direction, normal):
-    """Unlike the tank's (uw.geometry.ray_bottom), the pool's walls are occluders: a tilted beam near one hits it."""
+    """Unlike the tank's (physics.geometry.ray_bottom), the pool's walls are occluders: a tilted beam near one hits it."""
     d = np.asarray(direction) / np.linalg.norm(direction)
     t, n, role = hit(bottom, origin, d)
     assert role == "wall" and np.allclose(n, normal)

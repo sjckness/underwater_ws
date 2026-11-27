@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# M11 pool on the Work machine: the WSL2 half of scenario B (hil/win/pool/README.md). Isaac and the physics process
+# M11 pool on the Work machine: the WSL2 half of scenario B (deploy/hil/windows/pool/README.md). Isaac and the physics process
 # run on Windows (run_pool.bat); here, in WSL's host networking with mirrored networking (127.0.0.1 is Windows'),
-# run ArduSub SITL, mediamtx, BlueOS and the Water Linked DVL extension (docker/pool/compose.yaml, profile "work").
+# run ArduSub SITL, mediamtx, BlueOS and the Water Linked DVL extension (deploy/docker/pool/compose.yaml, profile "work").
 #
 # Inside the WSL distribution, from anywhere in the repo, or from Windows through run_pool.bat:
-#   bash hil/win/pool/stack.sh up            the stack up (the SITL image is built the first time, ~3 min)
-#   bash hil/win/pool/stack.sh restart-sitl  a fresh ArduSub for a fresh physics process (docs/pool.md: before every
+#   bash deploy/hil/windows/pool/stack.sh up            the stack up (the SITL image is built the first time, ~3 min)
+#   bash deploy/hil/windows/pool/stack.sh restart-sitl  a fresh ArduSub for a fresh physics process (docs/pool.md: before every
 #                                            uw pool, or its EKF keeps the old vehicle's heading)
-#   bash hil/win/pool/stack.sh configure     BlueOS's Manual board, the video stream and the DVL extension; waits for
+#   bash deploy/hil/windows/pool/stack.sh configure     BlueOS's Manual board, the video stream and the DVL extension; waits for
 #                                            the vehicle (uw pool up), up to WAIT seconds (default 600).
 #                                            Log: output/pool/blueos_setup.log
-#   bash hil/win/pool/stack.sh status        what answers, link by link
-#   bash hil/win/pool/stack.sh smoke [--dvl] tools/pool_smoke.py: flies the vehicle through SITL and checks it
-#   bash hil/win/pool/stack.sh logs [svc]    the last lines of the containers' logs
-#   bash hil/win/pool/stack.sh down          everything off (BlueOS's settings, SITL's eeprom stay in volumes)
+#   bash deploy/hil/windows/pool/stack.sh status        what answers, link by link
+#   bash deploy/hil/windows/pool/stack.sh smoke [--dvl] sim/tools/pool_smoke.py: flies the vehicle through SITL and checks it
+#   bash deploy/hil/windows/pool/stack.sh logs [svc]    the last lines of the containers' logs
+#   bash deploy/hil/windows/pool/stack.sh down          everything off (BlueOS's settings, SITL's eeprom stay in volumes)
 set -euo pipefail
-cd "$(dirname "$0")/../../.."
-COMPOSE=(docker compose -f docker/pool/compose.yaml --profile work)
+cd "$(dirname "$0")/../../../.."
+COMPOSE=(docker compose -f deploy/docker/pool/compose.yaml --profile work)
 BLUEOS=http://127.0.0.1
 DVL_PAGE=http://127.0.0.1:9001
 RTSP=rtsp://127.0.0.1:8654/rov
@@ -41,7 +41,7 @@ case "${1:-}" in
     configure)
         shift
         mkdir -p output/pool
-        python3 tools/pool_blueos_setup.py --blueos "$BLUEOS" --rtsp "$RTSP" --dvl "$DVL_PAGE" \
+        python3 sim/tools/pool_blueos_setup.py --blueos "$BLUEOS" --rtsp "$RTSP" --dvl "$DVL_PAGE" \
             --wait "${WAIT:-600}" "$@" 2>&1 | tee output/pool/blueos_setup.log
         ;;
     status)
@@ -57,7 +57,7 @@ case "${1:-}" in
         ;;
     smoke)
         shift
-        python3 tools/pool_smoke.py "$@"
+        python3 sim/tools/pool_smoke.py "$@"
         ;;
     logs)
         shift

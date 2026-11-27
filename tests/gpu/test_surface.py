@@ -1,4 +1,4 @@
-"""Surface boil backscatter (uw/surface.py) on the GPU: the Kirchhoff level of a saturated cell, zero without bursts,
+"""Surface boil backscatter (physics/surface.py) on the GPU: the Kirchhoff level of a saturated cell, zero without bursts,
 and its echo in the sonar (all-paths label only)."""
 import math
 from types import SimpleNamespace
@@ -8,7 +8,8 @@ import pytest
 
 wp = pytest.importorskip("warp", reason="Warp tests run in the container: python -m uw test")
 
-from uw import bubbles, config, geometry, sonar, surface  # noqa: E402
+from physics import bubbles, geometry, sonar, surface  # noqa: E402
+from uw import config  # noqa: E402
 
 
 def _fake_sim(counts, cell=0.01):

@@ -1,14 +1,14 @@
 """The pool's solids in plain numpy (M11): one description for the USD stage and for the DVL's beams.
 
-``uw/pool_scene.py`` builds the visible stage from ``solids(cfg)``, and ``PoolBottom`` casts the DVL's beams at the
+``sim/pool_scene.py`` builds the visible stage from ``solids(cfg)``, and ``PoolBottom`` casts the DVL's beams at the
 same list, so what the camera sees and what the A50 measures cannot drift apart. No pxr, no Isaac: this module
 imports on the host and inside the physics process.
 
 Frame: the pool's ENU, origin at a floor corner, floor at z = 0, walls at x = 0, L and y = 0, W, the free surface at
-``pool.water_level``. Roles name what a beam hit; ``acoustics.roles`` in config/pool/pool.yaml maps each role to a
-material of ``acoustics.materials`` for the echo level (``uw.rov.dvl.Dvl._echo``).
+``pool.water_level``. Roles name what a beam hit; ``acoustics.roles`` in sim/config/pool/pool.yaml maps each role to a
+material of ``acoustics.materials`` for the echo level (``vehicles.common.dvl.Dvl._echo``).
 
-The walls are occluders here, unlike the tank's (``uw.geometry.ray_bottom``): a pool has real walls, and a tilted
+The walls are occluders here, unlike the tank's (``physics.geometry.ray_bottom``): a pool has real walls, and a tilted
 beam near one hits it at a glancing angle, weakly. The water surface is not a target: the beams point down.
 """
 from __future__ import annotations
@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .config import get
+from uw.config import get
 
 _EPS = 1e-9
 
@@ -151,8 +151,8 @@ def _ray_quad(o, d, corners):
 class PoolBottom:
     """What a DVL beam hits in the pool: the floor, the walls, the ladder and the props.
 
-    The DVL's bottom interface (``uw.rov.dvl``): ``ray_bottom(origin, directions, t_max)`` returning
-    ``(t (n,), normal (n, 3), role (n,))`` like ``uw.geometry.ray_bottom``, plus ``materials`` (name -> acoustic
+    The DVL's bottom interface (``vehicles.common.dvl``): ``ray_bottom(origin, directions, t_max)`` returning
+    ``(t (n,), normal (n, 3), role (n,))`` like ``physics.geometry.ray_bottom``, plus ``materials`` (name -> acoustic
     properties) and ``role_material`` (role -> material name).
     """
 
@@ -165,7 +165,7 @@ class PoolBottom:
         roles = {"floor", "wall"} | {s.role for s in self.solids}
         missing = sorted(r for r in roles if self.role_material.get(r) not in self.materials)
         if missing:
-            from .config import ConfigError
+            from uw.config import ConfigError
             raise ConfigError(f"acoustics.roles: no material of acoustics.materials for {missing}")
 
     def _shell(self, o, d):

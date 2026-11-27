@@ -1,4 +1,4 @@
-"""uw/trajectory.py and ScriptPose (host, pure Python + numpy): the three scripted runs in room9."""
+"""sim/trajectory.py and ScriptPose (host, pure Python + numpy): the three scripted runs in room9."""
 import math
 import sys
 from pathlib import Path
@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from uw import config  # noqa: E402
 from uw.config import ConfigError  # noqa: E402
-from uw.trajectory import body_box, build  # noqa: E402
+from sim.trajectory import body_box, build  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -20,7 +20,7 @@ def cfg():
 
 @pytest.fixture(scope="module")
 def leak(cfg):
-    from uw.geometry import build_scene
+    from physics.geometry import build_scene
     return build_scene(cfg).leak.hole                  # read from the room9 scene, as ScriptPose does
 
 
@@ -91,7 +91,7 @@ def test_too_big_circle_is_reduced_and_noted(cfg, leak, tmp_path):
 
 
 def test_script_pose_rides_the_mount(cfg):
-    from uw.pose import ScriptPose
+    from sim.pose import ScriptPose
     c = config.apply_overrides(config.merge(cfg, {}), ["sonar.pose_source=script", "sonar.script=circle"])
     sp = ScriptPose(c)
     p_body, rb = sp.body_at(10.0)

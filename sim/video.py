@@ -2,7 +2,7 @@
 
 Encoder settings are the ones BlueOS's camera manager and Cockpit's WebRTC want: H.264 constrained-baseline, no
 B-frames, an IDR every second, parameter sets repeated, zero-latency tuning. The destination is an RTSP server
-(mediamtx, docker/pool/compose.yaml) that BlueOS pulls as a "Redirect" source; a path ending in .ts or .mp4 writes a
+(mediamtx, deploy/docker/pool/compose.yaml) that BlueOS pulls as a "Redirect" source; a path ending in .ts or .mp4 writes a
 file instead (tests, recordings).
 
 The render loop never waits on the encoder: ``push`` replaces the one pending frame, and a slow or absent consumer
@@ -19,11 +19,11 @@ import time
 
 import numpy as np
 
-log = logging.getLogger("uw.video")
+log = logging.getLogger("sim.video")
 
 
 def ffmpeg_exe() -> str:
-    from . import deps
+    from uw import deps
     return deps.require("imageio_ffmpeg", "imageio-ffmpeg", "0.5.1").get_ffmpeg_exe()
 
 

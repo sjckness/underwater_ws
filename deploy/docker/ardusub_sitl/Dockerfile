@@ -1,6 +1,6 @@
 # ArduSub SITL for the HIL setup (M8a/M8b prerequisite). Unforked ArduPilot at a pinned release tag, SITL board only.
 #
-#   docker build -t uw-ardusub:4.5.7 docker/ardusub_sitl
+#   docker build -t uw-ardusub:4.5.7 deploy/docker/ardusub_sitl
 #
 # Tag: ArduSub-4.5.7, the last release of the 4.5 line (the tags are named "ArduSub-4.x.y" up to 4.5; "Sub-4.x.y"
 # starts at 4.7.0). To move to another release, change only ARDUPILOT_TAG.

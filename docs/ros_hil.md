@@ -15,10 +15,10 @@
 
 | runs on **linus** | runs on the **Jetson** |
 |---|---|
-| Isaac Sim (scene, plume, camera), the sonar model, the ROS 2 bridge `uw/ros_bridge.py` | the leak detector (M10) |
+| Isaac Sim (scene, plume, camera), the sonar model, the ROS 2 bridge `sim/ros_bridge.py` | the leak detector (M10) |
 | the BlueROV2 rigid body and the Fossen dynamics (M8a) | state estimation |
 | ArduSub SITL, with the JSON/UDP external-simulator link on **loopback** | the mission layer, which sends setpoints to ArduSub |
-| `ros/sonar_relay` (the `ProjectedSonarImage` assembly), rosbag2 capture | a latency/drop monitor (M7 step 4) |
+| `ros/src/sonar_relay` (the `ProjectedSonarImage` assembly), rosbag2 capture | a latency/drop monitor (M7 step 4) |
 
 There is **no physical ROV, no real sensor hardware and no sim-to-real milestone.** The Jetson is the only real
 thing in the loop, and the only reason the link exists is to put the detector on the hardware it will actually run
@@ -49,7 +49,7 @@ they decide arm64 package availability and whether a switch sits in the latency 
 
 ## 1. What exists today
 
-The entire ROS surface is two files: `uw/ros_bridge.py` (sim side) and `ros/sonar_relay/sonar_relay/relay.py`
+The entire ROS surface is two files: `sim/ros_bridge.py` (sim side) and `ros/src/sonar_relay/sonar_relay/relay.py`
 (host side). No MAVROS, ArduSub, Fossen, thruster, odometry, rosbag2 or setpoint code exists anywhere (**V**,
 repo-wide grep). Published today, all stamps **sim time**, domain **73**:
 
@@ -65,7 +65,7 @@ repo-wide grep). Published today, all stamps **sim time**, domain **73**:
 | `/tf`, `/tf_static`, `/clock` | `TFMessage`, `rosgraph_msgs/Clock` | per ping / once / 60 Hz |
 | `/uw/sonar_pose` (**in**) | `PoseStamped`, `sonar.pose_source=ros`, polled once per ping | — |
 
-`ros/sonar_relay` subscribes `/oculus/meta` + `/oculus/polar` and republishes
+`ros/src/sonar_relay` subscribes `/oculus/meta` + `/oculus/polar` and republishes
 `marine_acoustic_msgs/ProjectedSonarImage` on `/oculus/sonar_image` (**V**). `RosPose` has **no producer** — that
 is M7 step 2's job. There is no DDS tuning of any kind, and nothing anywhere declares `use_sim_time` (**V**).
 
@@ -86,7 +86,7 @@ So the realistic thing to put on the link is our *Oculus-like polar ping*, and w
 | `/oculus/polar` mono8 | its **pixels do** — inside `sonar_image` | the raw `Image` topic is redundant, not the data. This is the Oculus-like product (see below) |
 | `/oculus/polar_db` 32FC1 | **no** | the **calibrated pre-TVG level**, `10·log10(power)` dB re 1 µPa (`display_kernel`, **V**) — not "polar data" but a physical quantity no head reports, since a real ping is an intensity *after* its gain chain. 64 % of the sonar bytes in every preset (**V**). GT-only: `/gt` and the bag |
 | `/oculus/fan` mono8 | no | **derived from the uint8 polar on the sim side** (`Sonar.fan()` takes it as input, **V**), so it is a lossy resampling of what we already send; dropping it also leaves M10's polar-vs-Cartesian choice open |
-| `/camera/image_raw` rgb8 | only in the camera profile | 221.2 Mbit/s uncompressed, and no compressed transport exists (`uw/ros_bridge.py:247`). The camera profile is not the latency profile |
+| `/camera/image_raw` rgb8 | only in the camera profile | 221.2 Mbit/s uncompressed, and no compressed transport exists (`sim/ros_bridge.py:247`). The camera profile is not the latency profile |
 | `/clock`, `/tf_static`, `/tf`, setpoints, `/gt/*` scalars | yes | small |
 
 **What the two arrays actually are** (`display_kernel`, **V**). From the same beamformed power, per cell:
@@ -96,7 +96,7 @@ So the realistic thing to put on the link is our *Oculus-like polar ping*, and w
   it: a real Oculus hands you an amplitude that has already been through its analogue and digital gain.
 - `polar` = `clamp((level + 30·log10 R + 2αR − nf_db − lo) / (hi − lo) · 255, 0, 255)` — spreading TVG
   (`tvg_db_per_decade: 30`, area scattering) plus absorption, referenced to the beam noise floor, windowed by
-  `display_db: [0, 80]` dB and quantized to 8 bits (**V**, `config/tank.yaml:184-185`). That is structurally an
+  `display_db: [0, 80]` dB and quantized to 8 bits (**V**, `sim/config/tank.yaml:184-185`). That is structurally an
   Oculus 8-bit ping, and the relay already defaults to it (`DTYPE_UINT8`; `--db` is the float32 opt-in, **V**).
 
 So the correct statement of the decision is: **send the quantized polar ping with its gain and range metadata;
@@ -105,7 +105,7 @@ product we send.
 
 ### 2.2 Bandwidth against 1 GbE
 
-Payload at 10 Hz, 512 beams, from the real array shapes (**V**, `uw/sonar.py:850-852` + the size presets);
+Payload at 10 Hz, 512 beams, from the real array shapes (**V**, `physics/sonar.py:850-852` + the size presets);
 `ProjectedSonarImage` adds a constant 19 888 B (tank/lf) to 29 188 B (basin/hf) of beam geometry per ping
 (`relay.py:47-51`, **V**). Framing overhead ~8 % at MTU 1500 (**U**).
 
@@ -168,7 +168,7 @@ var and logs a default of `0`, which is an f1tenth domain (**V**).
 ### 2.4 Oculus-style sonar metadata
 
 The bag-compatibility target is **`marine_acoustic_msgs/ProjectedSonarImage`** (2.1.0, installed), because that is
-what `ros/sonar_relay` already emits and what the newer APL-lineage drivers publish. State the limits plainly:
+what `ros/src/sonar_relay` already emits and what the newer APL-lineage drivers publish. State the limits plainly:
 
 - That message carries **no ping id, no gain, no master mode, no temperature, no pressure and no row count**
   (rows are implicit in `len(data)/(beam_count·itemsize)`) (**V**). `PingInfo` has four fields only.
@@ -242,8 +242,8 @@ raycast, the 0.05-50 m gate, the incidence-dependent echo, the scale factor, the
 quantisation. Two tests guard the rest —
 `tests/rov/test_dvl.py::test_the_latched_meta_leaks_no_ground_truth` and
 `tests/test_ros_messages.py::test_dvl_report_leaks_no_ground_truth` — because the DVL's `meta` is latched, and
-rule 3 says latched ground truth is the worst case. The *estimator* is the other half: `ros/dvl_dr` subscribes
-nothing under `/gt`, and `tools/dvl_drift.py` is the only thing that reads both sides, on two participants.
+rule 3 says latched ground truth is the worst case. The *estimator* is the other half: `ros/src/dvl_dr` subscribes
+nothing under `/gt`, and `vehicles/tools/dvl_drift.py` is the only thing that reads both sides, on two participants.
 
 Enforcement by namespace is what M7 adopts. The only *middleware-enforced* alternative is a second
 `ROS_DOMAIN_ID` for `/gt`, which costs the evaluator a bridge and the Jetson a second participant; hold it in
@@ -275,7 +275,7 @@ Worse, the parser keeps only the **newest** complete frame, so a backlog collaps
 `deltat ≥ 0.1 s`, wall-clock pacing is skipped but `time_now_us` still jumps the full amount — one IMU sample
 across a >100 ms gap, which is the classic EKF-divergence path (**V**).
 
-Now put the repo's measured numbers next to that 0.1 s cliff. `uw/main.py` is **one synchronous loop**: a ping
+Now put the repo's measured numbers next to that 0.1 s cliff. `sim/main.py` is **one synchronous loop**: a ping
 costs 36.4 ms mean / 70.1 max with a fixed pose, and a *moving* sonar adds a static recompute of **133–154 ms
 (tank)** or **291–352 ms (basin)** per ping (**V**, `output/probe/mobile_timing.json`). A ping inside the JSON
 producer's loop would stall ArduSub for 1.3–3.5 ping periods and feed its 400 Hz loop a single 100–350 ms step,
@@ -381,7 +381,7 @@ estimation" circular.
 **Answered for the estimate, as of M8c (`docs/dvl.md`).** The dilemma above is about the *control* path, and
 it stands. For the *estimate* there is now a third option the draft did not have: a simulated DVL is not ground
 truth, so it can aid ArduSub's own EKF3 without making anything circular. The first step is already taken in
-`docker/ardusub_sitl/params/hil.parm` — `AHRS_EKF_TYPE 3` with `EK3_SRC1_POSXY/VELXY/VELZ` set to none, baro for
+`deploy/docker/ardusub_sitl/params/hil.parm` — `AHRS_EKF_TYPE 3` with `EK3_SRC1_POSXY/VELXY/VELZ` set to none, baro for
 z and compass for yaw — so MAVROS now reports an attitude ArduSub estimated rather than one SITL handed it. Note
 that this closes a second truth path the section above describes: the FDM-fed GPS instance 0 is still enabled by
 SITL, but the EKF no longer uses it. Feeding the DVL in as `EK3_SRC1_VELXY 6` (ExternalNav), which is what BlueOS

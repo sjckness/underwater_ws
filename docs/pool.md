@@ -8,11 +8,11 @@ Una vasca 10 × 10 × 5 m in Isaac Sim con un BlueROV2 Heavy che si pilota **com
 Isaac fa solo la fisica del veicolo e la camera di bordo, più un DVL Water Linked A50 emulato che alimenta ArduSub attraverso la vera estensione DVL di BlueOS (POSHOLD come sul ROV vero). Niente bolle, niente sonar.
 
 Questo file è la guida operativa. Il resto è nel codice:
-- l'app: `uw/pool.py`, `uw/pool_scene.py`, `uw/camera_uw.py`, `uw/video.py`;
-- la fisica: `uw/rov/physics_proc.py`;
-- il DVL: `uw/rov/a50.py` (il dispositivo in rete), `uw/rov/dvl.py` (fasci, rumore, aggancio al fondo), `uw/pool_geometry.py` (cosa colpiscono i fasci);
-- lo stack: `docker/pool/compose.yaml`;
-- la configurazione: `config/pool/`.
+- l'app: `sim/pool.py`, `sim/pool_scene.py`, `sim/camera_uw.py`, `sim/video.py`;
+- la fisica: `vehicles/common/physics_proc.py`;
+- il DVL: `vehicles/common/a50.py` (il dispositivo in rete), `vehicles/common/dvl.py` (fasci, rumore, aggancio al fondo), `physics/pool_geometry.py` (cosa colpiscono i fasci);
+- lo stack: `deploy/docker/pool/compose.yaml`;
+- la configurazione: `sim/config/pool/`.
 
 ## Come è fatto
 
@@ -24,7 +24,7 @@ Questo file è la guida operativa. Il resto è nel codice:
  ── macchina della simulazione (linus in docker, oppure la Work nativa) ─────────────────────────────
   mediamtx :8654 ◄── H.264 ── python -m uw pool (Isaac headless: vasca, ROV, camera, acqua, encoder)
                                      ▲ shared memory: posa, tilt camera, luci
-                  uw.rov.physics_proc (Fossen, 400 Hz) ◄── UDP 9002 lockstep ──► ArduSub SITL 4.5.7 (Heavy)
+                  vehicles.common.physics_proc (Fossen, 400 Hz) ◄── UDP 9002 lockstep ──► ArduSub SITL 4.5.7 (Heavy)
                     └─ DVL A50 emulato: TCP 16171 (JSON), HTTP 8061 ──► estensione Water Linked DVL di BlueOS
                                                                           └─► VISION_POSITION_DELTA ad ArduSub
 ```
@@ -39,18 +39,18 @@ Questo file è la guida operativa. Il resto è nel codice:
 ## Preparazione (una volta)
 
 **Sulla macchina della simulazione:**
-1. **Modello 3D del ROV.** Lancia `python -m uw py tools/fetch_bluerov2.py`.
-   - Scarica la Heavy di Blue Robotics da BlueSim (ricavata dal loro CAD, già decimata, 126 k triangoli) e la converte in `assets/bluerov2_heavy/bluerov2_heavy.usd`.
+1. **Modello 3D del ROV.** Lancia `python -m uw py vehicles/bluerov2_heavy/fetch_bluerov2.py`.
+   - Scarica la Heavy di Blue Robotics da BlueSim (ricavata dal loro CAD, già decimata, 126 k triangoli) e la converte in `vehicles/bluerov2_heavy/assets/bluerov2_heavy.usd`.
    - Il file non va in git, per licenza (GPL-2.0) e dimensione.
    - Senza questo file la vasca mostra un parallelepipedo delle stesse misure.
-2. **Immagine di ArduSub SITL.** Lancia `docker compose -f docker/pool/compose.yaml build sitl` (circa 3 minuti).
+2. **Immagine di ArduSub SITL.** Lancia `docker compose -f deploy/docker/pool/compose.yaml build sitl` (circa 3 minuti).
 
-**Sulla Work:** la guida passo per passo è [hil/win/pool/README.md](../hil/win/pool/README.md) (installazione, avvio, verifica, problemi noti). In breve:
-1. Copia `hil/win/pool/wslconfig.example` in `%UserProfile%\.wslconfig`, poi esegui `wsl --shutdown`.
-2. In una distro Ubuntu WSL dedicata, dal repo: `bash hil/win/pool/setup_blueos_wsl.sh`.
+**Sulla Work:** la guida passo per passo è [deploy/hil/windows/pool/README.md](../hil/win/pool/README.md) (installazione, avvio, verifica, problemi noti). In breve:
+1. Copia `deploy/hil/windows/pool/wslconfig.example` in `%UserProfile%\.wslconfig`, poi esegui `wsl --shutdown`.
+2. In una distro Ubuntu WSL dedicata, dal repo: `bash deploy/hil/windows/pool/setup_blueos_wsl.sh`.
    - Abilita systemd e installa Docker Engine, non Docker Desktop: BlueOS vuole la vera rete host.
    - La prima volta chiede di riavviare la distro: rilancialo dopo.
-3. Solo se SITL o il browser stanno su un'altra macchina: `hil\win\pool\firewall_pool.bat`, da amministratore.
+3. Solo se SITL o il browser stanno su un'altra macchina: `deploy\hil\windows\pool\firewall_pool.bat`, da amministratore.
 
 ## Avvio
 
@@ -58,27 +58,27 @@ Questo file è la guida operativa. Il resto è nel codice:
 
 **Su linus:**
 ```bash
-BLUEOS_HOST=<IPv4 della Work, LAN o Tailscale> docker compose -f docker/pool/compose.yaml up -d sitl mediamtx
+BLUEOS_HOST=<IPv4 della Work, LAN o Tailscale> docker compose -f deploy/docker/pool/compose.yaml up -d sitl mediamtx
 python -m uw pool                 # headless; --gui per vedere il viewport, --view chase per la vista da dietro
 sudo ufw allow in on tailscale0 to any port 8654 proto tcp    # una volta: la Work deve leggere lo stream
 ```
 
 **Sulla Work, in WSL:**
 ```bash
-docker compose -f docker/pool/compose.yaml --profile blueos up -d blueos
-python3 tools/pool_blueos_setup.py --blueos http://localhost --rtsp rtsp://<IP di linus>:8654/rov
+docker compose -f deploy/docker/pool/compose.yaml --profile blueos up -d blueos
+python3 sim/tools/pool_blueos_setup.py --blueos http://localhost --rtsp rtsp://<IP di linus>:8654/rov
 ```
 
 ### Scenario B: tutto sulla Work
 
-Isaac e la fisica nativi su Windows; SITL, mediamtx, BlueOS e l'estensione DVL in WSL2 (profilo `work`). Guida completa: [hil/win/pool/README.md](../hil/win/pool/README.md).
+Isaac e la fisica nativi su Windows; SITL, mediamtx, BlueOS e l'estensione DVL in WSL2 (profilo `work`). Guida completa: [deploy/hil/windows/pool/README.md](../hil/win/pool/README.md).
 
 ```bat
-hil\win\pool\run_pool.bat --gui
+deploy\hil\windows\pool\run_pool.bat --gui
 ```
 
 Fa tutto lui:
-- porta su lo stack in WSL (`hil/win/pool/stack.sh up`);
+- porta su lo stack in WSL (`deploy/hil/windows/pool/stack.sh up`);
 - riavvia SITL;
 - configura BlueOS e il DVL in background, appena il veicolo c'è;
 - lancia Isaac con il profilo `workstation` (30 fps, riflessi accesi).
@@ -89,15 +89,15 @@ Con la rete mirrored di WSL, il `127.0.0.1` di WSL è quello di Windows:
 - Isaac pubblica su mediamtx su 8654.
 
 **Da verificare** al primo avvio (non provato). Le alternative, senza toccare file in git, sono nella guida, §5:
-- `docker/pool/.env` con `PHYSICS_HOST` e `DVL_HOST`;
+- `deploy/docker/pool/.env` con `PHYSICS_HOST` e `DVL_HOST`;
 - `--set physics.bind=0.0.0.0` e `--set dvl.device.bind=0.0.0.0`.
 
 ### Scenario C: tutto su linus (Isaac con la GUI, BlueOS locale, Cockpit desktop)
 
 ```bash
-BLUEOS_HOST=172.31.250.2 docker compose -f docker/pool/compose.yaml --profile blueos-local up -d
+BLUEOS_HOST=172.31.250.2 docker compose -f deploy/docker/pool/compose.yaml --profile blueos-local up -d
 python3 -m uw pool --gui          # viewport alle spalle del ROV; --gui-view onboard|free per cambiarlo
-python3 tools/pool_blueos_setup.py --blueos http://127.0.0.1:28080 --rtsp rtsp://172.31.250.1:8654/rov \
+python3 sim/tools/pool_blueos_setup.py --blueos http://127.0.0.1:28080 --rtsp rtsp://172.31.250.1:8654/rov \
     --dvl http://172.31.250.3     # in un altro terminale, con uw pool già partito (serve il DVL)
 ~/.local/opt/cockpit-1.19.0/Cockpit-linux-x86_64-1.19.0.AppImage --no-sandbox
 ```
@@ -108,8 +108,8 @@ python3 tools/pool_blueos_setup.py --blueos http://127.0.0.1:28080 --rtsp rtsp:/
   - `--no-sandbox` serve su Ubuntu 24.04, che vieta i namespace utente senza privilegi (`kernel.apparmor_restrict_unprivileged_userns = 1`): senza, Electron non parte.
 - **La camera di bordo con l'acqua** è in Cockpit, oppure nel browser su `http://localhost:8889/rov` (il viewer WebRTC di mediamtx). Il viewport di Isaac mostra il render grezzo, senza il post-processing dell'acqua.
 - **Gamepad:** un controller USB o Bluetooth collegato a linus, letto da Cockpit.
-- **Stop:** `Ctrl-C` su `uw pool`, poi `docker compose -f docker/pool/compose.yaml --profile blueos-local down`. BlueOS tiene la configurazione nel volume `uw-pool_blueos_local_config`, l'estensione DVL in `uw-pool_dvl_settings`.
-- **Riavvia SITL insieme alla fisica.** Un nuovo `uw pool` rimette il ROV al punto di partenza, ma l'EKF di ArduSub resta dov'era. La prua stimata ci mette decine di secondi a raggiungere quella vera, e intanto POSHOLD e la navigazione stimata lavorano su una prua sbagliata (misurato: 20–25° di errore, 45 cm su 1 m di traccia). Quindi, prima di ogni `uw pool`: `docker compose -f docker/pool/compose.yaml restart sitl`. `pool_smoke.py` lo controlla.
+- **Stop:** `Ctrl-C` su `uw pool`, poi `docker compose -f deploy/docker/pool/compose.yaml --profile blueos-local down`. BlueOS tiene la configurazione nel volume `uw-pool_blueos_local_config`, l'estensione DVL in `uw-pool_dvl_settings`.
+- **Riavvia SITL insieme alla fisica.** Un nuovo `uw pool` rimette il ROV al punto di partenza, ma l'EKF di ArduSub resta dov'era. La prua stimata ci mette decine di secondi a raggiungere quella vera, e intanto POSHOLD e la navigazione stimata lavorano su una prua sbagliata (misurato: 20–25° di errore, 45 cm su 1 m di traccia). Quindi, prima di ogni `uw pool`: `docker compose -f deploy/docker/pool/compose.yaml restart sitl`. `pool_smoke.py` lo controlla.
 
 ### Pilotare
 
@@ -132,7 +132,7 @@ python3 tools/pool_blueos_setup.py --blueos http://127.0.0.1:28080 --rtsp rtsp:/
 
 ### Controllo senza BlueOS
 
-`python -m uw py tools/pool_smoke.py` pilota il veicolo via MAVLink sulla seconda uscita di SITL (UDP 14560), come farebbe Cockpit, e verifica:
+`python -m uw py sim/tools/pool_smoke.py` pilota il veicolo via MAVLink sulla seconda uscita di SITL (UDP 14560), come farebbe Cockpit, e verifica:
 - i parametri;
 - l'armamento;
 - la discesa;
@@ -145,11 +145,11 @@ python3 tools/pool_blueos_setup.py --blueos http://127.0.0.1:28080 --rtsp rtsp:/
 
 Con `--dvl` (estensione DVL attiva e configurata) verifica anche: l'EKF ha la velocità orizzontale, POSHOLD si attiva e tiene il posto, si sposta con lo stick e tiene il nuovo posto, e la posizione stimata da ArduSub segue quella vera. Prima di tutto controlla che la prua stimata da ArduSub coincida con quella vera (entro 3° per 5 s).
 
-Per provare SITL senza GPU c'è la fisica da sola: `python -m uw py -m uw.rov.physics_proc` (il ROV è invisibile ma vola, e il DVL emulato c'è anche qui).
+Per provare SITL senza GPU c'è la fisica da sola: `python -m uw py -m vehicles.common.physics_proc` (il ROV è invisibile ma vola, e il DVL emulato c'è anche qui).
 
 ## Torbidità
 
-Un solo parametro, `water.turbidity_per_m` (b_p, in 1/m): il coefficiente di diffusione delle particelle sospese, uguale nei tre canali, perché particelle molto più grandi della lunghezza d'onda diffondono tutti i colori allo stesso modo (`uw/camera_uw.py`).
+Un solo parametro, `water.turbidity_per_m` (b_p, in 1/m): il coefficiente di diffusione delle particelle sospese, uguale nei tre canali, perché particelle molto più grandi della lunghezza d'onda diffondono tutti i colori allo stesso modo (`sim/camera_uw.py`).
 - Si somma all'attenuazione del segnale diretto e a quella della luce diffusa.
 - Sposta la luce diffusa di fondo dal blu dell'acqua limpida verso `water.turbidity_veil`, il colore della nuvola di particelle illuminata (grigio-verde, a occhio).
 
@@ -169,21 +169,21 @@ Cosa non c'è: le lampade del ROV illuminano le particelle subito davanti alla c
 
 Un Water Linked DVL A50 sotto la Heavy, a 0,14 m sotto il baricentro, rivolto in basso. Sono tre pezzi:
 
-1. **Il sensore** (`uw/rov/dvl.py`, `docs/dvl.md`): lo stesso modello della vasca del gas.
+1. **Il sensore** (`vehicles/common/dvl.py`, `docs/dvl.md`): lo stesso modello della vasca del gas.
    - Quattro fasci a 22,5°, aggancio al fondo con il rapporto segnale/rumore, rumore, bias lento, fattore di scala.
-   - I fasci colpiscono la geometria della piscina (`uw/pool_geometry.py`): fondo, pareti, scaletta, oggetti. Sono la stessa lista di solidi della scena USD, così quello che vede la camera e quello che misura il DVL non possono divergere.
+   - I fasci colpiscono la geometria della piscina (`physics/pool_geometry.py`): fondo, pareti, scaletta, oggetti. Sono la stessa lista di solidi della scena USD, così quello che vede la camera e quello che misura il DVL non possono divergere.
    - Le pareti fermano i fasci. Vicino a una parete un fascio la colpisce di striscio, l'eco è debole e il DVL può perdere l'aggancio, come quello vero. Lo stesso succede sul tubo.
-2. **Il dispositivo in rete** (`uw/rov/a50.py`), dentro il processo della fisica.
+2. **Il dispositivo in rete** (`vehicles/common/a50.py`), dentro il processo della fisica.
    - Protocollo JSON di Water Linked `json_v3.3` su TCP 16171: report di velocità, dead reckoning `position_local` a 5 Hz, comandi (`get_config`, `set_config`, `reset_dead_reckoning`, `trigger_ping`, …).
    - L'API HTTP che l'estensione interroga, sulla porta 8061 perché la 80 su linus è occupata.
    - Timestamp in tempo Unix, come il dispositivo vero.
 3. **L'estensione DVL di BlueOS**, la stessa del ROV vero (`bluerobotics/blueos-water-linked-dvl:v1.0.11`), senza modifiche.
    - Legge il DVL e manda ad ArduSub `VISION_POSITION_DELTA`, l'altitudine come rangefinder e l'origine EKF.
-   - Sul ROV vero raggiunge BlueOS come `host.docker.internal`. Qui al suo posto c'è `dvl-gateway` (un nginx, `docker/pool/dvl_gateway.conf.template`), per due motivi: il BlueOS locale non ha il socket docker per le estensioni, e cable_guy è spento (gestirebbe la rete dell'host), mentre l'estensione lo aspetta all'avvio.
+   - Sul ROV vero raggiunge BlueOS come `host.docker.internal`. Qui al suo posto c'è `dvl-gateway` (un nginx, `deploy/docker/pool/dvl_gateway.conf.template`), per due motivi: il BlueOS locale non ha il socket docker per le estensioni, e cable_guy è spento (gestirebbe la rete dell'host), mentre l'estensione lo aspetta all'avvio.
    - Il gateway inoltra mavlink2rest a BlueOS, risponde al posto di cable_guy e serve la pagina dell'estensione su `http://172.31.250.3`.
    - Sulla Work (profilo `work`) l'estensione gira in rete host accanto a BlueOS (servizio `dvl-host`, pagina su `http://localhost:9001`). Il gateway (`dvl-gateway-host`) resta da solo sulla rete bridge e da lì raggiunge BlueOS su 172.31.250.1. Su linus questa variante è stata provata con BlueOS locale: `pool_smoke.py --dvl` 18/18.
 
-**Lato ArduSub** (`docker/ardusub_sitl/params/pool.parm`): EKF3 con posizione e velocità orizzontali dal DVL (`EK3_SRC1_POSXY/VELXY 6`), `VISO_TYPE 1`, `RNGFND1_TYPE 10`. Sono i valori che imposta l'estensione stessa, messi già come default perché `VISO_TYPE` vale solo dopo un riavvio. `pool_blueos_setup.py --dvl` fa quello che farebbe un operatore sulla pagina dell'estensione:
+**Lato ArduSub** (`deploy/docker/ardusub_sitl/params/pool.parm`): EKF3 con posizione e velocità orizzontali dal DVL (`EK3_SRC1_POSXY/VELXY 6`), `VISO_TYPE 1`, `RNGFND1_TYPE 10`. Sono i valori che imposta l'estensione stessa, messi già come default perché `VISO_TYPE` vale solo dopo un riavvio. `pool_blueos_setup.py --dvl` fa quello che farebbe un operatore sulla pagina dell'estensione:
 - carica i parametri "DVL";
 - sceglie `POSITION_DELTA`;
 - attiva il rangefinder;
@@ -206,7 +206,7 @@ L'errore della posizione stimata viene da due scale che si sommano:
 
 Sul ROV vero la velocità del suono si imposta dalla pagina web dell'A50; qui con `set_config`.
 
-**Ancora incerti** (UNVERIFIED in `config/pool/pool.yaml`):
+**Ancora incerti** (UNVERIFIED in `sim/config/pool/pool.yaml`):
 - come cala la frequenza dei report con l'altitudine. Water Linked pubblica solo l'intervallo 2–15 Hz, e la forma conta per la qualità di POSHOLD;
 - il riferimento d'eco (`rssi_ref_dbm`);
 - i materiali acustici della piscina;
@@ -276,7 +276,7 @@ Sulla Work restano accesi (profilo `workstation`).
 
 ## Da verificare (non ancora provato)
 
-Tutto lo scenario B, con la tabella di verifica di [hil/win/pool/README.md](../hil/win/pool/README.md) (§4). In particolare:
+Tutto lo scenario B, con la tabella di verifica di [deploy/hil/windows/pool/README.md](../hil/win/pool/README.md) (§4). In particolare:
 
 - BlueOS in WSL2 con la rete mirrored sulla Work, e Cockpit con il video WebRTC e il gamepad. Sono state verificate su linus, con un BlueOS 1.5.0-beta.43 isolato:
   - la board Manual;

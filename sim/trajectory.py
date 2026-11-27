@@ -1,4 +1,4 @@
-"""Scripted ROV trajectories (sonar.pose_source script): config/trajectories/<name>.yaml, evaluated at sim time.
+"""Scripted ROV trajectories (sonar.pose_source script): sim/config/trajectories/<name>.yaml, evaluated at sim time.
 
 Deterministic and ROS-free. A trajectory moves the vehicle BODY (FLU, level, yawed so that its x axis points at the
 leak); the sonar and the cameras ride it through the fixed mount (vehicle.body.offset, the sonar's configured roll
@@ -15,7 +15,7 @@ Kinds (all distances in metres, the leak position read from the scene, never har
 Bounds: the body centre keeps wall_margin_m + half the footprint diagonal from the walls and from the free surface,
 floor_margin_m + half the height above the sand. A circle that does not fit gets a smaller radius, an updown that
 reaches below the floor is shifted up (then its amplitude reduced if it hits the top); each change is a note that
-tools/record.py writes into run.json.
+sim/tools/record.py writes into run.json.
 """
 from __future__ import annotations
 
@@ -25,9 +25,9 @@ from pathlib import Path
 
 import numpy as np
 
-from .config import ConfigError, get
+from uw.config import ConfigError, get
 
-TRAJ_DIR = Path(__file__).resolve().parents[1] / "config" / "trajectories"
+TRAJ_DIR = Path(__file__).resolve().parent / "config" / "trajectories"
 
 
 @dataclass
@@ -57,7 +57,7 @@ def load_spec(name_or_path: str) -> dict:
         p = TRAJ_DIR / f"{name_or_path}.yaml"
     if not p.is_file():
         avail = ", ".join(sorted(q.stem for q in TRAJ_DIR.glob("*.yaml")))
-        raise ConfigError(f"trajectory '{name_or_path}' not found (config/trajectories: {avail})")
+        raise ConfigError(f"trajectory '{name_or_path}' not found (sim/config/trajectories: {avail})")
     spec = yaml.safe_load(p.read_text(encoding="utf-8-sig"))
     spec.setdefault("name", p.stem)
     return spec

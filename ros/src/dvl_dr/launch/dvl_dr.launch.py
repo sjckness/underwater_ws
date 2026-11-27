@@ -1,9 +1,9 @@
 """The DVL dead-reckoning chain: the preprocessor and robot_localization's EKF.
 
-    ros2 launch ros/dvl_dr/launch/dvl_dr.launch.py [vehicle:=rov1] [use_sim_time:=true]
+    ros2 launch ros/src/dvl_dr/launch/dvl_dr.launch.py [vehicle:=rov1] [use_sim_time:=true]
 
-It expects, already running: the simulator (``/sim/dvl/report``, ``/clock``), ``ros/dvl_relay``, and
-MAVROS under ``/<vehicle>/mavros`` (``ros/mavros_rov1``). It publishes ``/<vehicle>/nav/odom`` and owns
+It expects, already running: the simulator (``/sim/dvl/report``, ``/clock``), ``ros/src/dvl_relay``, and
+MAVROS under ``/<vehicle>/mavros`` (``deploy/hil/thor/mavros_rov1``). It publishes ``/<vehicle>/nav/odom`` and owns
 ``odom -> base_link`` on ``/tf``; ``map -> odom`` stays a Jetson-side static identity until a map-frame
 localizer exists (docs/topic_map.md section 2).
 

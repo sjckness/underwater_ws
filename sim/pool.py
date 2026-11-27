@@ -3,11 +3,11 @@ a gamepad) in a 10 x 10 x 5 m tank; the onboard camera goes out as a live H.264 
 
     python -m uw pool [--gui] [--duration S] [--snapshot T]... [--no-stream] [--stats-file F] [--profile P] [--set k=v]
 
-The physics is not in this process: ``uw.rov.physics_proc`` runs the ArduSub JSON server (UDP physics.port) in a
+The physics is not in this process: ``vehicles.common.physics_proc`` runs the ArduSub JSON server (UDP physics.port) in a
 child process, lockstep with SITL and paced to the wall clock, so SITL, BlueOS and the pilot see real time whatever
 the renderer does. This loop only renders: every 1/camera.rate_hz it reads the latest vehicle pose, camera tilt and
-lights from the child's shared memory, renders, applies the water (uw/camera_uw.py) and hands the frame to the
-encoder (uw/video.py). A slow frame costs frame rate, never simulation time. Setup and the operator side: docs/pool.md.
+lights from the child's shared memory, renders, applies the water (sim/camera_uw.py) and hands the frame to the
+encoder (sim/video.py). A slow frame costs frame rate, never simulation time. Setup and the operator side: docs/pool.md.
 """
 from __future__ import annotations
 
@@ -20,10 +20,10 @@ from pathlib import Path
 
 import numpy as np
 
-from . import config
-from .config import WS, get
+from uw import config
+from uw.config import WS, get
 
-log = logging.getLogger("uw.pool")
+log = logging.getLogger("sim.pool")
 CAMERA_WARMUP_RENDERS = 10
 SNAPSHOT_DIR = Path(WS) / "output" / "pool" / "snapshots"
 
@@ -61,7 +61,7 @@ def main(argv: list[str]) -> int:
     args = parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     cfg = config.from_args(args, config.POOL_CONFIG)
-    from .rov.physics_proc import PhysicsProcess
+    from vehicles.common.physics_proc import PhysicsProcess
     physics = PhysicsProcess(cfg).start()            # first: SITL can lock on while Kit boots, a busy port fails fast
     log.info("physics process up on UDP %s:%d; %s", get(cfg, "physics.bind"), physics.port,
              "DVL A50 on TCP %d, HTTP %d" % physics.dvl_ports if physics.dvl_ports else "no DVL")
@@ -107,7 +107,7 @@ def run(app, cfg: dict, args, physics, stop: dict) -> int:  # noqa: C901 - one f
     stage = omni.usd.get_context().get_stage()
     info = pool_scene.build(stage, cfg)
     if info.vehicle_asset is None:
-        log.warning("vehicle asset %s not found: a box stands in (python -m uw py tools/fetch_bluerov2.py)",
+        log.warning("vehicle asset %s not found: a box stands in (python -m uw py vehicles/bluerov2_heavy/fetch_bluerov2.py)",
                     get(cfg, "vehicle.asset"))
     timeline = omni.timeline.get_timeline_interface()
     timeline.play()

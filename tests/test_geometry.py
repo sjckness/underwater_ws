@@ -2,7 +2,8 @@
 import numpy as np
 import pytest
 
-from uw import config, geometry
+from uw import config
+from physics import geometry
 
 
 @pytest.fixture(scope="module", params=["exposed", "buried"])

@@ -1,4 +1,4 @@
-# Dataset sweep v0.1 (tools/sweep.py): every randomised parameter and its distribution. The dataset card
+# Dataset sweep v0.1 (ml/tools/sweep.py): every randomised parameter and its distribution. The dataset card
 # (README.md in the dataset root) is written from this file.
 # Distributions: [lo, hi] uniform; {log: [lo, hi]} log-uniform; {int: [lo, hi]} integer, both ends included;
 # {choice: {value: weight, ...}} weighted choice.

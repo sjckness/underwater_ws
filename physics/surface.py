@@ -8,7 +8,7 @@ inside it every ping (random phase: the surface moves) with
     sigma_bs = f A_cell exp(-tan^2 theta / (2 s^2)) / (8 pi s^2 cos^4 theta)
 
 the Kirchhoff (geometric optics) backscatter of a rough pressure-release surface (|R| = 1) with Gaussian slopes of
-rms ``s`` per axis, theta the incidence from the vertical, in the sonar model's convention (uw/sonar.py, emit).
+rms ``s`` per axis, theta the incidence from the vertical, in the sonar model's convention (physics/sonar.py, emit).
 The sonar gets them as generic point scatterers (``Sonar.ping(extra=...)``) on the direct path, counted in the
 all-paths plume label (plume-caused energy) but not in the direct-path or geometric bubble labels.
 """
@@ -18,7 +18,7 @@ import math
 
 import warp as wp
 
-from .config import get
+from uw.config import get
 
 PI = wp.constant(math.pi)
 

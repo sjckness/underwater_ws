@@ -12,7 +12,7 @@ import math
 
 import numpy as np
 
-from .config import get
+from uw.config import get
 
 log = logging.getLogger(__name__)
 FAN_COLOR = [1.0, 0.85, 0.1, 0.9]

@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from . import water as wat
-from .config import ConfigError, get
+from uw.config import ConfigError, get
 
 N_CL = 160          # centreline samples per plume
 

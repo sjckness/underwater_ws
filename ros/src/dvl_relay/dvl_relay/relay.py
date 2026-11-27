@@ -7,13 +7,13 @@ this relay, and nothing downstream of ``/rov1/sensors/dvl/**`` changes - which i
 
 It exists as a separate host node, rather than as publishers inside the sim, for one hard reason:
 ``marine_acoustic_msgs`` is not in the Isaac container's bundled rclpy (docs/topic_map.md §4.5), so the
-``Dvl`` message cannot be built there at all. ``ros/sonar_relay`` exists for the same reason.
+``Dvl`` message cannot be built there at all. ``ros/src/sonar_relay`` exists for the same reason.
 
 Runs with the host's ROS 2 Jazzy (``ros-jazzy-marine-acoustic-msgs``), on the tank sim's own domain:
 
-    ros/dvl_relay/run.sh [--vehicle rov1]
+    ros/src/dvl_relay/run.sh [--vehicle rov1]
 
-or, sourced: ``python3 ros/dvl_relay/dvl_relay/relay.py``, or as a colcon package (``ros2 run dvl_relay
+or, sourced: ``python3 ros/src/dvl_relay/dvl_relay/relay.py``, or as a colcon package (``ros2 run dvl_relay
 relay``). The domain is ``UW_ROS_DOMAIN_ID`` (default 73), as in the container; a ``ROS_DOMAIN_ID``
 exported for another stack is ignored on purpose.
 
@@ -22,7 +22,7 @@ x forward, y starboard, z down. ``marine_acoustic_msgs/Dvl`` declares the same c
 ("z-axis in direction DVL is pointing, x-axis aligned with vehicle forward"), so that message is
 published untouched in ``rov1/dvl_instrument``. REP-103 wants FLU, so the ``TwistWithCovarianceStamped``
 the estimator consumes is flipped into ``rov1/dvl_link`` - once, here, and nowhere else. The two frames
-are a fixed static transform published by the sim (``uw.ros_bridge.R_DVL_INSTRUMENT``).
+are a fixed static transform published by the sim (``sim.ros_bridge.R_DVL_INSTRUMENT``).
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ from sensor_msgs.msg import Range
 from std_msgs.msg import String
 
 BEAMS = 4
-#: FRD -> FLU, the involution of uw.rov.frames.M_FLU_FRD. The only axis change in this file.
+#: FRD -> FLU, the involution of vehicles.common.frames.M_FLU_FRD. The only axis change in this file.
 FLIP = (1.0, -1.0, -1.0)
 
 LATCHED = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=1, reliability=ReliabilityPolicy.RELIABLE,

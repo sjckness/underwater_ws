@@ -1,4 +1,4 @@
-"""The Fast DDS profile generator (tools/dds_profile.py, host): valid XML, the right addresses, the right ports.
+"""The Fast DDS profile generator (deploy/hil/dds_profile.py, host): valid XML, the right addresses, the right ports.
 
 Pure string and XML work: no ROS, no DDS participant, no network.
 """
@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 WS = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(WS / "tools"))
+sys.path.insert(0, str(WS / "deploy" / "hil"))
 import dds_profile      # noqa: E402 - after sys.path
 
 NS = {"d": "http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles"}

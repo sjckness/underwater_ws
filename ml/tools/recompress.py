@@ -1,14 +1,14 @@
 """Recompress a finished dataset in place: deflate the npz and the PNGs a sweep wrote uncompressed.
 
-    python3 tools/recompress.py --root /HDD2T/underwater_data/datasets/v0.2 [--level 6] [--dry-run]   (host)
-    python3 tools/recompress.py status --root DIR
+    python3 ml/tools/recompress.py --root /HDD2T/underwater_data/datasets/v0.2 [--level 6] [--dry-run]   (host)
+    python3 ml/tools/recompress.py status --root DIR
 
 A sweep runs with ``recorder.compress=false`` and ``recorder.png_level=0`` to keep zlib off the worker's critical
 path (M5: 63 ms of a ~100 ms write). That costs about 3.5x the disk, so the compression is done afterwards, here,
 as a CPU-only pass. v0.2 measured 216.6 -> 62.4 GB; see docs/validation.md "Recompressing v0.2".
 
 Lossless by construction and verified per scenario before anything is replaced: every ping is re-encoded into
-<root>/.recompress/<id>, then read back **through the dataset loader** (`uw.dataset.load_ping`) and compared with
+<root>/.recompress/<id>, then read back **through the dataset loader** (`ml.dataset.load_ping`) and compared with
 the original, array by array and bit for bit, plus a raw comparison of each npz array and each PNG. Only if the
 whole scenario matches are its files moved over the originals (one ``os.replace`` each, so an interrupted run
 leaves valid files either way) and a RECOMPRESSED marker written.
@@ -17,7 +17,7 @@ Resumable: a scenario with RECOMPRESSED is skipped, anything else is redone from
 half-replaced scenario is simply redone. It pauses while an f1tenth run is active, while <root>/PAUSE exists, while
 a GPU job holds an open file under the dataset's disk, or while that disk or / runs low, and resumes after.
 
-PNGs go through ``uw.sinks.write_png``, not Pillow: it writes the single-IDAT, filter-0 form that ``read_png``
+PNGs go through ``sim.sinks.write_png``, not Pillow: it writes the single-IDAT, filter-0 form that ``read_png``
 decodes on its fast path, which is what the loader uses during training. Pillow's row filters would save another
 13 % and cost that fast path.
 
@@ -37,11 +37,11 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tools.sweep import f1tenth_active                                                    # noqa: E402
-from uw.dataset import load_ping                                                           # noqa: E402
-from uw.sinks import read_png, write_png                                                   # noqa: E402
+from ml.dataset import load_ping                                                           # noqa: E402
+from sim.sinks import read_png, write_png                                                   # noqa: E402
 
 MIN_FREE_ROOT_GB = 5.0        # the pass frees space, but never run the disk dry
 MIN_FREE_SYSTEM_GB = 5.0

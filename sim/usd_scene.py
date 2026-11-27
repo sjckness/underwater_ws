@@ -1,4 +1,4 @@
-"""The USD stage, built from the numpy geometry (uw/geometry.py) that the sonar traces: one geometry source.
+"""The USD stage, built from the numpy geometry (physics/geometry.py) that the sonar traces: one geometry source.
 
 Tank walls and floor, sand height field (per-vertex albedo), rocks, pipe, flanges, supports, a hole marker; one
 material per surface material; the two LED lamps (no dome unless lights.ambient_dome > 0); the sonar and camera
@@ -17,9 +17,9 @@ import numpy as np
 import warp as wp
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdLux, UsdShade, Vt
 
-from . import water as wat
-from .config import get
-from .geometry import body_rotation, icosphere, rot_rpy_deg, sonar_rotation, surface_materials
+from physics import water as wat
+from uw.config import get
+from physics.geometry import body_rotation, icosphere, rot_rpy_deg, sonar_rotation, surface_materials
 
 WORLD = "/World"
 TANK = f"{WORLD}/tank"

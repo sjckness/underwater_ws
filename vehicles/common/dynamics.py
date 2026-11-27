@@ -5,7 +5,7 @@ is checked out. Paths go through ``pathlib``.
 
 **Frame.** Everything here is ArduPilot's: earth **NED**, body **FRD**. That is the convention the published
 Fossen identifications use and the one the JSON link wants, so the dynamics needs no conversion at all and
-``uw.rov.frames`` is called only at the seams (the soft tank bound, which is stated in tank coordinates, and
+``vehicles.common.frames`` is called only at the seams (the soft tank bound, which is stated in tank coordinates, and
 whatever the ROS/Isaac side asks for).
 
 **The model** (Fossen, *Handbook of Marine Craft Hydrodynamics and Motion Control*, 2011):
@@ -57,7 +57,7 @@ from . import frames
 log = logging.getLogger(__name__)
 
 G = 9.80665
-DEFAULT_PARAMS = Path(__file__).resolve().parents[2] / "config" / "rov_bluerov2.yaml"
+DEFAULT_PARAMS = Path(__file__).resolve().parents[1] / "bluerov2_heavy" / "vehicle.yaml"
 
 
 class VehicleError(RuntimeError):
@@ -168,7 +168,7 @@ class TankBounds:
     def from_tank(size, sand_base: float, water_level: float, margin: float, sand_extra: float,
                   stiffness: float, damping: float, surface_stiffness: float,
                   surface_damping: float, open_surface: bool = False) -> "TankBounds":
-        """The same box ``uw.pose.Bounds`` clips the kinematic trajectories to: ``margin`` from the walls,
+        """The same box ``sim.pose.Bounds`` clips the kinematic trajectories to: ``margin`` from the walls,
         ``margin + sand_extra`` over the sand, ``margin`` below the surface.
 
         ``open_surface``: no top face and no surface spring, because the partial-submersion buoyancy of
@@ -229,7 +229,7 @@ def _vec(d: dict, key: str, n: int = 3) -> np.ndarray:
 
 
 def load_params(path: str | Path | None = None) -> Params:
-    """Read ``config/rov_bluerov2.yaml`` (or ``path``) into a ``Params``, checking it for consistency.
+    """Read ``vehicles/bluerov2_heavy/vehicle.yaml`` (or ``path``) into a ``Params``, checking it for consistency.
 
     Checks that raise rather than producing a quietly wrong vehicle: the body origin must be the CG, the
     thrust axes must be unit, ``M`` must be positive definite, the damping coefficients must be
@@ -480,7 +480,7 @@ class Vehicle:
         """Steady thrust [N] per thruster for a PWM array ordered as ``params.thrusters``.
 
         The map from an ArduSub servo channel to a thruster is NOT applied here: that mapping comes from the
-        ArduSub frame definition and is M8a step 2's job (see ``config/rov_bluerov2.yaml``).
+        ArduSub frame definition and is M8a step 2's job (see ``vehicles/bluerov2_heavy/vehicle.yaml``).
         """
         return self.params.t200.thrust_of_command(self.params.t200.command_of_pwm(pwm))
 
@@ -561,7 +561,7 @@ def make_vehicle(params_path: str | Path | None = None, tank_size=(3.0, 3.0, 3.0
                  water_level: float = 2.9, surface_model: bool = False) -> Vehicle:
     """A ``Vehicle`` with its soft bound built from the tank geometry.
 
-    The three tank numbers are passed in rather than read from ``config/tank.yaml`` here, so that this module
+    The three tank numbers are passed in rather than read from ``sim/config/tank.yaml`` here, so that this module
     stays independent of the repo's config layering; the runner wires them from ``tank.size``,
     ``sand.thickness`` and ``tank.water_level``. ``surface_model``: partial-submersion buoyancy and an open
     top (see ``Vehicle``), off by default so the tank scenes keep their bound.

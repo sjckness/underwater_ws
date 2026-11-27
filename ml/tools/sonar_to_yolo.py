@@ -1,8 +1,8 @@
-"""Convert a sweep dataset (tools/sweep.py) into a YOLO-seg dataset and an RF-DETR-readable COCO dataset.
+"""Convert a sweep dataset (ml/tools/sweep.py) into a YOLO-seg dataset and an RF-DETR-readable COCO dataset.
 
-    python3 tools/sonar_to_yolo.py --root /HDD2T/underwater_data/datasets/v0.2 --out /HDD2T/underwater_data/yolo/v0.2
-    python3 tools/sonar_to_yolo.py status --out DIR        what is already converted
-    python3 tools/sonar_to_yolo.py check  --out DIR        verify what was written
+    python3 ml/tools/sonar_to_yolo.py --root /HDD2T/underwater_data/datasets/v0.2 --out /HDD2T/underwater_data/yolo/v0.2
+    python3 ml/tools/sonar_to_yolo.py status --out DIR        what is already converted
+    python3 ml/tools/sonar_to_yolo.py check  --out DIR        verify what was written
 
 CPU only: no GPU, no warp, no torch. It reads the PNGs the sweep wrote (the npz only for --db-range and
 --repr fan), turns each ping's label mask into polygons, and writes both formats from the same polygons, so
@@ -11,7 +11,7 @@ neighbouring pings of one scenario are 0.1 s apart and nearly identical, so spli
 
 Orientation, which is the one silent corruption this conversion can produce: the sweep stores every PNG
 flipped (row 0 = far range) and the npz arrays unflipped (row 0 = range 0). We flip every PNG on the way in,
-exactly as uw.dataset.load_ping does, so images, masks and anything taken from the npz all share row 0 =
+exactly as ml.dataset.load_ping does, so images, masks and anything taken from the npz all share row 0 =
 range 0. Flipping only some of them mirrors the labels in range, and no loader would say a word.
 
 Images are written once, under <out>/images/<split>/, and every dataset directory hardlinks them, so the mask
@@ -59,7 +59,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-WS = Path(__file__).resolve().parents[1]
+WS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(WS))
 
 MASKS = ("direct", "all", "geom")
@@ -75,7 +75,7 @@ SIG_KEYS = ("root", "repr", "masks", "db_range", "db_noise_floor", "level_gate",
 # ------------------------------------------------------------------------------------ the Cartesian fan
 
 def fan_geometry(range_m: np.ndarray, bearing_deg: np.ndarray, width: int) -> dict:
-    """Sonar.fan's constants (uw/sonar.py:1312-1319) recovered from the npz arrays instead of the config.
+    """Sonar.fan's constants (physics/sonar.py:1312-1319) recovered from the npz arrays instead of the config.
 
     theta_max comes from bearing_deg, never from a constant: lf is a 130 deg fan and hf a 70 deg one, and lf is
     65.5 % of v0.2's pings. The sidecar JSON does not record fov_h_deg, so the npz is the only per-ping source."""
@@ -91,7 +91,7 @@ def fan_maps(range_m: np.ndarray, bearing_deg: np.ndarray, width: int, off: tupl
     """(beam coordinate, range-bin coordinate, in-sector mask) per output pixel, float32 as warp does it.
 
     x = (col - (W-1)/2)/scale metres to starboard, y = (H-1-row)/scale metres along the axis: the apex sits on
-    the bottom row, starboard to the right, exactly as uw/sonar.py's fan_kernel builds it. ``off`` shifts the
+    the bottom row, starboard to the right, exactly as physics/sonar.py's fan_kernel builds it. ``off`` shifts the
     sampling point inside the pixel, which is how the mask is supersampled."""
     f32 = np.float32
     g = fan_geometry(range_m, bearing_deg, width)
@@ -139,7 +139,7 @@ def fan_mask(mask: np.ndarray, maps_ss: list) -> np.ndarray:
 # ------------------------------------------------------------------------------------ reading one ping
 
 def read_grey(path: Path) -> np.ndarray:
-    """cv2, not uw.sinks.read_png: the stdlib reader scans for the IDAT marker a byte at a time, 150 ms on a
+    """cv2, not sim.sinks.read_png: the stdlib reader scans for the IDAT marker a byte at a time, 150 ms on a
     3201x512 frame against cv2's 18 ms, which is 80 CPU-minutes over 36000 pings. `check --root` cross-checks
     the two on a sample so the fast path stays honest."""
     a = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
@@ -162,7 +162,7 @@ def ping_arrays(d: Path, stem: str, masks, cfg, meta: dict) -> dict:
                 # polar_db is the calibrated level (dB re 1 uPa) *before* TVG, NaN in the blind zone, so a fixed
                 # window on it is session-independent but range-shaded, unlike the stored display image, which
                 # already carries 30 dB/decade of TVG and the 0-80 dB window. --db-noise-floor reproduces
-                # uw/dataset.py's "db" image instead, which is relative to this ping's own noise floor.
+                # ml/dataset.py's "db" image instead, which is relative to this ping's own noise floor.
                 lo, hi = cfg.db_range
                 db = z["polar_db"].astype(np.float32)
                 if cfg.db_noise_floor:
@@ -432,7 +432,7 @@ def prepare_out(out: Path, cfg, used: list) -> None:
 
 def write_data_yaml(out: Path, name: str, mask: str, cfg, used: list) -> None:
     root = out / name
-    yaml = [f"# {name}: label mask_{mask}, one class, written by tools/sonar_to_yolo.py of underwater_ws.",
+    yaml = [f"# {name}: label mask_{mask}, one class, written by ml/tools/sonar_to_yolo.py of underwater_ws.",
             "# Simulated forward-looking sonar -- read docs/INSPECTION.md before training on it.",
             f"path: {root}", "train: images/train", "val: images/val"]
     if "test" in used:
@@ -631,7 +631,7 @@ def run(cfg) -> int:
         {k: (list(v) if isinstance(v, tuple) else v) for k, v in vars(cfg).items()}, indent=1, default=str))
     (out / "README.md").write_text(
         f"# {out.name}\n\nSimulated forward-looking-sonar dataset, converted from `{root}` by\n"
-        f"`tools/sonar_to_yolo.py` of underwater_ws. **Simulated data, no real sonar.** Read\n"
+        f"`ml/tools/sonar_to_yolo.py` of underwater_ws. **Simulated data, no real sonar.** Read\n"
         f"`docs/INSPECTION.md` in that repo before training on it, in particular the mask choice, the\n"
         f"aspect-ratio note and the sim-to-real note.\n\n"
         f"- `dataset_yolo*/` Ultralytics YOLO-seg, `dataset_coco*/` RF-DETR COCO (`valid`, not `val`)\n"
@@ -661,7 +661,7 @@ def status(cfg) -> int:
 
 def check(cfg) -> int:
     """Structural verification of a written output. Pure python and stdlib + cv2: the Ultralytics and
-    pycocotools checks need their own venvs and live in tools/run_sonar_to_yolo.sh. Every failure is
+    pycocotools checks need their own venvs and live in ml/tools/run_sonar_to_yolo.sh. Every failure is
     collected, nothing stops at the first."""
     out = Path(cfg.out)
     bad, warn = [], []
@@ -686,12 +686,12 @@ def check(cfg) -> int:
 
     if cfg.root:
         # the stdlib decoder the training loader uses, against the cv2 fast path this tool uses
-        import uw.sinks as sinks
+        import sim.sinks as sinks
         rng = random.Random(0)
         for r in rng.sample(rows, min(8, len(rows))):
             p = Path(cfg.root) / r["source_png"]
             if not np.array_equal(sinks.read_png(p), cv2.imread(str(p), cv2.IMREAD_GRAYSCALE)):
-                bad.append(f"cv2 and uw.sinks.read_png disagree on {p}")
+                bad.append(f"cv2 and sim.sinks.read_png disagree on {p}")
         print(f"decoder cross-check on 8 source PNGs: {'ok' if not bad else 'FAILED'}")
 
     for m in masks:
@@ -843,7 +843,7 @@ def main() -> int:
                     help="rebuild the image from the npz polar_db with this fixed dB window instead of the "
                          "stored 8-bit display image, which already carries TVG and the 0-80 dB window")
     ap.add_argument("--db-noise-floor", action="store_true",
-                    help="with --db-range, window polar_db minus this ping's noise floor, as uw/dataset.py's "
+                    help="with --db-range, window polar_db minus this ping's noise floor, as ml/dataset.py's "
                          "\"db\" image does. Per ping, so it is not the fixed normalisation --db-range alone is")
     ap.add_argument("--level-gate", type=int, default=0,
                     help="keep only mask pixels whose display level exceeds this (0-255; 0 off)")

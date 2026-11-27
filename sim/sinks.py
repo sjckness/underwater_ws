@@ -1,7 +1,7 @@
 """Where sensor outputs go (plan: SensorSink = file | ros | zenoh; later oculus_emulator).
 
 A sensor produces ``Message``s; a sink delivers them. ``file`` writes a dataset; ``ros`` publishes live through the
-Isaac ROS bridge's internal Jazzy (uw/ros_bridge.py); ``zenoh`` (M7) will.
+Isaac ROS bridge's internal Jazzy (sim/ros_bridge.py); ``zenoh`` (M7) will.
 """
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ class SensorSink:
     def static_transforms(self, t: float, transforms: list) -> None:
         """Mount offsets [(parent, child, rotation 3x3, translation)]; only live sinks use them. There is no
         moving-frame counterpart: the sim does not publish /tf (docs/ros_hil.md §2.5 rule 4), and the true sonar
-        pose travels with the ping, on /gt (uw/ros_bridge.py)."""
+        pose travels with the ping, on /gt (sim/ros_bridge.py)."""
 
     def close(self) -> None:
         pass

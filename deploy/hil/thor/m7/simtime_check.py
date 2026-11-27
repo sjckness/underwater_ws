@@ -2,7 +2,7 @@
 """M7 step 3: verify that a node started with use_sim_time:=true takes its clock, timers and stamps
 from /clock.
 
-    python3 hil/thor/m7/simtime_check.py --ros-args -p use_sim_time:=true -p run_wall_s:=30.0
+    python3 deploy/hil/thor/m7/simtime_check.py --ros-args -p use_sim_time:=true -p run_wall_s:=30.0
 
 Checks (results to results/simtime_check.json next to this script):
   * node clock type is ROS_TIME and ros_time_is_active is true;

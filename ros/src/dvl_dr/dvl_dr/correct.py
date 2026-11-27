@@ -1,7 +1,7 @@
 """The arithmetic of the dead-reckoning preprocessor, with no ROS imports.
 
 Separate from ``preprocess.py`` so it can be tested on any machine (``tests/test_dvl_dr.py``) rather
-than only where ROS 2 is installed. The same split ``ros/sonar_relay`` makes with its pure ``projected``,
+than only where ROS 2 is installed. The same split ``ros/src/sonar_relay`` makes with its pure ``projected``,
 taken one step further because none of this needs a message type at all.
 """
 from __future__ import annotations
@@ -39,7 +39,7 @@ def depth_pose(pressure_pa: float, surface_pa: float, rho: float, water_level: f
     """Hydrostatic depth as ``(z in the tank's ENU frame, depth below the surface)``.
 
     ``z`` is measured up from the tank floor, so it is ``water_level`` minus the depth - the same
-    relation ``uw.rov.frames.position_tank_to_ned`` uses at the other seam. The depth is clamped at
+    relation ``vehicles.common.frames.position_tank_to_ned`` uses at the other seam. The depth is clamped at
     zero: a pressure below the surface value means the baro is off, not that the vehicle is airborne.
     """
     depth = max((float(pressure_pa) - float(surface_pa)) / (float(rho) * G), 0.0)

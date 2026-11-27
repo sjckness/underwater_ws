@@ -7,10 +7,10 @@
 #   work (Work, WSL2):     BlueOS and the extension in host networking (mirrored: 127.0.0.1 is Windows', where Isaac
 #                          and the physics run), the gateway alone on the bridge
 #
-#   linus, BlueOS on Work:   BLUEOS_HOST=<Work IPv4> docker compose -f docker/pool/compose.yaml up -d sitl mediamtx
-#   linus, all local:        BLUEOS_HOST=172.31.250.2 docker compose -f docker/pool/compose.yaml --profile blueos-local up -d
-#   Work, all in WSL2:       bash hil/win/pool/stack.sh up    (= docker compose ... --profile work up -d)
-#   stop:                    docker compose -f docker/pool/compose.yaml --profile blueos --profile blueos-local --profile work down
+#   linus, BlueOS on Work:   BLUEOS_HOST=<Work IPv4> docker compose -f deploy/docker/pool/compose.yaml up -d sitl mediamtx
+#   linus, all local:        BLUEOS_HOST=172.31.250.2 docker compose -f deploy/docker/pool/compose.yaml --profile blueos-local up -d
+#   Work, all in WSL2:       bash deploy/hil/windows/pool/stack.sh up    (= docker compose ... --profile work up -d)
+#   stop:                    docker compose -f deploy/docker/pool/compose.yaml --profile blueos --profile blueos-local --profile work down
 name: uw-pool
 
 # The extension's start, shared by its two services: its settings file gets the defaults a vehicle's operator would
@@ -32,7 +32,7 @@ x-dvl-entrypoint: &dvl-entrypoint
 
 services:
   sitl:
-    # ArduSub-4.5.7 (docker/ardusub_sitl/README.md); built here on first use.
+    # ArduSub-4.5.7 (deploy/docker/ardusub_sitl/README.md); built here on first use.
     image: uw-ardusub:4.5.7
     build: ../ardusub_sitl
     container_name: uw-pool-sitl
@@ -42,14 +42,14 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     environment:
-      PHYSICS_HOST: ${PHYSICS_HOST:-127.0.0.1}      # where uw.rov.physics_proc listens (UDP 9002); an IPv4 literal
+      PHYSICS_HOST: ${PHYSICS_HOST:-127.0.0.1}      # where vehicles.common.physics_proc listens (UDP 9002); an IPv4 literal
       # MAVLink to BlueOS's "Manual" board (its default master endpoint is udpin 0.0.0.0:14551). An IPv4 literal:
       # ardusub's udpclient silently sends nothing to a host name.
       MAVLINK_OUT: udpclient:${BLUEOS_HOST:-127.0.0.1}:14551
       PARAM_FILES: /opt/ardupilot/default_params/sub-6dof.parm,/params/pool.parm
       WIPE: ${SITL_WIPE:-0}
       HOME_LOC: ${HOME_LOC:-45.0703,7.6869,0,0}
-    # a second MAVLink output for the local tools (tools/pool_smoke.py, a QGC on the sim host)
+    # a second MAVLink output for the local tools (sim/tools/pool_smoke.py, a QGC on the sim host)
     command: ["--serial1", "udpclient:127.0.0.1:14560"]
     volumes:
       - ../ardusub_sitl/params:/params:ro
@@ -74,7 +74,7 @@ services:
       MTX_HLS: "no"
       MTX_SRT: "no"
       MTX_WEBRTCADDRESS: ":8889"
-      # the control API, on loopback only: is the camera publishing? (hil/win/pool/stack.sh status)
+      # the control API, on loopback only: is the camera publishing? (deploy/hil/windows/pool/stack.sh status)
       MTX_API: "yes"
       MTX_APIADDRESS: "127.0.0.1:9997"
 
@@ -132,7 +132,7 @@ services:
 
   dvl:
     # BlueOS's Water Linked DVL extension, unmodified: the one a real BlueROV2 with an A50 runs. It talks to the A50
-    # that the physics process emulates on the host (uw/rov/a50.py: TCP 16171, its HTTP API on 8061 because 80 is
+    # that the physics process emulates on the host (vehicles/common/a50.py: TCP 16171, its HTTP API on 8061 because 80 is
     # taken on linus) and feeds ArduSub VISION_POSITION_DELTA through BlueOS's mavlink2rest, by way of dvl-gateway.
     # Its settings live in a volume, as on a vehicle; DVL_HOST is written into them at every start.
     profiles: [blueos-local]
@@ -169,7 +169,7 @@ services:
       - ./dvl_gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
 
   dvl-host:
-    # Work (profile "work", docs in hil/win/pool/README.md): the same extension, next to the BlueOS above in WSL2's
+    # Work (profile "work", docs in deploy/hil/windows/pool/README.md): the same extension, next to the BlueOS above in WSL2's
     # host networking. Host networking for it too, because with mirrored networking 127.0.0.1 is Windows', where
     # the physics process inside Isaac emulates the A50 (bound to 127.0.0.1 by the workstation profile); its page is
     # then http://localhost:9001 on Windows as well. Its "vehicle" (host.docker.internal) is dvl-gateway-host on

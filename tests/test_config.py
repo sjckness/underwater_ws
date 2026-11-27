@@ -8,7 +8,7 @@ import yaml
 
 from uw import config
 
-CONFIG_DIR = os.path.join(config.WS, "config")
+CONFIG_DIR = os.path.join(config.WS, "sim", "config")
 
 
 def _write(path, data):
@@ -124,7 +124,7 @@ def test_command_line_options():
 
 
 def test_session_config_follows_the_command_line(cfg, pytestconfig):
-    """`pytest --profile workstation` (or `scripts/uw.sh test --profile workstation`) reaches the cfg fixture."""
+    """`pytest --profile workstation` (or `uw.sh test --profile workstation`) reaches the cfg fixture."""
     assert cfg["profile"]["name"] == pytestconfig.option.profile
 
 

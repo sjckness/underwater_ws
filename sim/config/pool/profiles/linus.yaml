@@ -13,5 +13,5 @@ stream:
   encoder: libx264
 dvl:
   device:
-    bind: 0.0.0.0                 # the emulated A50 (uw/rov/a50.py): the DVL extension reaches it from its bridge,
+    bind: 0.0.0.0                 # the emulated A50 (vehicles/common/a50.py): the DVL extension reaches it from its bridge,
                                   #   at 172.31.250.1

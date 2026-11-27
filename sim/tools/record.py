@@ -1,7 +1,7 @@
 """One headless recording run with the ROV on a scripted trajectory: sonar, stereo cameras, ground truth, poses.
 
-    python tools/record.py --trajectory circle                      # 5 min simulated, room9, -> output/records/circle_s7
-    python tools/record.py --trajectory updown --duration 20 --run-id test_updown --seed 3 [--set a.b=c ...]
+    python sim/tools/record.py --trajectory circle                      # 5 min simulated, room9, -> output/records/circle_s7
+    python sim/tools/record.py --trajectory updown --duration 20 --run-id test_updown --seed 3 [--set a.b=c ...]
 
 Writes <out-root>/<run_id>/: run.json (seed, conditions, trajectory and its notes, estimate), sonar/ (polar frames +
 meta, 10 Hz), camera/ and camera_right/ (10 Hz, the same sim stamps), gt/ (per-frame bubbles: bubble_id, position,
@@ -27,7 +27,7 @@ import sys
 import time
 from pathlib import Path
 
-WS = Path(__file__).resolve().parents[1]
+WS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(WS))
 
 from uw import config  # noqa: E402
@@ -50,8 +50,8 @@ def estimate_gb(cfg: dict, duration: float) -> tuple[float, dict]:
 
 
 def run_json(cfg: dict, args, run_dir: Path, est_gb: float, est: dict) -> dict:
-    from uw.geometry import build_scene
-    from uw.trajectory import build
+    from physics.geometry import build_scene
+    from sim.trajectory import build
     scene = build_scene(cfg)
     traj = build(cfg, args.trajectory, scene.leak.hole)
     try:
@@ -87,7 +87,7 @@ def run_json(cfg: dict, args, run_dir: Path, est_gb: float, est: dict) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--trajectory", required=True, help="config/trajectories/<name>.yaml: circle | updown | combined")
+    ap.add_argument("--trajectory", required=True, help="sim/config/trajectories/<name>.yaml: circle | updown | combined")
     ap.add_argument("--duration", type=float, default=300.0, help="simulated seconds (default 300)")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--run-id", default="", help="default <trajectory>_s<seed>")
@@ -120,7 +120,7 @@ def main() -> int:
     if args.dry_run:
         return 0
 
-    from uw import launcher, runner                     # the native launcher's child environment (tools/debug_sim.py)
+    from uw import launcher, runner                     # the native launcher's child environment (sim/tools/debug_sim.py)
     rt = launcher.runtime()
     n = rt["native"]
     os.environ.update({

@@ -1,6 +1,6 @@
 """Plume preview (M1): the bubble plume and its integral model for the pipe presets, without the sonar.
 
-    scripts/uw.sh py tools/plume_preview.py [--measure 10] [--preset buried] [--profile ...] [--set a.b=c]
+    uw.sh py physics/tools/plume_preview.py [--measure 10] [--preset buried] [--profile ...] [--set a.b=c]
 
 Without a pipe preset both run (exposed, buried); other presets (e.g. basin) apply to both. After the warm-up
 (plume.warmup_s) a measuring window is simulated and averaged over snapshots; written to
@@ -21,8 +21,9 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import warp as wp  # noqa: E402
 
-from uw import bubbles, config, geometry, plume  # noqa: E402
-from uw import water as wat  # noqa: E402
+from physics import bubbles, geometry, plume  # noqa: E402
+from uw import config  # noqa: E402
+from physics import water as wat  # noqa: E402
 
 PIPE_PRESETS = ("exposed", "buried")
 HEIGHTS = (0.1, 0.25, 0.5, 1.0, 1.5, 2.0)      # above the source, for the stats table [m]

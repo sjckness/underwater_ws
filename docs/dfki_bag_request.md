@@ -76,7 +76,7 @@ Seamorph Robotics
 
 ## Notes for us, not for the message
 
-- Sizes and settings are from `tools/deepersense_index.py` over the record-10373154 CSV export; the full
+- Sizes and settings are from `physics/tools/deepersense_index.py` over the record-10373154 CSV export; the full
   per-stream table is `docs/deepersense_tank_recordings.md`.
 - Settings across the 95 configs: `freqMode` high 74 / low 21; `range` mostly 8 m; `gain` 10–80 %, mostly
   30 %; `gamma` 127 throughout; `data_16bit` **false in 92 of 95**; `send_gain` true in 9;

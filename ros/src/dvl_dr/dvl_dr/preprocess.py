@@ -18,10 +18,10 @@ IMU alone instead. The relay already marks them with a 1e6 covariance; this is t
 
 No ground truth enters this chain. The DVL comes from the sensor model with its noise, dropout and
 quantisation; the attitude and the pressure come from ArduSub's own EKF3 over SITL's synthetic noisy
-IMU, baro and compass (``docker/ardusub_sitl/params/hil.parm``). ``/gt`` is for scoring the result
+IMU, baro and compass (``deploy/docker/ardusub_sitl/params/hil.parm``). ``/gt`` is for scoring the result
 afterwards, on its own ROS domain, and nothing here subscribes to it.
 
-    ros/dvl_dr/run.sh [--vehicle rov1]
+    ros/src/dvl_dr/run.sh [--vehicle rov1]
 """
 from __future__ import annotations
 
@@ -121,7 +121,7 @@ class Preprocess(Node):
 
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--vehicle", default="rov1", help="ros.vehicle of config/tank.yaml")
+    ap.add_argument("--vehicle", default="rov1", help="ros.vehicle of sim/config/tank.yaml")
     args, ros_args = ap.parse_known_args(argv)
     rclpy.init(args=ros_args, domain_id=int(os.environ.get("UW_ROS_DOMAIN_ID", "73")))
     node = Preprocess(args.vehicle)

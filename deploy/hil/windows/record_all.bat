@@ -7,7 +7,7 @@ rem and exit_code.txt; a failed run does not stop the next. Exit code of this sc
 rem Environment: uw.bat's variables only (no ROS: --sink file, no SITL). Nothing system-wide is changed.
 
 setlocal EnableDelayedExpansion
-for %%I in ("%~dp0..\..") do set "UW_WS=%%~fI\"
+for %%I in ("%~dp0..\..\..") do set "UW_WS=%%~fI\"
 cd /d "%UW_WS%"
 
 set "ISAAC_ENV=F:\envs\isaac"
@@ -29,7 +29,7 @@ for %%R in (circle updown combined) do (
   set "DIR=%ROOT%\!ID!"
   if not exist "!DIR!" mkdir "!DIR!"
   echo [record_all] !ID!: %DURATION% s simulated, log !DIR!\run.log
-  python tools\record.py --trajectory %%R --duration %DURATION% --run-id !ID! > "!DIR!\run.log" 2>&1
+  python sim\tools\record.py --trajectory %%R --duration %DURATION% --run-id !ID! > "!DIR!\run.log" 2>&1
   set "RC=!ERRORLEVEL!"
   > "!DIR!\exit_code.txt" echo !RC!
   echo [record_all] !ID!: exit !RC!
@@ -37,6 +37,6 @@ for %%R in (circle updown combined) do (
   set "IDS=!IDS! !ID!"
 )
 
-python tools\record_report.py --root "%ROOT%" --runs%IDS%
+python sim\tools\record_report.py --root "%ROOT%" --runs%IDS%
 echo [record_all] failed runs: %FAILED%; report: %ROOT%\report.md
 endlocal & exit /b %FAILED%

@@ -27,19 +27,19 @@ Run each command in a fresh shell, from the repo root:
 ```bash
 source ~/hil_env.sh                      # domain 73, Fast DDS, unicast profile
 
-python3 hil/thor/m7/peek_headers.py
-python3 hil/thor/m7/peek_sonar_values.py
+python3 deploy/hil/thor/m7/peek_headers.py
+python3 deploy/hil/thor/m7/peek_sonar_values.py
 
 # rates / gaps / bandwidth / RTF: 120 s window after a 5 s warm-up, with load logging
-hil/thor/m7/run_with_load.sh step2 python3 hil/thor/m7/measure.py --duration 120 --warmup 5
-python3 hil/thor/m7/summarize_load.py step2
+deploy/hil/thor/m7/run_with_load.sh step2 python3 deploy/hil/thor/m7/measure.py --duration 120 --warmup 5
+python3 deploy/hil/thor/m7/summarize_load.py step2
 
-python3 hil/thor/m7/simtime_check.py --ros-args -p use_sim_time:=true -p run_wall_s:=30.0
+python3 deploy/hil/thor/m7/simtime_check.py --ros-args -p use_sim_time:=true -p run_wall_s:=30.0
 
 # consumer: 120 s, threshold 140 dB, minimum blob area 20 px
-hil/thor/m7/run_with_load.sh step4 python3 hil/thor/m7/m7_consumer.py --ros-args \
+deploy/hil/thor/m7/run_with_load.sh step4 python3 deploy/hil/thor/m7/m7_consumer.py --ros-args \
     -p use_sim_time:=true -p threshold_db:=140.0 -p min_area_px:=20 -p run_wall_s:=120.0
-python3 hil/thor/m7/summarize_load.py step4
+python3 deploy/hil/thor/m7/summarize_load.py step4
 # while it runs, in another sourced shell:
 ros2 topic hz -s --window 100 /uw/m7/detections     # sim time
 ros2 topic hz --window 100 /uw/m7/detections        # wall time

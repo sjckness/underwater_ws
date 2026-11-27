@@ -1,4 +1,4 @@
-"""Statistics for comparing sonar images, real or simulated (tools/compare_real.py). numpy only.
+"""Statistics for comparing sonar images, real or simulated (physics/tools/compare_real.py). numpy only.
 
 Inputs are polar images in dB (rows: range bins from range 0, columns: beams; NaN = no data) with their range and
 bearing axes.

@@ -1,10 +1,10 @@
-"""The ArduSub JSON physics server (``uw/physics_udp.py``) in a process of its own, for ``uw pool`` (M11).
+"""The ArduSub JSON physics server (``vehicles/common/physics_udp.py``) in a process of its own, for ``uw pool`` (M11).
 
 Why a process: the pool's render loop lives in Kit's Python, and a physics thread there would compete for the GIL
 with Kit at 400-1200 servo packets a second; every stall is something the pilot feels. Here the server runs alone,
 lockstep with SITL and paced to the wall clock, and the render loop only reads the latest state.
 
-    parent (uw pool, inside Kit)                       child: python -m uw.rov.physics_proc --shm NAME
+    parent (uw pool, inside Kit)                       child: python -m vehicles.common.physics_proc --shm NAME
     PhysicsProcess(cfg).start()  -- stdin: config JSON -->  make_pool_server(cfg).start()
     .body_pose() .aux_pwm(n)    <-- shared memory -------  on_step: a seqlock write per servo packet
     .close()                    -- stdin EOF ----------->  server.close(), exit
@@ -14,7 +14,7 @@ The child also exits when the parent dies (its stdin reaches EOF), so no orphan 
 Standalone, to fly SITL and BlueOS without a GPU or Isaac (the vehicle is then invisible, but ArduSub, BlueOS and
 Cockpit see a real vehicle with real dynamics):
 
-    python -m uw py -m uw.rov.physics_proc [--profile P] [--set physics.rtf=1.0]     # Ctrl-C stops
+    python -m uw py -m vehicles.common.physics_proc [--profile P] [--set physics.rtf=1.0]     # Ctrl-C stops
 """
 from __future__ import annotations
 
@@ -40,17 +40,17 @@ ROT = slice(11, 20)             # body FLU -> tank ENU, row-major 3x3
 VEL = slice(20, 23)             # body FRD linear velocity [m/s]
 RATE = slice(23, 26)            # body FRD angular velocity [rad/s]
 PWM = slice(26, 42)             # the last servo packet's 16 channels [us]
-DVL_REPORTS, DVL_LOCKED, DVL_CLIENTS = 42, 43, 44     # the emulated A50 (uw/rov/a50.py), when dvl.device is on
+DVL_REPORTS, DVL_LOCKED, DVL_CLIENTS = 42, 43, 44     # the emulated A50 (vehicles/common/a50.py), when dvl.device is on
 DVL_TCP_PORT, DVL_HTTP_PORT = 45, 46                  # its ports (0: no DVL)
 SIZE = 48
 STARTING, RUNNING, FAILED, STOPPED = 0.0, 1.0, -1.0, 2.0
 
 
 def make_pool_server(cfg: dict, on_step=None):
-    """The physics server for the pool config (config/pool/pool.yaml): the vehicle file, the pool's soft bound
+    """The physics server for the pool config (sim/config/pool/pool.yaml): the vehicle file, the pool's soft bound
     and free surface, the start pose ``vehicle.start`` and the SITL home ``vehicle.home``."""
-    from ..config import WS, get
-    from ..physics_udp import PhysicsServer
+    from uw.config import WS, get
+    from .physics_udp import PhysicsServer
     from . import dynamics, frames
 
     wl = float(get(cfg, "pool.water_level"))
@@ -132,9 +132,9 @@ def _interrupt(signum, frame):
 
 
 def child_main(argv=None) -> int:
-    from .. import config
+    from uw import config
 
-    ap = argparse.ArgumentParser(prog="python -m uw.rov.physics_proc", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="python -m vehicles.common.physics_proc", description=__doc__.split("\n\n")[0])
     ap.add_argument("--shm", help="shared-memory block of the parent (the config then comes on stdin)")
     config.add_args(ap.add_argument)
     args = ap.parse_args(argv)
@@ -203,7 +203,7 @@ def child_main(argv=None) -> int:
 
 
 def get_depth(cfg: dict, p_tank) -> float:
-    from ..config import get
+    from uw.config import get
     return float(get(cfg, "pool.water_level")) - float(p_tank[2])
 
 
@@ -221,13 +221,13 @@ class PhysicsProcess:
         self.port = None
 
     def start(self) -> "PhysicsProcess":
-        from ..config import WS
+        from uw.config import WS
         self.shm = shared_memory.SharedMemory(create=True, size=SIZE * 8)
         self.arr = np.ndarray((SIZE,), np.float64, self.shm.buf)
         self.arr[:] = 0.0
         env = dict(os.environ)
         env["PYTHONPATH"] = os.pathsep.join([str(WS)] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
-        self.proc = subprocess.Popen([self.python, "-u", "-m", "uw.rov.physics_proc", "--shm", self.shm.name],
+        self.proc = subprocess.Popen([self.python, "-u", "-m", "vehicles.common.physics_proc", "--shm", self.shm.name],
                                      stdin=subprocess.PIPE, env=env, text=True)
         self.proc.stdin.write(json.dumps(self.cfg) + "\n")
         self.proc.stdin.flush()

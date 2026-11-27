@@ -8,7 +8,7 @@ silently, looking exactly like a clean run.
 What is compared is a set of summary statistics of `polar_db` against `golden_ping.json`, not the array
 itself. Two reasons. `*.npz` is gitignored, so a reference array could not be committed beside the test. And
 bit-identity is only promised *within* a machine: echoes are summed in 64-bit fixed point so the order of
-atomics cannot change the sum (`uw/sonar.py`), which makes a run reproducible here and `sonar-only` identical
+atomics cannot change the sum (`physics/sonar.py`), which makes a run reproducible here and `sonar-only` identical
 to `sim` (`tests/isaac/test_sim_identity.py` checks that), but a different GPU or driver can still differ in
 the last bits of the transcendentals feeding it. The tolerances below are tight enough that any real change
 to the model trips them -- 0.05 dB on a percentile of a 876x512 image -- and loose enough to survive that.
@@ -24,7 +24,7 @@ import pytest
 
 wp = pytest.importorskip("warp", reason="Warp tests run in the container: python -m uw test")
 
-from uw import geometry, sonar  # noqa: E402
+from physics import geometry, sonar  # noqa: E402
 
 GOLDEN = Path(__file__).with_name("golden_ping.json")
 # dB tolerance per statistic. A changed scattering term, beam pattern, ring-down or TVG moves these by far

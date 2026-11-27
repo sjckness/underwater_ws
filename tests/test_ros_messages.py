@@ -1,4 +1,4 @@
-"""ROS 2 messages of the sim (uw/ros_bridge.py) and the host relay (ros/sonar_relay): layouts, frames, the
+"""ROS 2 messages of the sim (sim/ros_bridge.py) and the host relay (ros/src/sonar_relay): layouts, frames, the
 ProjectedSonarImage conversion. Message objects only: no node, no DDS participant, so safe while other ROS stacks run.
 
 The bridge messages need the Isaac ROS bridge's rclpy (container); the relay needs the host's marine_acoustic_msgs
@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from uw import ros_bridge, sinks
+from sim import ros_bridge, sinks
 
 WS = Path(__file__).resolve().parents[1]
 if os.environ.get("UW_IN_CONTAINER"):
@@ -107,7 +107,7 @@ def test_topic_and_frame_map():
     assert t["plume"] == "/gt/plume/markers" and t["gt_sonar_pose"] == "/gt/sonar_pose"
     assert t["fan"] == "/sim/debug/sonar_fan"
     # the DVL's raw report is the device's protocol, not something a real vehicle publishes, so it is /sim
-    # plumbing; ros/dvl_relay owns everything under /rov1/sensors/dvl (docs/topic_map.md §8)
+    # plumbing; ros/src/dvl_relay owns everything under /rov1/sensors/dvl (docs/topic_map.md §8)
     assert t["dvl_report"] == "/sim/dvl/report"
     assert t["clock"] == "/clock" and t["tf_static"] == "/tf_static"      # global by necessity
     # exactly five vehicle topics, and no /gt or /sim name hiding inside one
@@ -191,8 +191,9 @@ def test_sonar_meta_leaks_no_ground_truth():
 
 def _dvl_report():
     """One report from the shipped config, as the sim loop makes it."""
-    from uw import config, geometry
-    from uw.rov import dvl as dvl_model
+    from uw import config
+    from physics import geometry
+    from vehicles.common import dvl as dvl_model
     cfg = config.load()
     scene = geometry.build_scene(cfg)
     d = dvl_model.from_config(cfg, scene)
@@ -203,7 +204,7 @@ def test_dvl_report_message_is_the_devices_json():
     """/sim/dvl/report carries the A50's own velocity report verbatim, so the relay downstream of it is the
     same code whether the bytes came from the simulator or from the device's TCP stream."""
     pytest.importorskip("std_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
-    from uw import recorder
+    from sim import recorder
     cfg, _, report = _dvl_report()
     msg = recorder.dvl_message(report, 7, cfg)
     assert msg.sensor == "dvl" and msg.seq == 7 and msg.stamp == 1.5
@@ -218,7 +219,7 @@ def test_dvl_report_leaks_no_ground_truth():
     """docs/ros_hil.md §2.5. A DVL derived from the true state is the answer wearing a sensor's name unless
     the noise, the bottom-lock gate and the quantisation are real. What must never appear is the pose
     itself, the scene, or any label - the report describes the instrument and what its beams heard."""
-    from uw import recorder
+    from sim import recorder
     cfg, d, report = _dvl_report()
     text = json.dumps({"report": recorder.dvl_message(report, 0, cfg).meta["dvl"], "meta": d.meta()}).lower()
     for word in ("pose", "position_tank", "roll", "pitch", "yaw", "leak", "plume", "mask", "sand", "rock",
@@ -227,7 +228,7 @@ def test_dvl_report_leaks_no_ground_truth():
 
 
 def test_the_dvl_sink_branch_exists_for_every_sensor_the_loop_publishes():
-    """uw/main.py once published a camera_right Message that RosSink.publish had no branch for, so
+    """sim/main.py once published a camera_right Message that RosSink.publish had no branch for, so
     --sink ros plus stereo raised ValueError out of the loop. Pin that every name is handled."""
     import inspect
     src = inspect.getsource(ros_bridge.RosSink.publish)
@@ -238,7 +239,7 @@ def test_the_dvl_sink_branch_exists_for_every_sensor_the_loop_publishes():
 def test_relay_projected_sonar_image():
     pytest.importorskip("marine_acoustic_msgs.msg", reason="host ROS 2 Jazzy with ros-jazzy-marine-acoustic-msgs")
     from sensor_msgs.msg import Image
-    sys.path.insert(0, str(WS / "ros" / "sonar_relay"))
+    sys.path.insert(0, str(WS / "ros" / "src" / "sonar_relay"))
     from sonar_relay.relay import projected
 
     msg, polar = _sonar_message()
@@ -259,7 +260,7 @@ def test_pose_input_roundtrip():
     """sonar.pose_source ros: a PoseStamped built from a pose gives that pose back."""
     pytest.importorskip("geometry_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
     from geometry_msgs.msg import PoseStamped
-    from uw import geometry
+    from physics import geometry
     rot = geometry.rot_rpy_deg([10.0, 25.0, -130.0])
     m = PoseStamped()
     m.pose.position.x, m.pose.position.y, m.pose.position.z = 0.4, 1.1, 1.3
@@ -275,7 +276,7 @@ def test_relay_dvl_message():
     sin and cos swapped."""
     pytest.importorskip("marine_acoustic_msgs.msg", reason="host ROS 2 Jazzy with ros-jazzy-marine-acoustic-msgs")
     from marine_acoustic_msgs.msg import Dvl
-    sys.path.insert(0, str(WS / "ros" / "dvl_relay"))
+    sys.path.insert(0, str(WS / "ros" / "src" / "dvl_relay"))
     from dvl_relay.relay import dvl_msg
 
     _, d, report = _dvl_report()
@@ -301,7 +302,7 @@ def test_relay_twist_is_the_single_frd_to_flu_flip():
     is silent: the filter simply trusts the wrong axes."""
     pytest.importorskip("geometry_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
     pytest.importorskip("marine_acoustic_msgs.msg", reason="host ROS 2 Jazzy with ros-jazzy-marine-acoustic-msgs")
-    sys.path.insert(0, str(WS / "ros" / "dvl_relay"))
+    sys.path.insert(0, str(WS / "ros" / "src" / "dvl_relay"))
     from dvl_relay.relay import twist_msg
 
     _, _, report = _dvl_report()
@@ -322,7 +323,7 @@ def test_relay_twist_is_the_single_frd_to_flu_flip():
 def test_relay_twist_without_a_fix_is_not_actionable():
     pytest.importorskip("geometry_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
     pytest.importorskip("marine_acoustic_msgs.msg", reason="host ROS 2 Jazzy with ros-jazzy-marine-acoustic-msgs")
-    sys.path.insert(0, str(WS / "ros" / "dvl_relay"))
+    sys.path.insert(0, str(WS / "ros" / "src" / "dvl_relay"))
     from dvl_relay.relay import twist_msg
 
     _, _, report = _dvl_report()
@@ -335,7 +336,7 @@ def test_relay_range_reports_no_return_as_infinity():
     pytest.importorskip("sensor_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
     pytest.importorskip("marine_acoustic_msgs.msg", reason="host ROS 2 Jazzy with ros-jazzy-marine-acoustic-msgs")
     from sensor_msgs.msg import Range
-    sys.path.insert(0, str(WS / "ros" / "dvl_relay"))
+    sys.path.insert(0, str(WS / "ros" / "src" / "dvl_relay"))
     from dvl_relay.relay import range_msg
 
     _, d, report = _dvl_report()

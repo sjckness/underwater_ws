@@ -1,6 +1,6 @@
-"""Training loader for sweep datasets (tools/sweep.py): a PyTorch Dataset of pings.
+"""Training loader for sweep datasets (ml/tools/sweep.py): a PyTorch Dataset of pings.
 
-    from uw.dataset import SonarDataset
+    from ml.dataset import SonarDataset
     ds = SonarDataset("/HDD2T/underwater_data/v0.1", split="train", size=(512, 256))
     item = ds[0]      # {"image": 1xHxW float, "masks": 3xHxW float, "shares": 2xHxW float, "targets": {...}, "meta"}
 
@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .sinks import read_png
+from sim.sinks import read_png
 
 MASKS = ("mask_geom", "mask_direct", "mask_all")
 

@@ -3,10 +3,10 @@
 Runs the physics sanity set (a)-(g) of the M8a step 1 brief, prints every number it measures next to what the
 model predicts analytically, and writes the plots. Nothing here needs a GPU, Isaac or ROS.
 
-    python -m uw py tools/rov_sanity.py                 # the repo's portable entry point
-    python3 tools/rov_sanity.py --out output/rov        # or directly, with PYTHONPATH=<repo>
+    python -m uw py vehicles/tools/rov_sanity.py                 # the repo's portable entry point
+    python3 vehicles/tools/rov_sanity.py --out output/rov        # or directly, with PYTHONPATH=<repo>
 
-Also prints the parameter tag inventory: every value in config/rov_bluerov2.yaml marked GUESS or UNVERIFIED,
+Also prints the parameter tag inventory: every value in vehicles/bluerov2_heavy/vehicle.yaml marked GUESS or UNVERIFIED,
 which is the list the M8a report has to carry.
 """
 from __future__ import annotations
@@ -19,12 +19,12 @@ from pathlib import Path
 
 import numpy as np
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from uw.rov import dynamics as D          # noqa: E402
-from uw.rov import frames as F            # noqa: E402
+from vehicles.common import dynamics as D          # noqa: E402
+from vehicles.common import frames as F            # noqa: E402
 
 WL, TANK, SAND = 2.9, (3.0, 3.0, 3.0), 0.3
 AXES = ("surge", "sway", "heave", "roll", "pitch", "yaw")
@@ -389,13 +389,13 @@ def plots(out: Path, v: D.Vehicle, res: dict) -> None:
 # ------------------------------------------------------------------------------- parameter tag inventory
 
 def tags(out: Path) -> None:
-    """Every GUESS / UNVERIFIED value in config/rov_bluerov2.yaml, read off the file's own comments.
+    """Every GUESS / UNVERIFIED value in vehicles/bluerov2_heavy/vehicle.yaml, read off the file's own comments.
 
     Line-based: it reports the ``key:`` on the same line as the tag, so a tag in a continuation comment is
     attributed to the key the comment belongs to only if that key is on the first line. The file is written
     with that in mind.
     """
-    text = (REPO / "config" / "rov_bluerov2.yaml").read_text().splitlines()
+    text = (REPO / "vehicles" / "bluerov2_heavy" / "vehicle.yaml").read_text().splitlines()
     found: dict[str, list[str]] = {"GUESS": [], "UNVERIFIED": [], "V": []}
     key_re = re.compile(r"^\s*(?:-\s*)?\{?\s*([A-Za-z_][A-Za-z0-9_]*)\s*:")
     last_key: str | None = None
@@ -417,7 +417,7 @@ def tags(out: Path) -> None:
                 if last_key not in found["V"]:
                     found["V"].append(last_key)
     print("\n" + "-" * 100)
-    print("PARAMETER TAG INVENTORY  config/rov_bluerov2.yaml")
+    print("PARAMETER TAG INVENTORY  vehicles/bluerov2_heavy/vehicle.yaml")
     print("-" * 100)
     for tag in ("GUESS", "UNVERIFIED", "V"):
         keys = found[tag]

@@ -1,4 +1,4 @@
-"""Peak GPU memory of the uw processes (host side, nvidia-smi): `python3 tools/gpu_mem.py OUT.json [interval_s]`.
+"""Peak GPU memory of the uw processes (host side, nvidia-smi): `python3 sim/tools/gpu_mem.py OUT.json [interval_s]`.
 
 Samples until SIGINT/SIGTERM; for every process whose command line contains `uw.runner` (the container's Python,
 seen with its host PID), the peak of nvidia-smi's per-process used memory, plus the peak total used on the GPU.

@@ -39,7 +39,7 @@ import warp as wp
 
 from . import scattering
 from . import water as wat
-from .config import ConfigError, get, sonar_mode
+from uw.config import ConfigError, get, sonar_mode
 from .geometry import sonar_rotation, surface_materials
 
 # The acoustic model's own version. Bump it whenever a change alters what a ping contains -- a new scattering

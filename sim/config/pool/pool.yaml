@@ -1,11 +1,11 @@
 # M11 "vasca prove": a BlueROV2 Heavy flown through ArduSub SITL, BlueOS and Cockpit with a gamepad, in a deep test
 # tank. Camera and vehicle dynamics only: no bubbles, no sonar. Plan: docs/pool.md.
 #
-# The base config of `python -m uw pool` and of `uw.rov.physics_proc`, layered like config/tank.yaml (uw/config.py):
+# The base config of `python -m uw pool` and of `vehicles.common.physics_proc`, layered like sim/config/tank.yaml (uw/config.py):
 # this file, then profiles/<name>.yaml (--profile, default linus), then --set (existing keys only).
 #
 # Frames: tank/ENU, origin at a floor corner, x and y along two walls, z up; the body is FLU.
-# uw/rov/frames.py is the only converter to ArduPilot's NED/FRD.
+# vehicles/common/frames.py is the only converter to ArduPilot's NED/FRD.
 seed: 0
 
 scene:
@@ -24,11 +24,11 @@ pool:
   props: true                     # on the floor: a concrete block, a pipe section, a marker board
 
 water:
-  temperature_c: 27.0            # an indoor pool. Sets the speed of sound the DVL sees (uw/water.py). GUESS
+  temperature_c: 27.0            # an indoor pool. Sets the speed of sound the DVL sees (physics/water.py). GUESS
   salinity_psu: 0.0              # fresh water
   surface: true                   # the free surface as a dielectric plane (ior 1.333): total internal reflection
                                   #   and the Snell window seen from below. Casts no shadow.
-  # Underwater look, applied to the rendered frame (uw/camera_uw.py) with the per-pixel distance d [m]:
+  # Underwater look, applied to the rendered frame (sim/camera_uw.py) with the per-pixel distance d [m]:
   #   I = J exp(-beta_d d) + b_inf (1 - exp(-beta_b d))
   # GUESS, clear fresh pool water: pure-water absorption is ~0.35 / 0.06 / 0.015 1/m at 650 / 550 / 450 nm,
   # plus a little scattering. Red is gone after a few metres, blue-green carries the far wall.
@@ -40,7 +40,7 @@ water:
   b_inf_gain: 1.0
   turbidity_per_m: 0.0            # suspended particles: an extra scattering coefficient b_p [1/m], flat in R, G, B. It
                                   #   adds to beta_d and beta_b and pulls the veiling light towards turbidity_veil
-                                  #   (uw/camera_uw.py). 0 = the clear pool above. Presets: --preset turbid (0.6) or
+                                  #   (sim/camera_uw.py). 0 = the clear pool above. Presets: --preset turbid (0.6) or
                                   #   murky (1.5); or --set water.turbidity_per_m=X. A dark target stays visible to about
                                   #   3.9 / (beta_d green + b_p): 52 m clear, 5.8 m turbid, 2.5 m murky
   turbidity_veil: [0.10, 0.12, 0.09]  # the veiling light of water so full of particles that they alone count: the
@@ -56,8 +56,8 @@ lights:
   dome: 150.0                     # room fill; 0 = none
 
 vehicle:
-  params: config/rov_bluerov2.yaml                    # BlueROV2 Heavy, FRAME_CONFIG 2 (8 x T200)
-  asset: assets/bluerov2_heavy/bluerov2_heavy.usd     # tools/fetch_bluerov2.py; if missing, a box of the hull size
+  params: vehicles/bluerov2_heavy/vehicle.yaml                    # BlueROV2 Heavy, FRAME_CONFIG 2 (8 x T200)
+  asset: vehicles/bluerov2_heavy/assets/bluerov2_heavy.usd     # vehicles/bluerov2_heavy/fetch_bluerov2.py; if missing, a box of the hull size
   start: [5.0, 1.5, 4.88, 90.0]   # CG x, y, z [m] and heading [deg, ENU: 0 = +x, 90 = +y]: floating at the
                                   #   surface near the y = 0 wall, facing the far one
   home: null                      # SITL home [x, y] on the surface; null = the start point
@@ -85,15 +85,15 @@ camera:
   clip_m: [0.10, 40.0]            # near plane beyond the front dome (radius ~0.065 m around the camera), which
                                   #   would otherwise be the first hit of every pixel and blind the water model
 
-stream:                           # H.264 to an RTSP server (mediamtx, docker/pool/compose.yaml), which BlueOS's
+stream:                           # H.264 to an RTSP server (mediamtx, deploy/docker/pool/compose.yaml), which BlueOS's
   enabled: true                   #   camera manager pulls as a "Redirect" source and serves to Cockpit over WebRTC
   url: rtsp://127.0.0.1:8654/rov
   encoder: libx264                # libx264 | h264_nvenc
   bitrate_kbps: 4000
   threads: 2                      # libx264 threads; the encoder also runs niced, so it does not slow the renderer
 
-acoustics:                        # what the DVL's beams hit (uw/pool_geometry.py) is made of: the echo law of
-                                  #   uw/rov/dvl.py, units as config/tank.yaml materials (Z [MRayl] or reflection,
+acoustics:                        # what the DVL's beams hit (physics/pool_geometry.py) is made of: the echo law of
+                                  #   vehicles/common/dvl.py, units as sim/config/tank.yaml materials (Z [MRayl] or reflection,
                                   #   lambert_db, rms_slope of the incoherent Kirchhoff term). All GUESS
   materials:
     tiles:    {Z: 10.0, lambert_db: -30.0, rms_slope: 0.10}   # glazed ceramic, grout every 0.25 m
@@ -103,10 +103,10 @@ acoustics:                        # what the DVL's beams hit (uw/pool_geometry.p
     board:    {Z: 3.0,  lambert_db: -30.0, rms_slope: 0.10}   # a plastic marker board
   roles: {floor: tiles, wall: tiles, ladder: steel, block: concrete, pipe: pipe, board: board}
 
-dvl:                              # Water Linked DVL A50 under the Heavy: the model of config/tank.yaml (uw/rov/dvl.py,
-                                  #   docs/dvl.md) cast at the pool (uw/pool_geometry.py), and the device's network side
-                                  #   (uw/rov/a50.py) so that BlueOS's Water Linked DVL extension and the ndahn/dvl_a50
-                                  #   driver talk to it unmodified. The instrument values are config/tank.yaml's, kept
+dvl:                              # Water Linked DVL A50 under the Heavy: the model of sim/config/tank.yaml (vehicles/common/dvl.py,
+                                  #   docs/dvl.md) cast at the pool (physics/pool_geometry.py), and the device's network side
+                                  #   (vehicles/common/a50.py) so that BlueOS's Water Linked DVL extension and the ndahn/dvl_a50
+                                  #   driver talk to it unmodified. The instrument values are sim/config/tank.yaml's, kept
                                   #   equal by tests/test_pool_dvl.py; only rssi_ref_dbm and the mount differ
   enabled: true
   model: Water Linked DVL A50
@@ -142,7 +142,7 @@ dvl:                              # Water Linked DVL A50 under the Heavy: the mo
   snr_threshold_db: 6.0
   noise: true
   dropout: true
-  device:                         # the A50's network side, emulated in the physics process (uw/rov/a50.py)
+  device:                         # the A50's network side, emulated in the physics process (vehicles/common/a50.py)
     enabled: true
     bind: 0.0.0.0                 # the BlueOS extension reaches it from a container (linus: 172.31.250.1)
     tcp_port: 16171               # the JSON protocol. VERIFIED, and fixed on the device and in the extension
@@ -151,7 +151,7 @@ dvl:                              # Water Linked DVL A50 under the Heavy: the mo
     temperature_c: 30.0           # what /api/v1/about/status reports (the extension warns above 45). GUESS
     yaw_drift_deg_per_h: 0.0      # the A50's own gyro, in its dead reckoning only. UNVERIFIED: off
 
-physics:                          # uw.rov.physics_proc: the ArduSub JSON server in its own process
+physics:                          # vehicles.common.physics_proc: the ArduSub JSON server in its own process
   port: 9002                      # UDP; ArduSub SITL --model JSON sends here
   bind: 127.0.0.1                 # Work with SITL in WSL2: the address SITL reaches Windows on (docs/pool.md)
   rtf: 1.0                        # paced to the wall clock: SITL, BlueOS and the pilot see real time

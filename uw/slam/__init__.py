@@ -1,6 +1,6 @@
 """Acoustic SLAM from the forward-looking sonar: front end, registration, pose graph.
 
-Pure numpy, like ``uw.rov``. Nothing in here imports Isaac, omni, pxr, rclpy, scipy or cv2, so every
+Pure numpy, like ``vehicles.common``. Nothing in here imports Isaac, omni, pxr, rclpy, scipy or cv2, so every
 module imports and every test runs on a bare host with numpy alone — which is also what lets the whole
 chain be developed offline against a recording while Isaac has the GPU.
 

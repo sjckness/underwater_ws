@@ -9,7 +9,8 @@ import pytest
 
 wp = pytest.importorskip("warp", reason="Warp tests run in the container: python -m uw test")
 
-from uw import bubbles, config, geometry, sonar, sonar_stats  # noqa: E402
+from physics import bubbles, geometry, sonar, sonar_stats  # noqa: E402
+from uw import config  # noqa: E402
 
 QUIET = ["sonar.receiver_noise=false", "sonar.reverberation=false", "sonar.ringdown=false",
          "sonar.speckle_sigma_rad=0", "sonar.multipath=[]"]
@@ -250,7 +251,7 @@ def test_vertical_pattern(taper):
 
 def test_plume_labels():
     """Direct-path label inside the plume's own ranges; the all-paths label adds the surface ghosts beyond them."""
-    from uw import bubbles
+    from physics import bubbles
     cfg = config.load(overrides=["sonar.speckle_sigma_rad=0"])
     scene = geometry.build_scene(cfg)
     sim = bubbles.BubbleSim(cfg, scene)

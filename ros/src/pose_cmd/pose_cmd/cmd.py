@@ -3,15 +3,15 @@
 
 Runs with the host's ROS 2 Jazzy, on the tank sim's own domain (UW_ROS_DOMAIN_ID, default 73):
 
-    ros/pose_cmd/run.sh hold [--position X Y Z] [--rpy R P Y] [--look-at X Y Z]
-    ros/pose_cmd/run.sh trajectory [--preset approach|orbit|lawnmower|hover|poses] [--loop]
-    ros/pose_cmd/run.sh keys        # wasd translate, rf up/down, jl yaw, ik pitch, space stop, q quit
+    ros/src/pose_cmd/run.sh hold [--position X Y Z] [--rpy R P Y] [--look-at X Y Z]
+    ros/src/pose_cmd/run.sh trajectory [--preset approach|orbit|lawnmower|hover|poses] [--loop]
+    ros/src/pose_cmd/run.sh keys        # wasd translate, rf up/down, jl yaw, ik pitch, space stop, q quit
 
 All three publish geometry_msgs/PoseStamped in the **map** frame at --rate (default 20 Hz), body x forward,
-y port, z up, pitch nose-down positive, as uw/pose.py defines it. The sim polls the latest message once per
+y port, z up, pitch nose-down positive, as sim/pose.py defines it. The sim polls the latest message once per
 ping, so the command is quantized to the ping period whatever rate is used here (docs/ros_hil.md §5).
 
-`trajectory` replays the configured `sonar.trajectory` through `uw.pose.sensor_pose`, the same code the datasets
+`trajectory` replays the configured `sonar.trajectory` through `sim.pose.sensor_pose`, the same code the datasets
 were generated with, so a HIL run and a dataset of the same config see the same motion. `--profile`, `--preset`
 and `--set` are the usual config arguments and must match the sim's, or the two disagree about the tank.
 
@@ -32,10 +32,12 @@ from pathlib import Path
 
 import numpy as np
 
-WS = Path(__file__).resolve().parents[3]
+WS = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(WS))
 
-from uw import config, geometry, pose as uwpose      # noqa: E402 - after sys.path
+from uw import config      # noqa: E402 - after sys.path
+from physics import geometry      # noqa: E402 - after sys.path
+from sim import pose as uwpose      # noqa: E402 - after sys.path
 
 TOPIC = "/sim/cmd/rov1/pose"
 FRAME = "map"
@@ -46,7 +48,7 @@ KEYS = {"w": ("x", +1.0), "s": ("x", -1.0), "a": ("y", +1.0), "d": ("y", -1.0),
 
 def held_pose(position, rpy_deg, look_at=None) -> tuple[np.ndarray, np.ndarray]:
     """One pose: ``rpy_deg`` as given, or, with ``look_at``, the roll kept and the pitch and yaw that point the
-    body x axis at that point (uw.pose.aim with bearing 0, elevation 0 — the same aiming the `track` trajectories
+    body x axis at that point (sim.pose.aim with bearing 0, elevation 0 — the same aiming the `track` trajectories
     use, so a held view is comparable with a dataset view)."""
     position = np.asarray(position, float)
     rpy = np.asarray(rpy_deg, float).copy()
@@ -118,7 +120,7 @@ def _publisher(topic: str, sim_time: bool = True):
         m.header.frame_id = FRAME
         m.header.stamp = node.get_clock().now().to_msg()
         m.pose.position.x, m.pose.position.y, m.pose.position.z = (float(v) for v in position)
-        from uw.ros_bridge import quat_xyzw
+        from sim.ros_bridge import quat_xyzw
         q = quat_xyzw(geometry.rot_rpy_deg(rpy_deg))
         m.pose.orientation.x, m.pose.orientation.y, m.pose.orientation.z, m.pose.orientation.w = map(float, q)
         pub.publish(m)
@@ -127,7 +129,7 @@ def _publisher(topic: str, sim_time: bool = True):
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="ros/pose_cmd/run.sh", description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(prog="ros/src/pose_cmd/run.sh", description=__doc__.splitlines()[0])
     ap.add_argument("mode", choices=("hold", "trajectory", "keys"))
     ap.add_argument("--topic", default=TOPIC)
     ap.add_argument("--rate", type=float, default=20.0, help="publish rate [Hz]")

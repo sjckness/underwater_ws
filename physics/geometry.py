@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .config import WS, ConfigError, get, sonar_mode
+from uw.config import WS, ConfigError, get, sonar_mode
 
 CACHE_DIR = os.path.join(WS, "output", "cache")
 SCATTERER_CACHE_VERSION = 2         # bump when the sampling changes, so stale caches are not reused
@@ -619,7 +619,7 @@ def spacing_from_config(cfg: dict, scene: Scene | None = None) -> Spacing:
     son = sonar_mode(cfg)
     sonar = tuple(float(v) for v in son["position"])
     if son["pose_source"] in ("trajectory", "script"):
-        from .pose import sensor_pose
+        from sim.pose import sensor_pose
         pts = sensor_pose(cfg, scene).positions(0.05)
         sonar = tuple(tuple(round(float(v), 4) for v in q) for q in pts)
     return Spacing(base=base, wall_min=WALL_SPACING_FACTOR * base, adaptive=True, sonar=sonar,

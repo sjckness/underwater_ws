@@ -1,13 +1,13 @@
 """M11 pool smoke test: fly the simulated BlueROV2 Heavy through ArduSub the way a pilot would, and check that it
 goes where the sticks say.
 
-Needs ArduSub SITL (docker/pool/compose.yaml, service sitl) and the physics: `python -m uw pool` or, without a GPU,
-`python -m uw py -m uw.rov.physics_proc`. Talks MAVLink on SITL's second output (udpclient 127.0.0.1:14560) as GCS
+Needs ArduSub SITL (deploy/docker/pool/compose.yaml, service sitl) and the physics: `python -m uw pool` or, without a GPU,
+`python -m uw py -m vehicles.common.physics_proc`. Talks MAVLink on SITL's second output (udpclient 127.0.0.1:14560) as GCS
 255, like Cockpit, sending MANUAL_CONTROL at 20 Hz; the truth comes back from SITL's own SIM_STATE, which is the
 state our physics replied with.
 
-    python3 tools/pool_smoke.py                 # host (pymavlink goes into ~/.cache/uw_pydeps on first use)
-    python -m uw py tools/pool_smoke.py         # or in the container
+    python3 sim/tools/pool_smoke.py                 # host (pymavlink goes into ~/.cache/uw_pydeps on first use)
+    python -m uw py sim/tools/pool_smoke.py         # or in the container
 
 Checks, in order: arm in MANUAL; dive on "throttle down"; ALT_HOLD holds depth; forward, lateral and yaw move the
 vehicle the right way; the depth ArduSub estimates from its baro matches the simulated one; climb; disarm.
@@ -24,7 +24,7 @@ import sys
 import time
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 

@@ -134,7 +134,7 @@ tank/lf and **951.8 Mbit/s at basin/hf** (`hil:120-122`, marked **V**, computed)
 **Not verified from a second host — no Thor.** What exists:
 
 - `/gt` runs on its own ROS domain, `ros.gt_domain_id: 74`, with `ros.gt_localhost_only: true`
-  (`config/tank.yaml:247`; `bridge:495-500`).
+  (`sim/config/tank.yaml:247`; `bridge:495-500`).
 - Verified on linus, one sim, both domains listed at once (`bridge:509-515`): domain 73 carries
   `/clock`, `/tf_static`, `/rov1/sensors/**`, `/sim/diagnostics`, `/sim/debug/sonar_fan` and
   **"no `/gt` topic of any kind"**; domain 74 carries `/gt/{polar_db,sonar_pose,tf}`,
@@ -221,7 +221,7 @@ Where I looked and found nothing: `output/probe/m7/*` (no detection or round-tri
 
 Socket buffers on linus, which the DDS profile is capped by:
 `rmem_max = wmem_max = 4194304`, `rmem_default = 212992`; **not pinned on disk** — nothing in
-`/etc/sysctl.conf` or `/etc/sysctl.d/` sets them (`bridge:50-51`). `config/sysctl/60-ros2-hil.conf`
+`/etc/sysctl.conf` or `/etc/sysctl.d/` sets them (`bridge:50-51`). `deploy/hil/sysctl/60-ros2-hil.conf`
 exists but is **not installed** (`bridge:490-492`, `bridge:822`). IP fragment reassembly:
 `ipfrag_high_thresh = 4194304`, `ipfrag_time = 30` (`bridge:53`).
 
@@ -308,7 +308,7 @@ The recorder/bag writer needs the §4 DDS profile like every other subscriber: `
 ## f. Packet loss / dropped messages per topic, and RTF with and without the camera
 
 All loss figures are `lost` from `QoSMessageLostInfo` per subscription, read by
-`ros/link_monitor`. **All loopback on linus — no Thor.** No `/proc/net/snmp` or `ip -s link` delta
+`ros/src/link_monitor`. **All loopback on linus — no Thor.** No `/proc/net/snmp` or `ip -s link` delta
 was captured in any run (see §d).
 
 ### f.1 No-camera profile, 40 s window (`bridge:439-451`; `output/probe/m7/link_nocam.json`)
@@ -389,10 +389,10 @@ Two findings attached to these (`bridge:418-422`, `bridge:622-626`):
 `ros.camera_transport: compressed`, `ros.camera_compression: jpeg` (q85),
 `camera.rate_hz: 2` → **0.69 Mbit/s, no drops, RTF 1.0000, full sonar rate**.
 Current repo defaults are still `camera_transport: raw`, `camera_compression: png`,
-`camera_jpeg_quality: 85`, `camera_hz: null` (`config/tank.yaml:250-254`), with
+`camera_jpeg_quality: 85`, `camera_hz: null` (`sim/config/tank.yaml:250-254`), with
 `camera.rate_hz: 10.0`, `sonar.ping_rate_hz: 10.0`, `ros.clock_hz: 60.0`,
 `ros.plume_hz: 2.0`, `ros.leak_hz: 1.0`, `ros.diagnostics_hz: 1.0`
-(`config/tank.yaml:138,243,244,246,256,269`).
+(`sim/config/tank.yaml:138,243,244,246,256,269`).
 
 ---
 

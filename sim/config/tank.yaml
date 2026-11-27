@@ -69,7 +69,7 @@ leak:
   hole_diameter_mm: 1.0         # 3 bar g through 1 mm -> ~25 L/min methane at the hole ("medium")
   discharge_coeff: 0.62         # sharp-edged hole
   flow_lpm: 25.0                # source flow and flow_jet; at the hole's ambient pressure
-  flow_range_lpm: [5.0, 50.0]   # validity range of the leak preset (config/presets/leak): sweeps sample flow_lpm in it
+  flow_range_lpm: [5.0, 50.0]   # validity range of the leak preset (sim/config/presets/leak): sweeps sample flow_lpm in it
   profile:                      # gas flow over sim time (time 0 = the leak starts; the plume warm-up counts):
     kind: constant              # constant | ramp (0 -> full over ramp_s) | intermittent (on for duty of each period_s)
     ramp_s: 5.0
@@ -139,7 +139,7 @@ sonar:
   yaw_deg: 0.0                  # 0 looks along +x
   range: 3.5                    # range setting [m], at most the mode's max_range
   ping_rate_hz: 10.0            # at most the mode's max_ping_rate_hz
-  trajectory:                   # pose_source trajectory (the profile; uw/pose.py). Time 0 = end of the plume warm-up
+  trajectory:                   # pose_source trajectory (the profile; sim/pose.py). Time 0 = end of the plume warm-up
     preset: approach            # approach | lawnmower | orbit | hover | waypoints | poses
     speed: 0.15                 # [m/s] along the path
     height: 1.0                 # [m] above the tank floor (approach, orbit, lawnmower)
@@ -164,7 +164,7 @@ sonar:
     hold_s: 3.0                 #   for hold_s, then the next (several fixed views of one scene; static_cache on_motion)
   static_cache_motion: {position_m: 0.005, angle_deg: 0.25}   # static_cache on_motion: recompute beyond these
   ros_pose_topic: /sim/cmd/rov1/pose  # pose_source ros: geometry_msgs/PoseStamped of the sonar in the map frame
-  script: null                  # pose_source script: a trajectory in config/trajectories (circle | updown | combined)
+  script: null                  # pose_source script: a trajectory in sim/config/trajectories (circle | updown | combined)
   modes:                        # VERIFIED (datasheet): frequency, fan (h x v), beams, angular resolution (-3 dB beam
                                 # width), range resolution, min range, max range, max update rate
     lf: {frequency_hz: 750000.0, fov_h_deg: 130.0, fov_v_deg: 20.0, beams: 512, beamwidth_h_deg: 1.0,
@@ -192,7 +192,7 @@ sonar:
   volume_sv_db: -75.0           # volume backscattering strength of the tank water [dB re 1/m] (assumed)
   surface_roughness_m: 0.0002   # rms height of the calm water surface (assumed)
   boil_roughness_m: 0.005       # rms height where the plume breaks the surface (assumed)
-  boil_backscatter:             # the boil's own echo (uw/surface.py): Kirchhoff (geometric optics) of a rough
+  boil_backscatter:             # the boil's own echo (physics/surface.py): Kirchhoff (geometric optics) of a rough
     enabled: true               # pressure-release surface, rms slope per axis, over the area the bursts disturb:
     rms_slope: 0.3              #   share 1 - exp(-rate / saturation_rate) of each cell, rate = bursts per s and m^2
     saturation_rate: 20000.0    #   (smoothed over time_s); random phase every ping (assumed values)
@@ -215,7 +215,7 @@ sonar:
   scatterer_spacing: 0.002      # surface sampling [m] for the acoustic scatterers (fixed in the world: frozen speckle);
                                 # the base: scatterer_spacing_mode adaptive (profile) coarsens it far from the sonar
 
-record:                         # tools/record.py runs (--sink file): per-frame ground truth and poses.csv (uw/record.py)
+record:                         # sim/tools/record.py runs (--sink file): per-frame ground truth and poses.csv (sim/record.py)
   enabled: false
   gt_max_range_m: null          # keep only bubbles within this distance of the sonar or the left camera; null: all
   mb_per_frame: {sonar: 1.9, camera: 0.7, gt: 3.2}   # disk estimate per 10 Hz frame [MB] (record.py refuses to start
@@ -246,12 +246,12 @@ sim:                            # python -m uw sim: the Isaac app
   overlay_returns_min: 170      #   pixels (0-255) from this value up are drawn (at most 6000 points)
   view: side45                  # GUI viewport camera at start: side45 | top | sonar
   viewport_resolution: [1280, 720]   # GUI viewport render size (not the window's: a maximised window costs GPU time)
-  physics_port: null            # ArduSub SITL JSON physics (uw/physics_udp.py) on UDP 127.0.0.1:<port>, for
-                                #   sonar.pose_source ardusub; null: off. 9002 is SITL's; stop tools/stub_physics.py
+  physics_port: null            # ArduSub SITL JSON physics (vehicles/common/physics_udp.py) on UDP 127.0.0.1:<port>, for
+                                #   sonar.pose_source ardusub; null: off. 9002 is SITL's; stop sim/tools/stub_physics.py
   physics_rtf: 1.0              # pace the physics timestamps (= SITL's clock, lockstep) to the wall clock; 0: unpaced
 
-ros:                            # SensorSink "ros" (uw/ros_bridge.py); the domain is UW_ROS_DOMAIN_ID (default 73).
-                                # The topic and frame map is docs/topic_map.md; uw/ros_bridge.py names them once
+ros:                            # SensorSink "ros" (sim/ros_bridge.py); the domain is UW_ROS_DOMAIN_ID (default 73).
+                                # The topic and frame map is docs/topic_map.md; sim/ros_bridge.py names them once
   vehicle: rov1                 # namespace and TF prefix: /rov1/sensors/..., frames rov1/base_link etc. One per
                                 #   vehicle even with a single ROV, so multi-ROV is a config change
   clock_hz: 60.0                # /clock (sim time)
@@ -283,7 +283,7 @@ vehicle:                        # the ROV (M8a). Graphics only: a box in the RTX
                                 #   the sonar's yaw): behind and below the sonar, camera and lamps, out of the camera's
                                 #   view. With the fixed pose at the -x wall the back half pokes through that wall
     color: [0.08, 0.30, 0.65]   # BlueROV2 blue (visual only)
-  params: config/rov_bluerov2_vectored.yaml   # dynamics (sonar.pose_source ardusub): 6 thrusters, FRAME_CONFIG 1
+  params: vehicles/bluerov2/vehicle.yaml   # dynamics (sonar.pose_source ardusub): 6 thrusters, FRAME_CONFIG 1
   home_tank: null               # [x, y] of the SITL home on the free surface (NED origin); null: the start point
   stereo:                       # a right camera beside camera (rig/camera_right): same intrinsics, same attitude,
     enabled: false              #   offset by baseline_m along the left camera's -y (to its right). Off by default
@@ -297,8 +297,8 @@ camera:
   hfov_deg: 80.0                # in-water field of view (flat port)
   rate_hz: 10.0
 
-dvl:                            # Water Linked DVL A50: 4-beam convex Janus bottom track (uw/rov/dvl.py). The model
-                                #   emits the device's own velocity-and-transducer report; ros/dvl_relay turns it into
+dvl:                            # Water Linked DVL A50: 4-beam convex Janus bottom track (vehicles/common/dvl.py). The model
+                                #   emits the device's own velocity-and-transducer report; ros/src/dvl_relay turns it into
                                 #   marine_acoustic_msgs/Dvl, as the real driver would. See docs/dvl.md
   enabled: true
   model: Water Linked DVL A50   # VERIFIED: on docs.waterlinked.com/dvl (datasheet, JSON protocol, axes, A50 page);
@@ -306,7 +306,7 @@ dvl:                            # Water Linked DVL A50: 4-beam convex Janus bott
   version: standard             # standard | performance. The Performance tier is a software licence on the same
                                 #   hardware, so here it is only the scale-factor sigma below. VERIFIED
   mount:                        # on the vehicle body, in ArduPilot FRD (x forward, y right, z down), like the
-                                #   thruster positions of config/rov_bluerov2_vectored.yaml
+                                #   thruster positions of vehicles/bluerov2/vehicle.yaml
     position_frd_m: [0.0, 0.0, 0.12]  # the lever arm r: v_dvl = v_body + omega x r. UNVERIFIED: no DVL is mounted
                                 #   on the real vehicle yet, this is a plausible place under the hull
     roll_deg: 0.0               # the instrument's attitude on the body; 0/0/0 looks straight down

@@ -18,7 +18,7 @@ rem to the Thor). Nothing here touches the network configuration or the firewall
 
 setlocal
 set "HERE=%~dp0"
-for %%I in ("%HERE%..\..") do set "WS=%%~fI"
+for %%I in ("%HERE%..\..\..") do set "WS=%%~fI"
 set "OUT=%WS%\output\ardusub_sitl"
 set "IMAGE=uw-ardusub:4.5.7"
 set "NAME=uw-ardusub"

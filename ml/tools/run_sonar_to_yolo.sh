@@ -2,7 +2,7 @@
 # Wait for the in-place recompression pass to finish, then convert v0.2 to YOLO-seg + COCO and verify it.
 #
 #     setsid nohup flock -n /HDD2T/underwater_data/datasets/.sonar_to_yolo.lock \
-#       tools/run_sonar_to_yolo.sh --pid 1387995 \
+#       ml/tools/run_sonar_to_yolo.sh --pid 1387995 \
 #       >/HDD2T/underwater_data/datasets/v0.2_to_yolo.log 2>&1 &
 #
 # The gate is deliberately not the pass's exit status: the pass is parented to an editor session, so it can
@@ -19,7 +19,7 @@ OUT=/HDD2T/underwater_data/yolo/v0.2
 POLL=60
 UL_VENV=/home/andreas/dev_ws/kumi_stack/.venv/bin/python          # ultralytics 8.4.96, torch 2.13.0+cu130
 COCO_VENV=/home/andreas/image_processing/datasets_gSEM/autodistill-env/bin/python   # the only pycocotools
-WS="$(cd "$(dirname "$0")/.." && pwd)"
+WS="$(cd "$(dirname "$0")/../.." && pwd)"
 SCRATCH=/HDD2T/underwater_data/yolo/.smoke
 CONV_ARGS=()
 
@@ -63,7 +63,7 @@ say "gate passed, $(du -sh "$ROOT" | cut -f1) on disk"
 
 cd "$WS" || exit 1
 say "converting -> $OUT"
-nice -n 10 ionice -c3 /usr/bin/python3 -I tools/sonar_to_yolo.py run --root "$ROOT" --out "$OUT" \
+nice -n 10 ionice -c3 /usr/bin/python3 -I ml/tools/sonar_to_yolo.py run --root "$ROOT" --out "$OUT" \
   ${CONV_ARGS[@]+"${CONV_ARGS[@]}"}
 RC=$?
 say "converter exit $RC"
@@ -71,12 +71,12 @@ say "converter exit $RC"
 
 FAILURES=0
 say "--- structural check (repo python) ---"
-nice -n 10 /usr/bin/python3 -I tools/sonar_to_yolo.py check --root "$ROOT" --out "$OUT" || FAILURES=$((FAILURES + 1))
+nice -n 10 /usr/bin/python3 -I ml/tools/sonar_to_yolo.py check --root "$ROOT" --out "$OUT" || FAILURES=$((FAILURES + 1))
 
 say "--- COCO validation (pycocotools $("$COCO_VENV" -c 'import pycocotools;print(pycocotools.__version__ if hasattr(pycocotools,"__version__") else "2.x")' 2>/dev/null)) ---"
 mapfile -t COCO_JSON < <(find "$OUT" -name _annotations.coco.json | sort)
 if [ "${#COCO_JSON[@]}" -gt 0 ]; then
-  nice -n 10 "$COCO_VENV" -I tools/verify_coco.py "${COCO_JSON[@]}" || FAILURES=$((FAILURES + 1))
+  nice -n 10 "$COCO_VENV" -I ml/tools/verify_coco.py "${COCO_JSON[@]}" || FAILURES=$((FAILURES + 1))
 else
   say "no COCO json found"
 fi
@@ -86,7 +86,7 @@ mkdir -p "$SCRATCH/ulcfg" "$SCRATCH/runs"
 export YOLO_CONFIG_DIR="$SCRATCH/ulcfg"
 for Y in "$OUT"/dataset_yolo*/data.yaml; do
   say "  $Y"
-  nice -n 10 "$UL_VENV" -I tools/verify_yolo_ultralytics.py "$Y" 2>&1 | grep -vE "Scanning|it/s" \
+  nice -n 10 "$UL_VENV" -I ml/tools/verify_yolo_ultralytics.py "$Y" 2>&1 | grep -vE "Scanning|it/s" \
     || FAILURES=$((FAILURES + 1))
 done
 

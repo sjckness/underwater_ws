@@ -1,7 +1,7 @@
 # Proposed topic, namespace and frame map (M7 step 1, task 2)
 
 > **Status (2026-10-29): a proposal. Nothing in this document is implemented, and no code was changed for it.**
-> It is written against the topics that exist today (`uw/ros_bridge.py`, `ros/sonar_relay`, `config/tank.yaml`,
+> It is written against the topics that exist today (`sim/ros_bridge.py`, `ros/src/sonar_relay`, `sim/config/tank.yaml`,
 > all **V**) and against the decisions already taken in `docs/ros_hil.md` §2 (what crosses the link, QoS,
 > metadata, `/gt`) and §6.1 (frames). Where it departs from the starting draft, §7 says so and why. Numbers
 > tagged **V** are traceable to a file or a measurement; **U** are assumed or inferred.
@@ -29,7 +29,7 @@ Five naming rules behind the table in §4:
 
 1. **Sensor topics carry the name and type the real driver would produce.** `/rov1/sensors/sonar_fls/sonar_image`
    is `marine_acoustic_msgs/ProjectedSonarImage` because that is what the APL-lineage Oculus drivers publish and
-   what `ros/sonar_relay` already emits (**V**). The camera follows `image_pipeline`
+   what `ros/src/sonar_relay` already emits (**V**). The camera follows `image_pipeline`
    (`image_raw` + `camera_info`).
 2. **Autopilot-provided sensors keep MAVROS's names**, under `/rov1/mavros/…`. MAVROS *is* the real driver for
    the IMU, the depth/pressure and the autopilot's own pose, so inventing `/rov1/sensors/imu` would create a
@@ -130,7 +130,7 @@ legitimately consumed by the Jetson stack).
 | `/rov1/sensors/dvl/meta` | `std_msgs/String` (JSON: beam geometry, mount, envelope, sound speed) | `dvl_relay` | relay consumers, rosbag2 | L | `rov1/dvl_instrument` | on change | no — the analogue of the sonar's `meta` |
 
 The DVL is named `dvl`, not `a50`: device names below `sensors/` are functional (rule 4 above), and the model
-string lives in `config/tank.yaml` as `dvl.model`, the way `sonar.model` does. `velocity` carries the type and
+string lives in `sim/config/tank.yaml` as `dvl.model`, the way `sonar.model` does. `velocity` carries the type and
 the topic name the Water Linked ROS 2 drivers publish, so swapping the simulator for the hardware changes
 nothing downstream (`docs/dvl.md`).
 
@@ -165,11 +165,11 @@ GUIDED are deliberately absent from this table.
 
 | topic | msg | pub | sub | QoS | frame_id | rate | sim-only |
 |---|---|---|---|---|---|---|---|
-| `/rov1/nav/odom` | `nav_msgs/Odometry` | `ekf_filter_node` (`ros/dvl_dr`) | mission, detector, rosbag2 | R | header `rov1/odom`, child `rov1/base_link` | 30 Hz (`ekf.yaml`) | no |
+| `/rov1/nav/odom` | `nav_msgs/Odometry` | `ekf_filter_node` (`ros/src/dvl_dr`) | mission, detector, rosbag2 | R | header `rov1/odom`, child `rov1/base_link` | 30 Hz (`ekf.yaml`) | no |
 | `/rov1/nav/depth` | `geometry_msgs/PoseWithCovarianceStamped` (z only) | `dvl_dr_preprocess` | `ekf_filter_node` | R | `rov1/odom` | the baro's rate (~10 Hz, **U**) | no |
 
 The estimator exists as of the DVL work: DVL velocity, the autopilot's IMU and the baro, and **nothing
-observing x or y** — the track is dead-reckoned, and `tools/dvl_drift.py` measures how fast it walks away.
+observing x or y** — the track is dead-reckoned, and `vehicles/tools/dvl_drift.py` measures how fast it walks away.
 `world_frame` is `rov1/odom`, so this is odometry and not localisation (`docs/dvl.md`).
 
 **The draft's `/rov1/nav/pose` is dropped.** It would be the same information as `odom.pose` and as the
@@ -285,16 +285,16 @@ data already sent, and M10 has not chosen between a polar and a Cartesian model.
 
 | node | host | publishes | subscribes | exists? |
 |---|---|---|---|---|
-| `sim_bridge` (today `uw_sim`) | sim host | `/rov1/sensors/**`, `/gt/**`, `/sim/**`, `/clock`, `/tf_static` | `/sim/cmd/rov1/pose` | **V** `uw/ros_bridge.py` |
-| `sonar_image_relay` (today `uw_sonar_relay`) | **sim host** | `/rov1/sensors/sonar_fls/sonar_image` | `…/image`, `…/meta` | **V** `ros/sonar_relay` |
-| `pose_cmd` | sim host | `/sim/cmd/rov1/pose` | — | **V** `ros/pose_cmd`: hold / trajectory / keys |
+| `sim_bridge` (today `uw_sim`) | sim host | `/rov1/sensors/**`, `/gt/**`, `/sim/**`, `/clock`, `/tf_static` | `/sim/cmd/rov1/pose` | **V** `sim/ros_bridge.py` |
+| `sonar_image_relay` (today `uw_sonar_relay`) | **sim host** | `/rov1/sensors/sonar_fls/sonar_image` | `…/image`, `…/meta` | **V** `ros/src/sonar_relay` |
+| `pose_cmd` | sim host | `/sim/cmd/rov1/pose` | — | **V** `ros/src/pose_cmd`: hold / trajectory / keys |
 | `rov1_dynamics` | sim host | body state → JSON/UDP to SITL (loopback, not ROS) | `/tf` of nothing | no — M8a |
 | `mavros` | thor | `/rov1/mavros/**`, `/tf` | `/rov1/mavros/{manual_control/send,setpoint_raw/global}` | no — M8b |
 | `mavlink_adapter` | thor | MAVROS command topics | `/rov1/control/**` | no — M8b |
 | `state_estimator` | thor | `/rov1/nav/odom`, `/tf` (`odom→base_link`) | `/rov1/mavros/**` | no — M9/M10 |
 | `leak_detector` | thor | `/rov1/perception/**` | `/rov1/sensors/sonar_fls/{sonar_image,meta}`, `/clock`, `/tf` | no — M10 |
 | `mission` | thor | `/rov1/control/**` | `/rov1/perception/**`, `/rov1/nav/odom` | no — M8b |
-| `link_monitor` | thor (and the sim host, for loopback) | a report; `/rov1/diagnostics` later | every sensor topic, with the QoS read from each publisher | **V** `ros/link_monitor`: rate, payload, age, `QoSMessageLostInfo` |
+| `link_monitor` | thor (and the sim host, for loopback) | a report; `/rov1/diagnostics` later | every sensor topic, with the QoS read from each publisher | **V** `ros/src/link_monitor`: rate, payload, age, `QoSMessageLostInfo` |
 | `rosbag2` | sim host (linus) | — | per profile (§6) | no — M7 step 3 |
 
 Every node except `sim_bridge` runs with `use_sim_time:=true`. **Nothing in the repo declares it today** (**V**).
@@ -381,13 +381,13 @@ rule (exclude `/gt`, or remap it into a dead namespace) is part of the profile, 
 
 Nothing below has been done. Grouped by file, with what it is today.
 
-**`uw/ros_bridge.py`** — the whole topic and frame surface is hard-coded here (**V**):
+**`sim/ros_bridge.py`** — the whole topic and frame surface is hard-coded here (**V**):
 
 - `FRAMES` (`line ~41`): `tank`→`map`, `oculus`→`rov1/sonar_fls`, `oculus_projected`→`rov1/sonar_fls_projected`,
   `camera`→`rov1/camera_front`, `camera_optical`→`rov1/camera_front_optical`; add `base_link`, `odom` and the
   `gt/` variants.
 - `RosSink.__init__`'s `self.pub` dict: every one of the 11 topic strings changes. Move them to a module-level
-  `TOPICS` dict (or `config/tank.yaml`'s `ros:` block) so this map has exactly one place in the code.
+  `TOPICS` dict (or `sim/config/tank.yaml`'s `ros:` block) so this map has exactly one place in the code.
 - QoS: images from `_qos({"depth": 2})` RELIABLE to `SensorDataQoS` (KEEP_LAST 5, BEST_EFFORT); `/tf` depth
   10→100; drop TRANSIENT_LOCAL from the leak topics.
 - `sonar_meta()`: **remove** `position`, `roll_deg`, `pitch_deg`, `yaw_deg` (they become `/gt/sonar_pose`);
@@ -398,19 +398,19 @@ Nothing below has been done. Grouped by file, with what it is today.
 - `rclpy.init()`: pass `domain_id` explicitly, as `relay.py:85` does — today it only reads the env var and logs a
   default of `0`, an f1tenth domain (**V**).
 
-**`ros/sonar_relay/sonar_relay/relay.py`** — subscribe `…/sonar_fls/{image,meta}`, default output topic
+**`ros/src/sonar_relay/sonar_relay/relay.py`** — subscribe `…/sonar_fls/{image,meta}`, default output topic
 `/rov1/sensors/sonar_fls/sonar_image` (`--topic` already exists, **V**); `SENSOR` QoS becomes BEST_EFFORT to
 match the publisher, or the subscription silently never matches.
 
-**`uw/main.py`** — `static_frames()` (`line 106`) builds `world→sonar` / `world→camera` from absolute tank
+**`sim/main.py`** — `static_frames()` (`line 106`) builds `world→sonar` / `world→camera` from absolute tank
 coordinates (**V**); with a body frame those become `base_link→payload` plus the estimator's edges. `R_BODY_OPTICAL`
 (`line 31`) is unchanged. The per-ping `sink.transforms(...)` call (`line 249`) publishes the sim's true sonar
 pose on `/tf` — **that is rule 4's violation** and must move to `/gt/tf`.
 
-**`uw/sonar_only.py`** — the same two calls with literal `"tank"`, `"oculus"`, `"oculus_projected"` strings
+**`sim/sonar_only.py`** — the same two calls with literal `"tank"`, `"oculus"`, `"oculus_projected"` strings
 (`lines 71, 88`, **V**).
 
-**`config/tank.yaml`** — the `ros:` block's comments name `/sim/plume`, `/sim/leak`, `/oculus/fan` (**V**); add
+**`sim/config/tank.yaml`** — the `ros:` block's comments name `/sim/plume`, `/sim/leak`, `/oculus/fan` (**V**); add
 `ros.vehicle`, a `ros.topics`/`ros.frames` block if §8 item 3 is adopted, and the sonar/camera **mount offsets**
 relative to `base_link` (absolute tank coordinates today, in the size presets). `sonar.ros_pose_topic` default
 `/uw/sonar_pose` → `/sim/cmd/rov1/pose`.

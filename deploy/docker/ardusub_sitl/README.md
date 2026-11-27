@@ -7,7 +7,7 @@ no host networking, no published ports, restart policy off, all capabilities dro
 
 ```
    Isaac Sim (Windows, native)                 Docker Desktop                         Jetson Thor
-   or tools/stub_physics.py                    container uw-ardusub                   192.168.200.10
+   or sim/tools/stub_physics.py                    container uw-ardusub                   192.168.200.10
    binds 127.0.0.1:9002   <---- servo UDP ---- ardusub (client)
                           ----- JSON state --->  (reply to the packet's source)
                                                  ardusub --serial0 ----- MAVLink v2 UDP ----> MAVROS binds :14550
@@ -21,7 +21,7 @@ So the **simulator listens on UDP 9002**, SITL is the client, nothing is publish
 the host through `host.docker.internal` (the entrypoint resolves it to an IP: ArduPilot's socket code wants a literal).
 Docker Desktop delivers it to the host's loopback (the stub sees the peer as 127.0.0.1): **Isaac must bind `127.0.0.1:9002`
 and reply to the sender**, no firewall rule involved. Servo packet: `<HHI16H` (magic 18458; 32 channels: magic 29569,
-`<HHI32H`), reply: `"\n{json}\n"` in the exact format `tools/stub_physics.py` emits (the parser is `strstr`/`sscanf`,
+`<HHI32H`), reply: `"\n{json}\n"` in the exact format `sim/tools/stub_physics.py` emits (the parser is `strstr`/`sscanf`,
 not a JSON parser: `"[a, b, c]"` with `", "`, no space after `:`). **SITL is lockstep with the sim**: it blocks on the reply
 and takes its clock from `"timestamp"`, so the physics' real-time factor is SITL's.
 
@@ -47,10 +47,10 @@ Logs: `output\ardusub_sitl\` (`build.log`, `sitl.log`, `stub.log`).
 ## Run
 ```bat
 rem from underwater_ws
-docker\ardusub_sitl\run.bat build
-docker\ardusub_sitl\run.bat            & rem start (detached)
-docker\ardusub_sitl\run.bat logs       & rem save the log, show the tail
-docker\ardusub_sitl\run.bat stop       & rem save the log, stop, remove
+deploy\docker\ardusub_sitl\run.bat build
+deploy\docker\ardusub_sitl\run.bat            & rem start (detached)
+deploy\docker\ardusub_sitl\run.bat logs       & rem save the log, show the tail
+deploy\docker\ardusub_sitl\run.bat stop       & rem save the log, stop, remove
 ```
 The equivalent `docker run` (what `run.bat up` executes):
 ```bat
@@ -65,8 +65,8 @@ name go straight to `ardusub`.
 ## Smoke test without Isaac (pass: `ros2 topic hz /mavros/state` on the Thor ~1 Hz, `connected: true`)
 Work machine, two consoles in `underwater_ws` (any Python 3; the stub is stdlib only):
 ```bat
-python tools\stub_physics.py > output\ardusub_sitl\stub.log 2>&1
-docker\ardusub_sitl\run.bat
+python sim\tools\stub_physics.py > output\ardusub_sitl\stub.log 2>&1
+deploy\docker\ardusub_sitl\run.bat
 ```
 Thor (HIL terminal): `USE_SIM_TIME=false bash ~/thor_mavros_run.sh`, then in a second HIL terminal
 `source ~/hil_env.sh; ros2 topic hz /mavros/state; ros2 topic echo /mavros/state --once`.
@@ -83,9 +83,9 @@ Checked on the work machine (no Thor): stub + container + a loopback MAVLink lis
   (`docs/dvl.md`). Feeding it in as `EK3_SRC1_VELXY 6` is not done yet.
 - `params/hil.parm` now also takes ArduSub off the truth AHRS (`AHRS_EKF_TYPE 3`, `EK3_SRC1_*` sources), so the attitude
   and depth MAVROS reports are estimated from SITL's own synthetic noisy IMU, baro and compass. The dead reckoning of
-  `ros/dvl_dr` depends on it. **Revert with one line** if EKF3 misbehaves: `AHRS_EKF_TYPE 10`.
-- MAVROS is version-controlled in `ros/mavros_rov1/` and namespaced `/rov1/mavros/**`; the `output/hil/thor_mavros_*`
+  `ros/src/dvl_dr` depends on it. **Revert with one line** if EKF3 misbehaves: `AHRS_EKF_TYPE 10`.
+- MAVROS is version-controlled in `deploy/hil/thor/mavros_rov1/` and namespaced `/rov1/mavros/**`; the `output/hil/thor_mavros_*`
   copies are superseded.
 - Clock: SITL time follows the physics' timestamps, and the physics paces them to the wall clock at `sim.physics_rtf`
-  on its own (`uw/physics_udp.py`), independently of the Isaac render loop. So SITL and MAVLink run at real time even
+  on its own (`vehicles/common/physics_udp.py`), independently of the Isaac render loop. So SITL and MAVLink run at real time even
   when Isaac renders at RTF 0.85; it is Isaac's `/clock` that then falls behind SITL's, not the other way round.

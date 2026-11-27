@@ -5,11 +5,13 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from uw import config, geometry, gui, main, ros_bridge
+from uw import config
+from physics import geometry
+from sim import gui, main, ros_bridge
 
 
 def _sonar(cfg):
-    """The attributes of uw.sonar.Sonar that the overlay and the frames use."""
+    """The attributes of physics.sonar.Sonar that the overlay and the frames use."""
     md = config.sonar_mode(cfg)
     n_r = int(round(float(config.get(cfg, "sonar.range")) / md["range_resolution"])) + 1
     return SimpleNamespace(position=np.asarray(config.get(cfg, "sonar.position"), float),
@@ -110,9 +112,9 @@ def test_static_frames_carry_no_world_anchored_edge():
 
 
 def test_the_dvl_static_edge_matches_the_sensor_model():
-    """The TF edge and uw.rov.dvl must place the acoustic centre in the same spot, or the lever arm the
+    """The TF edge and vehicles.common.dvl must place the acoustic centre in the same spot, or the lever arm the
     estimator removes is not the one the measurement was taken with."""
-    from uw.rov import dvl as dvl_model
+    from vehicles.common import dvl as dvl_model
     cfg = config.load()
     son = _sonar(cfg)
     f = ros_bridge.frames(config.get(cfg, "ros.vehicle"))

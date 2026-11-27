@@ -13,7 +13,7 @@ truth only.
 
   /rov1/sensors/sonar_fls/image        sensor_msgs/Image mono8, rows = range bins (row 0 = range 0), columns =
                                        beams (port to starboard, bearing_deg in …/meta); the display image (TVG,
-                                       display_db window). ros/sonar_relay turns it into ProjectedSonarImage on
+                                       display_db window). ros/src/sonar_relay turns it into ProjectedSonarImage on
                                        …/sonar_fls/sonar_image, and only that crosses the link
   /rov1/sensors/sonar_fls/meta         std_msgs/String JSON, latched: range_m, bearing_deg, frequency, sound
                                        speed, beam widths and the whole gain chain. No pose, no label
@@ -85,7 +85,7 @@ TOPIC_TEMPLATES = {
     "plume": "/gt/plume/markers",
     "gt_sonar_pose": "/gt/sonar_pose",
     "gt_tf": "/gt/tf",
-    # the DVL's own protocol, host-local: ros/dvl_relay stands in for the real driver and publishes
+    # the DVL's own protocol, host-local: ros/src/dvl_relay stands in for the real driver and publishes
     # /{v}/sensors/dvl/** from it, because marine_acoustic_msgs is not in the container's rclpy (§8)
     "dvl_report": "/sim/dvl/report",
     "dvl_meta": "/sim/dvl/meta",                        # latched: the instrument's geometry, for the relay
@@ -100,7 +100,7 @@ def topics(vehicle: str = VEHICLE) -> dict:
 # oculus_projected axes (x up, y starboard, z forward) in the oculus frame (x forward, y port, z up): columns
 R_SONAR_PROJECTED = np.array([[0.0, 0.0, 1.0], [0.0, -1.0, 0.0], [1.0, 0.0, 0.0]])
 # dvl_instrument axes (FRD: x forward, y starboard, z down) in dvl_link (FLU): the involution of
-# uw.rov.frames.M_FLU_FRD, the one fixed flip between what the device reports and what REP-103 wants
+# vehicles.common.frames.M_FLU_FRD, the one fixed flip between what the device reports and what REP-103 wants
 R_DVL_INSTRUMENT = np.diag([1.0, -1.0, -1.0])
 
 
@@ -292,7 +292,7 @@ SIMPLEJPEG_VERSION = "1.9.0"
 def jpeg_bytes(img: np.ndarray, quality: int = 85) -> bytes:
     """JPEG of an rgb8 frame, through simplejpeg (libturbojpeg). **Lossy**, so it is a transport for the link and
     for a detector's input, never for a dataset: the recorder keeps the raw frame."""
-    from .deps import require
+    from uw.deps import require
 
     # --no-deps: its only dependency is numpy, which every target already has, and a numpy installed into
     # UW_PYDEPS would shadow Isaac's for the whole sim
@@ -493,7 +493,7 @@ class RosSink(SensorSink):
             self.pub["plume"].publish(plume_markers_msg(t, msg.arrays["position"], msg.arrays["diameter"],
                                                         self.plume_max))
         elif msg.sensor == "dvl":
-            # the device's own JSON report, nothing added: ros/dvl_relay stands in for the real driver and
+            # the device's own JSON report, nothing added: ros/src/dvl_relay stands in for the real driver and
             # publishes /<v>/sensors/dvl/** from it, because marine_acoustic_msgs is not in this rclpy
             self.pub["dvl_report"].publish(self.msgs["String"](data=json.dumps(msg.meta["dvl"])))
             instrument = msg.meta.get("instrument")
@@ -587,7 +587,7 @@ class RosPose:
 
     def at(self, t: float):
         from .pose import Pose
-        from .geometry import rpy_deg_of
+        from physics.geometry import rpy_deg_of
         self.rclpy.spin_once(self.node, timeout_sec=0.0)
         if self.latest is None:
             return self.fallback.at(t)

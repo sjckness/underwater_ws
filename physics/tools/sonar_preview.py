@@ -1,6 +1,6 @@
 """Sonar preview (M2): polar and fan images of the tank, static and with the plume, focused and unfocused, plus timing.
 
-    python -m uw py tools/sonar_preview.py [--pings 20] [--video 50] [--preset buried] [--profile ...] [--set a.b=c]
+    python -m uw py physics/tools/sonar_preview.py [--pings 20] [--video 50] [--preset buried] [--profile ...] [--set a.b=c]
 
 Without a pipe preset both run (exposed, buried); other presets (e.g. basin) apply to both. Written to
 output/sonar_preview/<preset>[+roll<deg>][+pitch<deg>][+yaw<deg>]/ (a pose angle appears when --set changes it;
@@ -27,7 +27,9 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 import warp as wp  # noqa: E402
 
-from uw import bubbles, config, deps, geometry, pose, sinks, sonar, surface  # noqa: E402
+from physics import bubbles, geometry, sonar, surface  # noqa: E402
+from uw import config, deps  # noqa: E402
+from sim import pose, sinks  # noqa: E402
 
 PIPE_PRESETS = ("exposed", "buried")
 
@@ -43,7 +45,7 @@ def tank_views(ax_side, ax_top, scene, sim, son, path=None):
     """Insets: the tank seen from the side (x-z at the sonar's y) and from above (x-y): sand, water level, pipe,
     plume centreline, the sonar at its current pose and its field of view (the wireframe projected), the trajectory
     (dashed)."""
-    from uw.gui import fan_polylines
+    from sim.gui import fan_polylines
     L, W, H = scene.size
     pa = scene.pipe_axis
     lines = fan_polylines(son)
@@ -82,7 +84,7 @@ def video(path, cfg, scene, sim, son, n, dt, title, contour=True, motion=None, t
     tank. Plus how the echo changes from ping to ping: speckle correlation (sonar_stats.speckle_correlation) of
     consecutive pings in the plume (direct share > 0.9) and in the static scene (share < 0.001, 20 dB over the noise
     floor)."""
-    from uw import sonar_stats
+    from physics import sonar_stats
     ffmpeg = deps.require("imageio_ffmpeg", "imageio-ffmpeg", "0.5.1").get_ffmpeg_exe()
     pings = []
     for i in range(n):
@@ -131,7 +133,7 @@ def video(path, cfg, scene, sim, son, n, dt, title, contour=True, motion=None, t
                                      linewidths=1.0))
         pose_txt = ""
         if track is not None:
-            from uw.geometry import rpy_deg_of
+            from physics.geometry import rpy_deg_of
             r, pt, y = rpy_deg_of(p.rot)
             pose_txt = (f"\nsonar at ({p.position[0]:.2f}, {p.position[1]:.2f}, {p.position[2]:.2f}) m, "
                         f"roll {r:.0f}°, pitch {pt:.0f}°, yaw {y:.0f}°")

@@ -1,4 +1,4 @@
-"""ros/dvl_dr: the arithmetic the dead-reckoning preprocessor does before robot_localization sees it.
+"""ros/src/dvl_dr: the arithmetic the dead-reckoning preprocessor does before robot_localization sees it.
 
 Host-only and ROS-free by construction: the maths lives in ``dvl_dr/correct.py``, which imports nothing
 but the standard library, so these run everywhere rather than only where ROS 2 Jazzy is. The node that
@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 WS = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(WS / "ros" / "dvl_dr"))
+sys.path.insert(0, str(WS / "ros" / "src" / "dvl_dr"))
 
 from dvl_dr.correct import NO_FIX, correct_lever_arm, cross, depth_pose, has_fix  # noqa: E402
 
@@ -33,9 +33,9 @@ def test_a_stationary_body_with_no_rotation_needs_no_correction():
 
 
 def test_the_correction_undoes_exactly_what_the_sensor_model_added():
-    """uw.rov.dvl adds ``omega x r`` in FRD; this removes it in FLU. The two must cancel, or the
+    """vehicles.common.dvl adds ``omega x r`` in FRD; this removes it in FLU. The two must cancel, or the
     estimator integrates a phantom velocity that grows with every turn."""
-    from uw.rov import frames as fr
+    from vehicles.common import frames as fr
     rng = np.random.default_rng(5)
     for _ in range(50):
         v_body_frd = rng.normal(0, 0.3, 3)
@@ -80,9 +80,10 @@ def test_a_report_without_bottom_lock_is_not_a_measurement():
 def test_the_gate_agrees_with_what_the_relay_stamps_on_a_lost_lock():
     pytest.importorskip("geometry_msgs.msg", reason="the Isaac ROS bridge's rclpy: python -m uw test")
     pytest.importorskip("marine_acoustic_msgs.msg", reason="host ROS 2 Jazzy with ros-jazzy-marine-acoustic-msgs")
-    from uw import config, geometry
-    from uw.rov import dvl as dvl_model
-    sys.path.insert(0, str(WS / "ros" / "dvl_relay"))
+    from uw import config
+    from physics import geometry
+    from vehicles.common import dvl as dvl_model
+    sys.path.insert(0, str(WS / "ros" / "src" / "dvl_relay"))
     from dvl_relay.relay import twist_msg
 
     cfg = config.load()
@@ -105,9 +106,9 @@ def test_depth_is_hydrostatic_and_z_is_measured_up_from_the_floor():
 
 
 def test_depth_agrees_with_the_frame_convention_used_everywhere_else():
-    """uw.rov.frames puts the NED origin on the free surface, so D = water_level - z. The baro path
+    """vehicles.common.frames puts the NED origin on the free surface, so D = water_level - z. The baro path
     must land on the same z or the EKF and the dynamics disagree about where the vehicle is."""
-    from uw.rov import frames as fr
+    from vehicles.common import frames as fr
     rho, wl, surf = 1026.0, 2.9, 101325.0
     z_true = 1.3
     p = surf + rho * 9.80665 * (wl - z_true)
@@ -127,7 +128,7 @@ def test_the_ekf_fuses_no_ground_truth_and_no_position():
     """The two properties that make the drift number mean something: nothing from /gt is an input, and
     no x or y position is measured anywhere - the track is reckoned, not observed."""
     import yaml
-    cfg = yaml.safe_load((WS / "ros" / "dvl_dr" / "config" / "ekf.yaml").read_text(encoding="utf-8"))
+    cfg = yaml.safe_load((WS / "ros" / "src" / "dvl_dr" / "config" / "ekf.yaml").read_text(encoding="utf-8"))
     p = cfg["ekf_filter_node"]["ros__parameters"]
     inputs = {k: v for k, v in p.items() if k in ("imu0", "twist0", "pose0")}
     assert set(inputs) == {"imu0", "twist0", "pose0"}
@@ -141,9 +142,9 @@ def test_the_ekf_fuses_no_ground_truth_and_no_position():
     assert not p["two_d_mode"]
 
 
-# ------------------------------------------------------------------- tools/dvl_drift.py, the scoring
+# ------------------------------------------------------------------- vehicles/tools/dvl_drift.py, the scoring
 
-sys.path.insert(0, str(WS / "tools"))
+sys.path.insert(0, str(WS / "vehicles" / "tools"))
 import dvl_drift as DD  # noqa: E402
 
 
@@ -207,14 +208,15 @@ def test_path_length_of_a_straight_run():
     assert DD.path_length(np.zeros((1, 3))) == 0.0
 
 
-# -------------------------------------------------------- the whole chain, offline (tools/dvl_dr_offline)
+# -------------------------------------------------------- the whole chain, offline (vehicles/tools/dvl_dr_offline)
 
-sys.path.insert(0, str(WS / "tools"))
+sys.path.insert(0, str(WS / "vehicles" / "tools"))
 import dvl_dr_offline as OFF  # noqa: E402
 
 
 def _fly(yaw_bias_deg, duration=90.0, seed=1):
-    from uw import config, geometry
+    from uw import config
+    from physics import geometry
     cfg = config.load(presets=["basin"], overrides=[
         "sonar.pose_source=trajectory", "sonar.trajectory.preset=lawnmower",
         "sonar.trajectory.height=0.7", "sonar.trajectory.margin=0.35",

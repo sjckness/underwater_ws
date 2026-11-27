@@ -1,4 +1,4 @@
-"""Per-frame extras of a recording run (record.enabled, --sink file; started by tools/record.py).
+"""Per-frame extras of a recording run (record.enabled, --sink file; started by sim/tools/record.py).
 
 At every published camera frame (10 Hz, the same sim stamp as the left and right images) it writes, through the same
 FileSink as the sonar and the cameras:
@@ -15,13 +15,13 @@ from pathlib import Path
 
 import numpy as np
 
-from .config import get
-from .geometry import rot_rpy_deg, rpy_deg_of, sonar_rotation
+from uw.config import get
+from physics.geometry import rot_rpy_deg, rpy_deg_of, sonar_rotation
 from .sinks import Message
 
 
 def _quat(rot) -> list:
-    from .rov.frames import rot_to_quat
+    from vehicles.common.frames import rot_to_quat
     return [float(v) for v in rot_to_quat(rot)]
 
 

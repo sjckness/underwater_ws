@@ -1,13 +1,13 @@
 """Placeholder Warp test (M0): a kernel compiles, runs on the GPU and returns the right numbers.
 
-Runs in the container (scripts/uw.sh test); skipped where Warp is not importable (host pytest).
+Runs in the container (uw.sh test); skipped where Warp is not importable (host pytest).
 """
 import os
 
 import numpy as np
 import pytest
 
-wp = pytest.importorskip("warp", reason="Warp tests run in the container: scripts/uw.sh test")
+wp = pytest.importorskip("warp", reason="Warp tests run in the container: uw.sh test")
 
 
 @wp.kernel
@@ -28,7 +28,7 @@ def test_kernel_runs_on_the_gpu():
 
 
 def test_kernel_cache_is_the_mounted_one():
-    """docker/compose.yaml points WARP_CACHE_PATH at ~/.cache/uw_warp; compiled kernels must land there."""
+    """deploy/docker/compose.isaac.yaml points WARP_CACHE_PATH at ~/.cache/uw_warp; compiled kernels must land there."""
     want = os.environ.get("WARP_CACHE_PATH")
     if not want:
         pytest.skip("WARP_CACHE_PATH not set (not in the uw container)")

@@ -1,7 +1,7 @@
 # HIL su Windows (macchina "work")
 
 File di ambiente per il link HIL diretto work <-> Thor. I corrispettivi per il Thor stanno in
-`hil/thor/m8a/`. La sottorete del link e il dominio DDS sono documentati in `docs/ros_hil.md`.
+`deploy/hil/thor/m8a/`. La sottorete del link e il dominio DDS sono documentati in `docs/ros_hil.md`.
 
 | File | A cosa serve |
 |---|---|
@@ -16,7 +16,7 @@ File di ambiente per il link HIL diretto work <-> Thor. I corrispettivi per il T
 ## Ambiente Python nativo
 
 L'ambiente sta fuori dal repo (`uw.bat` punta a `ISAAC_ENV`, per default `F:\envs\isaac`);
-`python setup_native.py --write` genera `config/runtime.local.yaml`, che non e' in git.
+`python deploy\hil\windows\setup_native.py --write` genera `uw/runtime.local.yaml`, che non e' in git.
 
 **Pin di torch.** Serve la build CUDA:
 

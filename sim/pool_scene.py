@@ -15,8 +15,8 @@ from pathlib import Path
 import numpy as np
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdLux, UsdShade, Vt
 
-from . import pool_geometry
-from .config import WS, get
+from physics import pool_geometry
+from uw.config import WS, get
 from .sinks import write_png
 from .usd_scene import HORIZONTAL_APERTURE_MM, R_BODY_USDCAM, _bind, _look_at, _matrix, _mdl_material, _xform
 
@@ -175,7 +175,7 @@ def build(stage: Usd.Stage, cfg: dict, texture_dir: Path = TEXTURE_DIR) -> PoolI
 
 
 def camera_intrinsics(cfg: dict):
-    """Pinhole K, (width, height), focal length [mm] for HORIZONTAL_APERTURE_MM (as uw.usd_scene)."""
+    """Pinhole K, (width, height), focal length [mm] for HORIZONTAL_APERTURE_MM (as sim.usd_scene)."""
     w, h = (int(v) for v in get(cfg, "camera.resolution"))
     hfov = math.radians(float(get(cfg, "camera.hfov_deg")))
     focal = HORIZONTAL_APERTURE_MM / 2 / math.tan(hfov / 2)
@@ -227,7 +227,7 @@ def _tank(stage, cfg: dict, texture_dir: Path) -> None:
 
     looks = {}                                                    # role -> material, made on first use
     for solid in pool_geometry.solids(cfg):                       # the ladder and the props: the DVL's beams see
-        if solid.role not in looks:                               #   the same list (uw.pool_geometry.PoolBottom)
+        if solid.role not in looks:                               #   the same list (physics.pool_geometry.PoolBottom)
             looks[solid.role] = _prop_look(stage, solid.role, texture_dir)
         path = f"{POOL}/{solid.name}"
         if isinstance(solid, pool_geometry.Box):
@@ -250,7 +250,7 @@ def _tank(stage, cfg: dict, texture_dir: Path) -> None:
 
 
 def _prop_look(stage, role: str, texture_dir: Path):
-    """The visual material of a solid's role (uw.pool_geometry): ladder steel, a concrete block, a rusty pipe, the
+    """The visual material of a solid's role (physics.pool_geometry): ladder steel, a concrete block, a rusty pipe, the
     checkerboard."""
     if role == "ladder":
         return _surface(stage, f"{LOOKS}/steel", (0.62, 0.62, 0.64), 0.25, metallic=1.0)

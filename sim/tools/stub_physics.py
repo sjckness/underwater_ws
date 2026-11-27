@@ -13,8 +13,8 @@ Protocol (ArduPilot libraries/SITL/SIM_JSON.cpp, tag ArduSub-4.5.7). SITL is the
   Lockstep      SITL blocks on the reply and takes its clock from "timestamp", so SITL time = the timestamps sent here.
                 --rtf paces the timestamps against the wall clock (1.0 = real time). RTF < 1 = a slow physics sim.
 
-    python tools/stub_physics.py                       # listens on 127.0.0.1:9002, Ctrl+C to stop
-    python tools/stub_physics.py --duration 60 --rtf 0.8
+    python sim/tools/stub_physics.py                       # listens on 127.0.0.1:9002, Ctrl+C to stop
+    python sim/tools/stub_physics.py --duration 60 --rtf 0.8
 """
 import argparse
 import socket

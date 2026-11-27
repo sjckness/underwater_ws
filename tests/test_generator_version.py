@@ -1,7 +1,7 @@
 """Provenance of a generated ping (host, numpy): `generator_version` and the mixed-dataset warning.
 
 A dataset is only usable as evidence if what made it can be named. `config_hash` alone cannot do that -- it
-hashes the resolved config, so a change to the maths in `uw/sonar.py` leaves it untouched -- which is why a
+hashes the resolved config, so a change to the maths in `physics/sonar.py` leaves it untouched -- which is why a
 sonar model version and the git hash are recorded beside it.
 """
 import ast
@@ -12,7 +12,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from uw import config, dataset, recorder
+from uw import config
+from ml import dataset
+from sim import recorder
 
 WS = Path(__file__).resolve().parents[1]
 
@@ -53,23 +55,23 @@ def test_git_version_is_cached_so_it_is_not_paid_per_ping():
 
 
 def test_the_sonar_declares_a_model_version_and_hands_it_to_the_recorder():
-    """Read from the source: `uw/sonar.py` needs warp and torch, which the host suite does not have."""
-    src = (WS / "uw" / "sonar.py").read_text()
+    """Read from the source: `physics/sonar.py` needs warp and torch, which the host suite does not have."""
+    src = (WS / "physics" / "sonar.py").read_text()
     m = re.search(r'^SONAR_MODEL_VERSION = "([^"]+)"', src, re.M)
-    assert m, "uw/sonar.py must define SONAR_MODEL_VERSION at module level"
+    assert m, "physics/sonar.py must define SONAR_MODEL_VERSION at module level"
     assert m.group(1).strip()
     assert "self.model_version = SONAR_MODEL_VERSION" in src, "Sonar must expose it as .model_version"
     # and the recorder must stamp it, not re-derive it
-    rec = (WS / "uw" / "recorder.py").read_text()
+    rec = (WS / "sim" / "recorder.py").read_text()
     assert "generator_version(son.model_version, cfg)" in rec
 
 
 def test_there_is_only_one_git_version_implementation():
     """Two could disagree about whether the tree is dirty, and then a dataset's manifest and its own pings
     would claim different provenance."""
-    tree = ast.parse((WS / "tools" / "sweep.py").read_text())
+    tree = ast.parse((WS / "ml" / "tools" / "sweep.py").read_text())
     defined = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
-    assert "git_version" not in defined, "tools/sweep.py should reuse uw.recorder.git_version"
+    assert "git_version" not in defined, "ml/tools/sweep.py should reuse sim.recorder.git_version"
 
 
 # ------------------------------------------------------------------ the mixed-dataset warning

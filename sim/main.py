@@ -24,8 +24,8 @@ import time
 
 import numpy as np
 
-from . import config
-from .config import get
+from uw import config
+from uw.config import get
 
 log = logging.getLogger("uw.sim")
 R_BODY_OPTICAL = np.array([[0.0, 0.0, 1.0], [-1.0, 0.0, 0.0], [0.0, -1.0, 0.0]])   # optical axes in the body frame
@@ -112,15 +112,15 @@ def static_frames(cfg: dict) -> list:
     /gt/sonar_pose and /gt/tf instead, so tank -> oculus does not resolve until an estimator publishes it. The
     camera is expressed relative to the sonar whether the sonar moves or not: both are payload on the same rig,
     and only their relative offset is not ground truth."""
-    from .geometry import body_rotation, rot_rpy_deg, sonar_rotation
+    from physics.geometry import body_rotation, rot_rpy_deg, sonar_rotation
     from .ros_bridge import R_DVL_INSTRUMENT, R_SONAR_PROJECTED, frames
-    from .rov import frames as rov_frames
+    from vehicles.common import frames as rov_frames
     FRAMES = frames(get(cfg, "ros.vehicle"))
     out = [(FRAMES["sonar"], FRAMES["sonar_projected"], R_SONAR_PROJECTED, (0.0, 0.0, 0.0))]
     if get(cfg, "dvl.enabled"):
         # the DVL is bolted to the body, so its mount is given in ArduPilot FRD; the edge is still
         # expressed relative to the sonar, for the same reason the camera's is: payload on one rig, and
-        # only the relative offset is not ground truth. uw.rov.frames is the only converter.
+        # only the relative offset is not ground truth. vehicles.common.frames is the only converter.
         m = get(cfg, "dvl.mount")
         r_frd = np.asarray(m["position_frd_m"], float)
         rot_dvl_frd = rov_frames.rot_from_rpy_deg([float(m["roll_deg"]), float(m["pitch_deg"]),
@@ -146,7 +146,8 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
     import torch
     import warp as wp
 
-    from . import bubbles, geometry, pose, recorder, sinks, sonar, surface, usd_scene
+    from physics import bubbles, geometry, sonar, surface
+    from . import pose, recorder, sinks, usd_scene
     from .app import render_settings_report
 
     t_setup = time.perf_counter()
@@ -164,10 +165,10 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
         from .ros_bridge import RosPose
         motion = RosPose(motion, get(cfg, "sonar.ros_pose_topic"))
     elif get(cfg, "sonar.pose_source") == "ardusub":
-        from .physics_udp import ArduSubPose
+        from vehicles.common.physics_udp import ArduSubPose
         motion = ArduSubPose(cfg)              # binds sim.physics_port now: a busy port fails the setup, loudly
-    from .physics_udp import mount as sonar_mount
-    from .rov import dvl as dvl_model
+    from vehicles.common.physics_udp import mount as sonar_mount
+    from vehicles.common import dvl as dvl_model
     dvl = dvl_model.from_config(cfg, scene)    # None when dvl.enabled is false
     dvl_motion = None if dvl is None else dvl_model.BodyMotion(motion, *sonar_mount(cfg))
     stage = omni.usd.get_context().get_stage()
@@ -245,7 +246,7 @@ def run(app, cfg: dict, args, stop: dict) -> int:  # noqa: C901 - the loop is lo
     count = {"ticks": 0, "pings": 0, "renders": 0, "camera": 0, "camera_pub": 0, "camera_empty": 0,
              "camera_right": 0, "over_budget": 0, "dvl": 0, "dvl_locked": 0}
     recorder_extra = None
-    if args.sink == "file" and get(cfg, "record.enabled"):     # tools/record.py: per-frame truth and poses.csv
+    if args.sink == "file" and get(cfg, "record.enabled"):     # sim/tools/record.py: per-frame truth and poses.csv
         from .record import FrameRecorder
         recorder_extra = FrameRecorder(cfg, args.out, sink, sim, motion)
     worst = {"ping_ms": 0.0, "lag_s": 0.0}

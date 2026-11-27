@@ -4,16 +4,33 @@ output/
 *.npz
 # reference checkouts (OceanSim), cloned by hand
 third_party/
-# machine-specific runtime settings
-config/runtime.local.yaml
+# machine-specific settings: uw/runtime.local.yaml, deploy/targets/<host>.local, ...
+*.local
+uw/runtime.local.yaml
 # caches
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .cache/
 
-# generated DDS profiles: per host, from tools/dds_profile.py
-config/dds/*.xml
+# colcon workspace (ros/), wherever it is built from
+/build/
+/install/
+/log/
+/ros/build/
+/ros/install/
+/ros/log/
+
+# data never goes in git: logs and bags live on /HDD2T or the logs host (docs/MIGRATION.md §6), indexed in
+# robot/bluerov2/logs/INDEX.md
+*.BIN
+*.bin
+*.tlog
+*.mcap
+*.db3
+
+# generated DDS profiles: per host, from deploy/hil/dds_profile.py
+deploy/hil/dds/*.xml
 
 # heavy slide images (kept locally; docs/slides_assets/*.md are tracked)
 docs/slides_assets/*.png
@@ -23,8 +40,16 @@ docs/slides_assets/*.gif
 docs/slides_assets/*.svg
 docs/slides_assets/*.pdf
 
-# generated 3D assets (tools/fetch_bluerov2.py): third-party licences, regenerated on demand
-assets/
+# generated 3D assets (vehicles/bluerov2_heavy/fetch_bluerov2.py): third-party licences, regenerated on demand;
+# assets/models/ holds local model weights
+/assets
+vehicles/*/assets/
 
-# per-machine overrides for docker/pool/compose.yaml (PHYSICS_HOST, DVL_HOST, ...: hil/win/pool/README.md)
+# per-machine overrides for deploy/docker/pool/compose.yaml (PHYSICS_HOST, DVL_HOST, ...: deploy/hil/windows/pool/README.md)
+deploy/docker/pool/.env
+
+# where the files above lived before the restructure (docs/MIGRATION.md §5): kept ignored so that a pull on
+# Work/Thor does not show them as new until they are moved
+config/runtime.local.yaml
+config/dds/
 docker/pool/.env

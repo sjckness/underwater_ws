@@ -1,4 +1,4 @@
-"""uw/rov/a50.py: the emulated Water Linked DVL A50 as a client on the vehicle's network sees it (host, numpy only).
+"""vehicles/common/a50.py: the emulated Water Linked DVL A50 as a client on the vehicle's network sees it (host, numpy only).
 
 What the clients rely on is pinned here: the BlueOS Water Linked DVL extension (v1.0.11) reads "DVL" in
 /api/v1/about's product_name, "temperature" in /api/v1/about/status, and from the TCP stream the velocity report's
@@ -20,9 +20,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from uw import config  # noqa: E402
-from uw.pool_geometry import PoolBottom  # noqa: E402
-from uw.rov import dvl as dvl_model  # noqa: E402
-from uw.rov.a50 import A50  # noqa: E402
+from physics.pool_geometry import PoolBottom  # noqa: E402
+from vehicles.common import dvl as dvl_model  # noqa: E402
+from vehicles.common.a50 import A50  # noqa: E402
 
 RATE = 400.0
 
@@ -111,7 +111,7 @@ def rig():
 
 
 def test_the_pool_instrument_is_the_tanks():
-    """One instrument: config/pool/pool.yaml repeats config/tank.yaml's A50 (uw.rov.dvl can read only one dvl:
+    """One instrument: sim/config/pool/pool.yaml repeats sim/config/tank.yaml's A50 (vehicles.common.dvl can read only one dvl:
     section per config), and only the mount, the echo reference and the device's network side may differ."""
     tank, pool = config.load()["dvl"], config.load(config.POOL_CONFIG)["dvl"]
     differ = {"mount", "rssi_ref_dbm", "device", "enabled"}

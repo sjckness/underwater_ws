@@ -6,7 +6,7 @@
 #   twist0  /rov1/sensors/dvl/velocity_corrected   body linear velocity, lever arm removed
 #   pose0   /rov1/nav/depth                        z only, hydrostatic from the baro
 # Nothing else. There is NO position measurement in x or y: that is the point. The track is dead
-# reckoned, and tools/dvl_drift.py measures how fast it walks away from the truth.
+# reckoned, and vehicles/tools/dvl_drift.py measures how fast it walks away from the truth.
 #
 # The config vectors are robot_localization's 15 flags, in this order:
 #   x  y  z   roll pitch yaw   vx vy vz   vroll vpitch vyaw   ax ay az
@@ -58,5 +58,5 @@ ekf_filter_node:
     pose0_queue_size: 10
 
     # process_noise_covariance is left at robot_localization's default on purpose. It is a flat 15x15
-    # (225 values), and inventing one before tools/dvl_drift.py has produced a drift number would be
+    # (225 values), and inventing one before vehicles/tools/dvl_drift.py has produced a drift number would be
     # tuning against nothing. That tuning is the first thing to do once the chain runs end to end.

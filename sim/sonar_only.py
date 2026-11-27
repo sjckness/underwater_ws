@@ -2,7 +2,7 @@
 
     python -m uw sonar-only --pings 200 --out output/datasets/<name> [--no-plume] [--profile ...] [--preset ...]
         [--set a.b=c]
-    python -m uw sonar-only --sink ros --pings 1000      the sonar topics of `sim` (uw/ros_bridge.py), no Isaac
+    python -m uw sonar-only --sink ros --pings 1000      the sonar topics of `sim` (sim/ros_bridge.py), no Isaac
 Sim time advances 1 / sonar.ping_rate_hz per ping; the plume is warmed up first (plume.warmup_s). The pings are the
 ones `python -m uw sim` makes for the same config and seed (bit-identical). A moving sonar (sonar.pose_source
 trajectory | ros) takes its pose per ping; set sonar.static_cache on_motion or none.
@@ -16,7 +16,9 @@ import time
 import numpy as np
 import warp as wp
 
-from . import bubbles, config, geometry, pose, recorder, sinks, sonar, surface
+from physics import bubbles, geometry, sonar, surface
+from uw import config
+from . import pose, recorder, sinks
 from .ros_bridge import R_SONAR_PROJECTED, frames
 
 

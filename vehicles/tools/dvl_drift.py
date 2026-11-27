@@ -2,7 +2,7 @@
 
 This is the evaluator, and it is the only thing in the project allowed to look at both sides at once.
 It subscribes the estimate on the HIL domain and the simulator's truth on the ground-truth domain, with
-a separate participant for each - the arrangement ``uw.ros_bridge`` already uses so that no node on the
+a separate participant for each - the arrangement ``sim.ros_bridge`` already uses so that no node on the
 HIL domain can reach ``/gt`` at all (``docs/ros_hil.md`` section 2.5). Nothing it computes goes back
 into the stack; it writes a JSON and prints a table.
 
@@ -14,14 +14,14 @@ z, and nothing sees x and y.
 Running it (host, ROS 2 Jazzy sourced; it needs no Isaac and no GPU):
 
     source /opt/ros/jazzy/setup.bash
-    python3 tools/dvl_drift.py --duration 120 --label baseline
-    python3 tools/dvl_drift.py --duration 120 --label mag20      # after SIM_MAG1_OFS in hil.parm
-    python3 tools/dvl_drift.py --compare output/dvl/*.json
+    python3 vehicles/tools/dvl_drift.py --duration 120 --label baseline
+    python3 vehicles/tools/dvl_drift.py --duration 120 --label mag20      # after SIM_MAG1_OFS in hil.parm
+    python3 vehicles/tools/dvl_drift.py --compare output/dvl/*.json
 
 Heading is the term to sweep. In a metal tank the magnetometer is unreliable, and a heading error
 rotates the whole dead-reckoned track rather than lengthening it, so the drift grows with the distance
 travelled and not with the velocity error. Injecting it where a real one lives - SITL's compass model,
-``SIM_MAG1_OFS`` in ``docker/ardusub_sitl/params/hil.parm`` - and re-running this is what turns "the
+``SIM_MAG1_OFS`` in ``deploy/docker/ardusub_sitl/params/hil.parm`` - and re-running this is what turns "the
 heading will dominate" from a remark in a document into a curve.
 """
 from __future__ import annotations
@@ -35,7 +35,7 @@ from pathlib import Path
 
 import numpy as np
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
@@ -193,10 +193,10 @@ def body_truth(gt_p, cfg):
 
     Only the translation matters here and the rig is rigid, so this is the sonar's offset in the body
     frame rotated by the body's attitude - which for the tank's level poses is the configured rotation.
-    ``uw.physics_udp.mount`` is the same function ``ArduSubPose`` applies in the other direction.
+    ``vehicles.common.physics_udp.mount`` is the same function ``ArduSubPose`` applies in the other direction.
     """
-    from uw.geometry import body_rotation
-    from uw.physics_udp import mount
+    from physics.geometry import body_rotation
+    from vehicles.common.physics_udp import mount
     _, p_mount = mount(cfg)
     return np.asarray(gt_p, float) - body_rotation(cfg) @ np.asarray(p_mount, float)
 

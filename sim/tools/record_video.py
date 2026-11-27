@@ -1,7 +1,7 @@
-"""Videos of a recording run (tools/record.py): camera, sonar (as a fan) and the two side by side.
+"""Videos of a recording run (sim/tools/record.py): camera, sonar (as a fan) and the two side by side.
 
-    python tools/record_video.py output/records/test_combined_20s
-    python tools/record_video.py output/records/<run_id> --fps 10 --fan-width 720 --no-right
+    python sim/tools/record_video.py output/records/test_combined_20s
+    python sim/tools/record_video.py output/records/<run_id> --fps 10 --fan-width 720 --no-right
 
 Writes into <run>/video/: camera_left.mp4, camera_right.mp4 (if recorded), sonar_fan.mp4, combined.mp4 (left camera
 | sonar fan, stamped with sim time and the ROV position from poses.csv). One video frame per recorded 10 Hz frame, so
@@ -87,7 +87,7 @@ def main() -> int:
 
 
 def make_videos(run: Path, fps: float = 10.0, fan_width: int = 720, right_video: bool = True) -> int:
-    """The videos of one run into <run>/video/ (also called by tools/record_report.py at the end of a batch)."""
+    """The videos of one run into <run>/video/ (also called by sim/tools/record_report.py at the end of a batch)."""
     run = Path(run)
 
     class _A:                                  # the CLI's names, so the body below is unchanged

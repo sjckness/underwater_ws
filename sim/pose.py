@@ -24,8 +24,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .config import ConfigError, get
-from .geometry import rot_rpy_deg
+from uw.config import ConfigError, get
+from physics.geometry import rot_rpy_deg
 
 
 @dataclass
@@ -55,21 +55,21 @@ class SensorPose:
 
 
 class ScriptPose(SensorPose):
-    """sonar.pose_source script: the ROV body follows config/trajectories/<sonar.script>.yaml (uw/trajectory.py) at
+    """sonar.pose_source script: the ROV body follows sim/config/trajectories/<sonar.script>.yaml (sim/trajectory.py) at
     sim time, deterministic and ROS-free; the sonar rides it through the mount (as with pose_source ardusub)."""
     moving = True
 
     def __init__(self, cfg: dict, scene=None):
-        from .physics_udp import mount
+        from vehicles.common.physics_udp import mount
         from .trajectory import build
         if scene is None:
-            from .geometry import build_scene
+            from physics.geometry import build_scene
             scene = build_scene(cfg)
         if scene.leak is None:
             raise ConfigError("sonar.pose_source script circles the leak: leak.enabled must be true")
         name = get(cfg, "sonar.script")
         if not name:
-            raise ConfigError("sonar.pose_source script needs sonar.script (a name in config/trajectories)")
+            raise ConfigError("sonar.pose_source script needs sonar.script (a name in sim/config/trajectories)")
         self.traj = build(cfg, str(name), scene.leak.hole)
         self.r_mount, self.p_mount = mount(cfg)
 
@@ -78,7 +78,7 @@ class ScriptPose(SensorPose):
         return self.traj.body(t)
 
     def at(self, t: float) -> Pose:
-        from .geometry import rpy_deg_of
+        from physics.geometry import rpy_deg_of
         p, rb = self.traj.body(t)
         return Pose(p + rb @ self.p_mount, rpy_deg_of(rb @ self.r_mount))
 
@@ -316,7 +316,7 @@ def sensor_pose(cfg: dict, scene=None) -> SensorPose:
     fixed = Pose(np.asarray(son["position"], float), np.array([son["roll_deg"], son["pitch_deg"], son["yaw_deg"]],
                                                                 float))
     src = son["pose_source"]
-    if src in ("fixed", "ros", "ardusub"):     # ros / ardusub: wrapped or replaced in uw/main.py
+    if src in ("fixed", "ros", "ardusub"):     # ros / ardusub: wrapped or replaced in sim/main.py
         return FixedPose(fixed)
     if src == "script":
         return ScriptPose(cfg, scene)
@@ -328,7 +328,7 @@ def sensor_pose(cfg: dict, scene=None) -> SensorPose:
                            np.array([w.get("roll_deg", 0.0), w.get("pitch_deg", 0.0), w.get("yaw_deg", 0.0)], float))
                       for w in tc["poses"]], float(tc["hold_s"]))
     if scene is None:
-        from .geometry import build_scene
+        from physics.geometry import build_scene
         scene = build_scene(cfg)
     if tc["preset"] == "hover":
         b = Bounds(scene, float(tc["margin"]))

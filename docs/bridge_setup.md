@@ -2,7 +2,7 @@
 
 > **Status (2026-10-29): a runbook, not a result.** Nothing on the Windows side exists yet — the Isaac scene, the
 > plume and the sonar model were built in this repo against the **Linux container on linus**
-> (`docker/compose.yaml`), and the ROS 2 side of a Windows install has never been started. Everything in §1 is
+> (`deploy/docker/compose.isaac.yaml`), and the ROS 2 side of a Windows install has never been started. Everything in §1 is
 > **measured on linus today**; everything in §2–§5 is a procedure with a check beside it. Numbers tagged **V** are
 > traceable to a file, a datasheet, a doc page or a measurement taken here; **U** are assumed or inferred, as in
 > `docs/validation.md`.
@@ -19,20 +19,20 @@ transport work and proving it with measurements**.
 
 | host | hardware / OS | role | ROS 2 |
 |---|---|---|---|
-| **workstation** | Windows 10/11, RTX 4090 24 GB (`config/profiles/workstation.yaml`) | Isaac Sim 5.1 **native**: scene, plume, camera, the sonar model. HIL address **192.168.200.2** (since 2026-11-09) | internal bridge libraries — **which distro is check 1** |
+| **workstation** | Windows 10/11, RTX 4090 24 GB (`sim/config/profiles/workstation.yaml`) | Isaac Sim 5.1 **native**: scene, plume, camera, the sonar model. HIL address **192.168.200.2** (since 2026-11-09) | internal bridge libraries — **which distro is check 1** |
 | **thor** | Jetson AGX Thor, JetPack 7 / Ubuntu 24.04 (**U**, to confirm) | **primary**, decided 2026-10-29: stack container with the detector, estimator, mission and link monitor. HIL address **192.168.200.10** | ROS 2 Jazzy in a container (arm64), **built on thor** |
 | **orin** | Jetson Orin, JetPack 6 / Ubuntu 22.04 (**U**, to confirm) | second stack container | Jazzy **in the container**, whatever the host's L4T ships |
-| **linus** | Ubuntu, RTX 5050 8 GB, `enp5s0` 1 GbE | `ros/sonar_relay`, rosbag2, and the **fallback sim host** (what the repo does today). HIL address **none** (the HIL host is now the work PC, 192.168.200.2) | host Jazzy at `/opt/ros/jazzy` (**V**) |
+| **linus** | Ubuntu, RTX 5050 8 GB, `enp5s0` 1 GbE | `ros/src/sonar_relay`, rosbag2, and the **fallback sim host** (what the repo does today). HIL address **none** (the HIL host is now the work PC, 192.168.200.2) | host Jazzy at `/opt/ros/jazzy` (**V**) |
 
 Two structural facts about the containers, because the word "the container" now means two different things:
 
-1. **The sim container is amd64-and-NVIDIA-runtime only.** `docker/compose.yaml` runs
+1. **The sim container is amd64-and-NVIDIA-runtime only.** `deploy/docker/compose.isaac.yaml` runs
    `isaac_ws_devcontainer-isaac-sim:latest` with `runtime: nvidia`, `network_mode: host`, `ipc: host` and the
    workspace bind-mounted at the same path (**V**). It will not run on Thor or Orin, and it has **no `/opt/ros`**
-   — it reaches ROS only through Isaac's bundled Jazzy `rclpy` (`uw/ros_bridge.py:ensure_rclpy_path`, **V**).
+   — it reaches ROS only through Isaac's bundled Jazzy `rclpy` (`sim/ros_bridge.py:ensure_rclpy_path`, **V**).
 2. **The stack container is a plain ROS 2 Jazzy container** (arm64 on the Jetsons, amd64 on linus) that needs
    `rclpy`, `marine_acoustic_msgs` and later MAVROS — and does **not** need Isaac. It does not exist in this repo
-   yet: `ros/sonar_relay` is run from the host with `run.sh`, which sources `/opt/ros/jazzy` (**V**).
+   yet: `ros/src/sonar_relay` is run from the host with `run.sh`, which sources `/opt/ros/jazzy` (**V**).
 
 So the link under test is **one publisher host → up to three subscriber hosts on a shared Ethernet**, and the
 publisher host is the one variable this task actually changes.
@@ -58,10 +58,10 @@ publisher host is the one variable this task actually changes.
 | images present | only `isaac_ws_devcontainer-isaac-sim:latest` | `docker images` (**V**) |
 
 **The first trap is already visible in that table.** The domain is set *inside* the sim container
-(`UW_ROS_DOMAIN_ID`, default **73**, `docker/compose.yaml`, **V**) and passed explicitly by the relay
+(`UW_ROS_DOMAIN_ID`, default **73**, `deploy/docker/compose.isaac.yaml`, **V**) and passed explicitly by the relay
 (`relay.py:85`, **V**), but a plain login shell on linus has **no `ROS_DOMAIN_ID`**. So `ros2 topic list` typed
 without a prefix talks to **domain 0** and shows nothing, with no error — and domain 0 is an f1tenth domain
-(`docker/compose.yaml`'s own comment, **V**). Every command in §6 therefore carries the domain explicitly.
+(`deploy/docker/compose.isaac.yaml`'s own comment, **V**). Every command in §6 therefore carries the domain explicitly.
 
 ## 2. Four checks on the Windows side, before anything else
 
@@ -75,7 +75,7 @@ dir "$env:ISAAC\exts\isaacsim.ros2.bridge\*\lib"
 
 NVIDIA's **5.1 installation page lists Windows 10 and Windows 11 with Humble only**, and says internal Humble
 loads automatically on Windows; its Windows recipe for anything else is ROS 2 **in WSL2 on Ubuntu 22.04** (**V**,
-docs.isaacsim 5.1 `install_ros.html`). Our stack is **Jazzy** — `ros/sonar_relay` runs on host Jazzy with
+docs.isaacsim 5.1 `install_ros.html`). Our stack is **Jazzy** — `ros/src/sonar_relay` runs on host Jazzy with
 `ros-jazzy-marine-acoustic-msgs` (**V**), and the Jetson containers are Jazzy by choice. Community reports do
 have 5.1 on Windows running with the internal **Jazzy** libraries selected in the launcher (**U**, a third-party
 write-up, not NVIDIA), so the folder listing above is the only answer that counts.
@@ -90,7 +90,7 @@ by debugging a silent topic.
 
 Our entire ROS surface is a **Python publisher inside the sim process**. `RosSink` does
 `ensure_rclpy_path()` → appends `{isaac_root}/exts/isaacsim.ros2.bridge/{ROS_DISTRO}/rclpy` to `sys.path`, strips
-`/opt/ros`, then `import rclpy` and `create_publisher` for every topic (`uw/ros_bridge.py`, **V**). There is no
+`/opt/ros`, then `import rclpy` and `create_publisher` for every topic (`sim/ros_bridge.py`, **V**). There is no
 OmniGraph ROS 2 bridge node in this project at all, and there is no stock node that could publish a numpy array
 produced by our Warp sonar kernel — the bridge's graph nodes publish render products, TF and clock, not arbitrary
 arrays.
@@ -110,7 +110,7 @@ is not a free move either.
 
 > **If check 2 fails, there is no sonar on ROS from a Windows Isaac**, and the three honest ways out are:
 >
-> **(A) Keep the sim on linus** — `docker/compose.yaml` as it is today, Isaac in the Linux container, and the
+> **(A) Keep the sim on linus** — `deploy/docker/compose.isaac.yaml` as it is today, Isaac in the Linux container, and the
 > Ethernet carries sim → thor/orin. Nothing in the repo changes, the publisher path is the one the whole project
 > was measured with, and the Windows box stays a scene-authoring machine. Cost: the camera profile and the
 > workstation-class scene stay off the RTX 4090, and `docs/ros_hil.md` §0's "the camera profile moves to the
@@ -196,7 +196,7 @@ Two separate reasons to need one, and they want different things in it:
    virtual adapter, or a routed path. Then discovery needs **explicit unicast peers**, and the interface the
    participant is allowed to use needs pinning.
 
-Save this as `config/dds/fastdds_hil.xml` (**not created in this commit**: the `<address>` entries need the
+Save this as `deploy/hil/dds/fastdds_hil.xml` (**not created in this commit**: the `<address>` entries need the
 Windows, thor and orin addresses from check 3, and a profile with wrong peers fails *more* confusingly than no
 profile at all):
 
@@ -256,14 +256,14 @@ Three notes that save an afternoon:
 
 Also pin the socket buffers on both Linux hosts, since nothing on disk sets them today (**V**):
 
-The file is in the repo as `config/sysctl/60-ros2-hil.conf`, with the reasoning for each value and for the one
+The file is in the repo as `deploy/hil/sysctl/60-ros2-hil.conf`, with the reasoning for each value and for the one
 value it deliberately leaves alone (`rmem_default`, since the DDS profile sets its own socket sizes and this host
 is shared with the f1tenth stacks). **Install it as `70-ros2-hil.conf`**: `/etc/sysctl.d` is applied in lexical
 filename order and the last assignment wins, so a `60-ros2-hil.conf` sorts before thor's `60-zed-buffers.conf`
 (`'r' < 'z'`) and that file's `net.core.rmem_max=1048576` silently wins instead (**V**, thor 2026-11-03):
 
 ```bash
-sudo install -m 644 config/sysctl/60-ros2-hil.conf /etc/sysctl.d/70-ros2-hil.conf && sudo sysctl --system
+sudo install -m 644 deploy/hil/sysctl/60-ros2-hil.conf /etc/sysctl.d/70-ros2-hil.conf && sudo sysctl --system
 sysctl net.core.rmem_max net.core.wmem_max net.ipv4.ipfrag_high_thresh    # read them back
 ```
 
@@ -293,20 +293,20 @@ $env:PATH = "$env:PATH;$env:ISAAC\exts\isaacsim.ros2.bridge\$env:ROS_DISTRO\lib"
 
 Appending the `lib` path more than once per terminal is called out by NVIDIA as a source of conflicts (**V**).
 The repo side would run with `UW_RUNTIME=native` and `native.python` pointing at Isaac's `python.bat`
-(`config/runtime.yaml`, **V**) — note that `uw/launcher.py`'s native path has had no ROS exercise at all.
+(`uw/runtime.yaml`, **V**) — note that `uw/launcher.py`'s native path has had no ROS exercise at all.
 
 ### 5.2 The subscribers — thor (primary), orin, linus
 
-The stack container exists: `docker/stack/Dockerfile` and `docker/compose.stack.yaml`. `ros:jazzy-ros-base` is
+The stack container exists: `deploy/docker/Dockerfile.stack` and `deploy/docker/compose.stack.yaml`. `ros:jazzy-ros-base` is
 multi-arch, so the one file builds natively on each machine, and it carries **no project code** — the workspace
-is bind-mounted at the same path as on the host, so `ros/sonar_relay/run.sh`, `ros/link_monitor/run.sh` and
-`ros/pose_cmd/run.sh` run inside it unchanged.
+is bind-mounted at the same path as on the host, so `ros/src/sonar_relay/run.sh`, `ros/src/link_monitor/run.sh` and
+`ros/src/pose_cmd/run.sh` run inside it unchanged.
 
 ```bash
-docker build -t uw_stack:jazzy -f docker/stack/Dockerfile docker/stack     # natively, on the machine that runs it
-python3 tools/dds_profile.py --iface <nic|ip> [--peers <ip,…>] --out config/dds/this.xml
+docker build -t uw_stack:jazzy -f deploy/docker/Dockerfile.stack deploy/docker     # natively, on the machine that runs it
+python3 deploy/hil/dds_profile.py --iface <nic|ip> [--peers <ip,…>] --out deploy/hil/dds/this.xml
 export UW_WS=$PWD UW_UID=$(id -u) UW_GID=$(id -g) UW_DDS_PROFILE=$PWD/config/dds/this.xml
-docker compose -f docker/compose.stack.yaml run --rm stack -lc 'ros/link_monitor/run.sh --duration 60 --age'
+docker compose -f deploy/docker/compose.stack.yaml run --rm stack -lc 'ros/src/link_monitor/run.sh --duration 60 --age'
 ```
 
 It installs `marine_acoustic_msgs` (the one message package the sim's bundled rclpy does *not* have, §6.2),
@@ -364,7 +364,7 @@ S=/rov1/sensors/sonar_fls; C=/rov1/sensors/camera_front
 ros2 topic info -v $S/image             # QoS of every endpoint, and that there IS a remote endpoint
 # rate, payload, age and drops, with the reader's QoS taken from each publisher's. NOT ros2 topic hz/bw:
 # they have no QoS option in Jazzy and their RELIABLE reader cannot match a BEST_EFFORT writer (§6.1)
-ros/link_monitor/run.sh --duration 40 --age --json link.json
+ros/src/link_monitor/run.sh --duration 40 --age --json link.json
 ros2 topic echo --once --qos-durability transient_local $S/meta   # latched: a late joiner must receive it
 ros2 run tf2_ros tf2_echo rov1/sonar_fls rov1/sonar_fls_projected
 ros2 run tf2_ros tf2_echo map rov1/sonar_fls    # MUST fail: that edge is ground truth (§2.5 rule 4)
@@ -407,7 +407,7 @@ with §2.2's "+8 % wire" column; the 8 % is framing overhead measured at the NIC
 ### 6.1 Measured: loopback on linus, 2026-10-29
 
 **What ran.** `python3 -m uw sim --sink ros` in the Isaac container (`network_mode: host`, `ipc: host`, domain 73,
-`rmw_fastrtps_cpp`, no DDS profile unless stated), `ros/sonar_relay/run.sh` and `ros/link_monitor/run.sh` on the
+`rmw_fastrtps_cpp`, no DDS profile unless stated), `ros/src/sonar_relay/run.sh` and `ros/src/link_monitor/run.sh` on the
 host with `/opt/ros/jazzy`. Container ↔ host on one machine, which is M7 step 5's "loopback first". Raw numbers in
 `output/probe/m7/` (untracked).
 
@@ -417,7 +417,7 @@ host with `/opt/ros/jazzy`. Container ↔ host on one machine, which is M7 step 
    `--qos-reliability` is rejected with a usage error — and their default RELIABLE reader cannot match the
    BEST_EFFORT image writers the map specifies (§3 of `topic_map.md`). They report silence, and if the usage
    error is swallowed by a pipe it reads exactly like a dead link. `ros2 topic echo` *does* take the flag.
-   `ros/link_monitor` exists for this: it reads each publisher's offered QoS with
+   `ros/src/link_monitor` exists for this: it reads each publisher's offered QoS with
    `get_publishers_info_by_topic` and subscribes with a matching profile.
 2. **Every rate on the wire is nominal × RTF**, because the sim paces itself in sim time. With the camera at
    RTF 0.787 the 10 Hz sonar arrived at 7.88 Hz, `/clock` at 47.3 Hz instead of 60, the 2 Hz plume at 1.573 and
@@ -486,10 +486,10 @@ computes from `relay.py` — 28 bytes of message header.
 | 4 | **pass**: 0.0–0.1 % against §2.2 (table above) |
 | 5 | **pass**: `meta` and `/tf_static` both reached a monitor started minutes after the sim |
 | 6 | **pass**: the mount chain resolves (RPY 180°, −90°, 0° = `R_SONAR_PROJECTED`), and `map → rov1/sonar_fls` fails with *Invalid frame ID "map" … frame does not exist* — the world-anchored edge is simply not in the live tree |
-| 7 | **pass**: RTF **1.001** with nothing attached, **0.9963** with the relay and the monitor subscribing — 0.4 %, against the 50 % that twelve `ros2 topic hz` processes once cost (ros_hil §5). `ros/link_monitor` subscribes raw, which is most of the difference |
+| 7 | **pass**: RTF **1.001** with nothing attached, **0.9963** with the relay and the monitor subscribing — 0.4 %, against the 50 % that twelve `ros2 topic hz` processes once cost (ros_hil §5). `ros/src/link_monitor` subscribes raw, which is most of the difference |
 | 8 | **pass for everything that crosses the link**; `polar_db` and the camera frame drop without the §4 profile, and `polar_db` is 0 with it (finding 3). The camera case is untested with the profile |
 
-**Not done:** the sysctls are written to `config/sysctl/60-ros2-hil.conf` but **not installed** — that needs root,
+**Not done:** the sysctls are written to `deploy/hil/sysctl/60-ros2-hil.conf` but **not installed** — that needs root,
 and this session has no sudo. The live values on linus are still the unpinned `rmem_max = wmem_max = 4194304`,
 which is what the measurements above ran against, so installing the file raises the ceiling rather than changing
 any number reported here.
@@ -519,12 +519,12 @@ Verified on linus, one sim, both domains listed at once:
 | **no `/gt` topic of any kind** | measured flowing: `polar_db` 56.34 Mbit/s, `sonar_pose` and `tf` 8.25 Hz, `plume/markers` 1.65 Hz |
 
 Record the ground truth on the workstation from that domain (the `--domain` flag of `link_monitor` exists for the
-same reason — `ROS_DOMAIN_ID` deliberately does not select it, as in `ros/sonar_relay`):
+same reason — `ROS_DOMAIN_ID` deliberately does not select it, as in `ros/src/sonar_relay`):
 
 ```bash
 ROS_DOMAIN_ID=74 ros2 bag record -o gt_$(date +%F_%H%M) \
   /clock /gt/sonar_pose /gt/tf /gt/leak/pose /gt/leak/flow_lpm /gt/plume/markers /gt/polar_db
-ros/link_monitor/run.sh --domain 74 --duration 30        # what that bag is about to receive
+ros/src/link_monitor/run.sh --domain 74 --duration 30        # what that bag is about to receive
 ```
 
 Use the §4 profile for the recorder too: `/gt/polar_db` is a 1.79 MB sample and dropped 64 of ~250 on the
@@ -533,7 +533,7 @@ ground-truth domain with default socket buffers, exactly as it did on the HIL do
 ### 6.2.1 The ground-truth bag: what it costs and the four ways to make it smaller
 
 **The disk first, because it decides the shape of this.** On linus, `/` has **25 G free of 439 G (95 % used)** and
-`/HDD2T` has **1.6 T free of 1.8 T** (**V**, 2026-10-29). The bag goes on `/HDD2T`; `config/runtime.yaml` already
+`/HDD2T` has **1.6 T free of 1.8 T** (**V**, 2026-10-29). The bag goes on `/HDD2T`; `uw/runtime.yaml` already
 points `data_root` there, and the datasets occupy 153 G of it. A root-filesystem bag would fill the disk in
 roughly twenty minutes.
 
@@ -710,7 +710,7 @@ three of them change decisions rather than numbers.
       has none.
 - [x] **Direct cable** (decided 2026-10-29): no switch in the latency path and no IGMP question, so the
       profile's multicast form is the one to start with.
-- [ ] arm64 availability of everything the stack container installs — the build in `docker/stack/Dockerfile` is
+- [ ] arm64 availability of everything the stack container installs — the build in `deploy/docker/Dockerfile.stack` is
       the test, run it on the Jetson.
 
 **B — Addressing. A dedicated subnet, static, off the lab LAN.**
@@ -731,9 +731,9 @@ three of them change decisions rather than numbers.
 
 **C — The same configuration on both hosts (§3).**
 
-- [x] Owner agreed 2026-10-29: installed by hand on linus and thor. `config/sysctl/60-ros2-hil.conf` on
+- [x] Owner agreed 2026-10-29: installed by hand on linus and thor. `deploy/hil/sysctl/60-ros2-hil.conf` on
       **both**, installed as `70-ros2-hil.conf` and read back:
-      `sudo install -m 644 config/sysctl/60-ros2-hil.conf /etc/sysctl.d/70-ros2-hil.conf && sudo sysctl --system`
+      `sudo install -m 644 deploy/hil/sysctl/60-ros2-hil.conf /etc/sysctl.d/70-ros2-hil.conf && sudo sysctl --system`
       then `sysctl net.core.rmem_max net.core.wmem_max net.ipv4.ipfrag_high_thresh`.
       This is not optional: it is what the DDS profile's 4 MB receive buffer is capped by, and large BEST_EFFORT
       samples are lost without it (§6.1 finding 3). Do **not** install it with a `60-` prefix: on thor it then
@@ -745,9 +745,9 @@ three of them change decisions rather than numbers.
       address:
       ```bash
       # on the workstation
-      python3 tools/dds_profile.py --iface <hil-nic> --peers 192.168.200.10 --out config/dds/this.xml
+      python3 deploy/hil/dds_profile.py --iface <hil-nic> --peers 192.168.200.10 --out deploy/hil/dds/this.xml
       # on the Jetson
-      python3 tools/dds_profile.py --iface <hil-nic> --peers 192.168.200.2 --out config/dds/this.xml
+      python3 deploy/hil/dds_profile.py --iface <hil-nic> --peers 192.168.200.2 --out deploy/hil/dds/this.xml
       export FASTRTPS_DEFAULT_PROFILES_FILE=$PWD/config/dds/this.xml
       ```
 - [ ] Start with the profile's **multicast** form (no `--peers`) on a direct cable; switch to unicast peers only
@@ -781,7 +781,7 @@ three of them change decisions rather than numbers.
       ros.camera_compression=jpeg --set camera.rate_hz=2` (§6.3 — 0.69 Mbit/s of camera), the relay on the sim
       host, and the ground-truth bag on domain 74 with message-level zstd (§6.2.1). The dataset profile stays
       raw at 10 Hz and is a separate run, never the same one.
-- [ ] `ros/link_monitor/run.sh --duration 60 --age --json link_eth.json` **on the Jetson**, not on the sim host:
+- [ ] `ros/src/link_monitor/run.sh --duration 60 --age --json link_eth.json` **on the Jetson**, not on the sim host:
       subscriber CPU on the publisher's host is itself a term (§6.1 finding, and ros_hil §5).
 - [ ] Read the RTF from `/sim/diagnostics` before and during that window. Every rate on the wire is nominal ×
       RTF, so without it the table cannot be read at all.
@@ -810,8 +810,8 @@ measurement, and step 5 is where §5's table gets its two missing columns.
 | Windows: only its own nodes visible | Fast DDS bound to a Hyper-V/WSL virtual adapter | `interfaceWhiteList` with the physical NIC's address; `ipconfig /all` |
 | Windows: traffic one way only | firewall profile is **Public**, or no outbound rule | `Get-NetConnectionProfile`; §5.3 |
 | `/clock` present, Jetson nodes frozen or stamping wall time | `use_sim_time` not set — **nothing in the repo sets it** (**V**) | `ros2 param get <node> use_sim_time` |
-| the sim slows down when you start monitoring | subscriber-side CPU on the publisher host: 12 × `ros2 topic hz` → RTF 0.5 (**V**); `ros/link_monitor` costs 0.4 % (**V**, §6.1) | move monitors to thor; log RTF per run |
-| `ros2 topic hz`/`bw` print nothing on a sensor topic | they have **no `--qos-reliability` in Jazzy** and their default RELIABLE reader cannot match a BEST_EFFORT writer (**V**, §6.1). Piped into `grep`, the usage error looks like a dead link | use `ros/link_monitor/run.sh`, or `ros2 topic echo --qos-reliability best_effort` |
+| the sim slows down when you start monitoring | subscriber-side CPU on the publisher host: 12 × `ros2 topic hz` → RTF 0.5 (**V**); `ros/src/link_monitor` costs 0.4 % (**V**, §6.1) | move monitors to thor; log RTF per run |
+| `ros2 topic hz`/`bw` print nothing on a sensor topic | they have **no `--qos-reliability` in Jazzy** and their default RELIABLE reader cannot match a BEST_EFFORT writer (**V**, §6.1). Piped into `grep`, the usage error looks like a dead link | use `ros/src/link_monitor/run.sh`, or `ros2 topic echo --qos-reliability best_effort` |
 | every rate is low by the same factor | not a fault: rates are **nominal × RTF** (**V**, §6.1) — at RTF 0.787 a 10 Hz sonar is 7.88 Hz on the wire | divide by the RTF on `/sim/diagnostics` |
 | traffic appears on domain 73 that nobody here published | another host on the shared company LAN | `ros2 node list`; see ros_hil §7 item 14 (f1tenth coexistence) |
 | `rosidl`/`rclpy` import errors on the sim host | `ROS_DISTRO`, the bridge `lib` path or the RMW not exported in the launching shell | re-read §5.1; the bundled `rosidl_generator_py` also logs a harmless DEBUG traceback (**V**, `ros_bridge.py`) |
@@ -824,7 +824,7 @@ measurement, and step 5 is where §5's table gets its two missing columns.
 - **The §4 profile has been validated on one host only**, as a reader-side fix for large-sample loss. Its
   interface whitelist and unicast peers — the parts that matter for a real link — are still untested, and the
   camera frame has not been retested with it.
-- **The sysctls are not installed**: `config/sysctl/60-ros2-hil.conf` needs root.
+- **The sysctls are not installed**: `deploy/hil/sysctl/60-ros2-hil.conf` needs root.
 - **RTT and jitter work ↔ thor ↔ orin are unmeasured** — the first missing term of `docs/ros_hil.md` §5, and
   what decides whether MAVROS's TIMESYNC converges at all (its §7 item 2).
 - **Thor's and Orin's JetPack version, NIC and PTP capability are unknown** (§7 item 1 of that document); they

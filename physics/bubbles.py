@@ -19,7 +19,7 @@ import warp as wp
 
 from . import plume
 from . import water as wat
-from .config import ConfigError, get
+from uw.config import ConfigError, get
 from .plume import N_CL
 
 # stats slots (float64 accumulators)
@@ -344,7 +344,7 @@ class BubbleSim:
         # numbers, in the order of one substep after the other) goes into pinned staging arrays, one upload, then the
         # GPU part of all substeps, captured once per batch length as a CUDA graph (plume.cuda_graph). The results
         # are bit-identical to launching every substep on its own (tests/gpu/test_bubbles.py).
-        # bursts per surface cell (counted until someone reads and clears them: the surface boil, uw/surface.py),
+        # bursts per surface cell (counted until someone reads and clears them: the surface boil, physics/surface.py),
         # on a grid around where the plume reaches the surface
         self.burst_cell = float(pc["burst_grid_m"])
         pl = getattr(self.flow, "plume", None)

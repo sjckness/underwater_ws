@@ -19,7 +19,7 @@ ros2 topic hz /rov1/mavros/state             # ~1 Hz, connected: true
 ```
 
 These files were in `output/hil/` (`thor_mavros_*`), which is git-ignored. They are here because the
-dead-reckoning chain's **input contract** cannot live in an untracked directory: `ros/dvl_dr` subscribes
+dead-reckoning chain's **input contract** cannot live in an untracked directory: `ros/src/dvl_dr` subscribes
 `/rov1/mavros/imu/data` and `/rov1/mavros/imu/static_pressure`, and if the namespace or the launch
 changes, that breaks silently. The copies under `output/hil/` are superseded; the ones on the Thor's
 home directory should be replaced from here.
@@ -39,7 +39,7 @@ disarm-button requirement for arming). A read-only link meets none of them.
 ## The autopilot must not be handed the truth
 
 MAVROS is only honest if what ArduSub estimates is honest. Two truth paths run into SITL by default and
-`docker/ardusub_sitl/params/hil.parm` closes both — see the comments there. In short: `AHRS_EKF_TYPE 10`
+`deploy/docker/ardusub_sitl/params/hil.parm` closes both — see the comments there. In short: `AHRS_EKF_TYPE 10`
 hands ArduSub the simulator's attitude, and SITL feeds GPS instance 0 from the FDM position whatever
 `GPS_TYPE` says (`docs/ros_hil.md` §4.2, marked **V**). With `AHRS_EKF_TYPE 3` and the `EK3_SRC1_*`
 sources set to none for position and velocity, ArduSub runs its own EKF3 over SITL's synthetic noisy

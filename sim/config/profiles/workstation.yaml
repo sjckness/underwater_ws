@@ -1,6 +1,6 @@
 # Hardware profile "workstation": e.g. RTX 4090 24 GB, 500 GB RAM. Same code as linus with bigger parameters
 # or alternative backends; until an alternative backend exists (M6) this profile keeps the default one and
-# names the option. Merged over config/tank.yaml, before presets and --set.
+# names the option. Merged over sim/config/tank.yaml, before presets and --set.
 # linus.yaml sets exactly the same keys (tests/test_config.py checks it).
 profile:
   name: workstation
@@ -9,7 +9,7 @@ profile:
 sonar:
   scatterer_spacing_mode: fixed       # sonar.scatterer_spacing (2 mm) everywhere
   pose_source: fixed                  # SensorPose: fixed | trajectory (sonar.trajectory) | ros
-                                      #   (sonar.ros_pose_topic); uw/pose.py
+                                      #   (sonar.ros_pose_topic); sim/pose.py
   static_cache: precomputed           # StaticCache: precomputed (fixed pose only) | on_motion (recompute
                                       #   when the pose moved beyond sonar.static_cache_motion) | none
                                       #   (recompute every ping)

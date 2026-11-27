@@ -10,7 +10,7 @@ J is the rendered radiance, the first term the direct signal attenuated along th
 veiling light scattered into it (the "revised" image formation model of Akkaynak & Treibitz 2018, with separate
 coefficients for the two terms). A miss (no hit, d = inf) gets the veiling light alone. The path from a light to the
 surface is not attenuated, so a lamp's pool of light is brighter than in real water at range: the honest limit of a
-post-process. Coefficients: config/pool/pool.yaml water.*.
+post-process. Coefficients: sim/config/pool/pool.yaml water.*.
 
 Turbidity (``water.turbidity_per_m``, presets ``turbid`` / ``murky``): suspended particles add a scattering
 coefficient b_p, the same in every channel (particles much larger than the wavelength scatter all colours alike).
@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .config import ConfigError, get
+from uw.config import ConfigError, get
 
 
 def coefficients(cfg: dict):

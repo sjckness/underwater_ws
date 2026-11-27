@@ -24,7 +24,7 @@ def pytest_report_header(config):
     opt = config.option
     lines = [f"uw config: profile={opt.profile} presets={opt.preset} set={opt.overrides}"]
     if importlib.util.find_spec("warp") is None:
-        lines.append("warp: not importable here, Warp tests skip (run them with scripts/uw.sh test)")
+        lines.append("warp: not importable here, Warp tests skip (run them with uw.sh test)")
     else:
         import warp as wp
         wp.config.quiet = True

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """M7 step 4: minimal consumer on the Thor (sim time).
 
-    python3 hil/thor/m7/m7_consumer.py --ros-args -p use_sim_time:=true -p run_wall_s:=120.0
+    python3 deploy/hil/thor/m7/m7_consumer.py --ros-args -p use_sim_time:=true -p run_wall_s:=120.0
 
 Inputs (types read with `ros2 topic info -v`; no topic map / docs/ros_hil.md exists on the Thor):
   /oculus/polar_db   sensor_msgs/msg/Image, 32FC1, rows = range bins, cols = beams (see /oculus/meta)

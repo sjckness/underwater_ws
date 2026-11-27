@@ -1,6 +1,6 @@
 """Split the read-only real sonar recordings into a calibrate and a hold-out half, leak-free, once.
 
-    python -m uw py tools/real_holdout.py [--threshold 0.95] [--out output/compare_real/holdout.json]
+    python -m uw py physics/tools/real_holdout.py [--threshold 0.95] [--out output/compare_real/holdout.json]
 
 Why this is not a line of shell. The publishers' own split cannot be used: UATD ships `UATD_Test_1` and
 `UATD_Test_2`, but they are a random 50/50 draw from one pool, not two sessions. Measured over the 1600
@@ -9,7 +9,7 @@ one pair is bit-identical, and all 171 distinct `soundspeed` values split evenly
 on one and verifying on the other would be verifying on the training data.
 
 Neither can the split be per frame: a forward-looking sonar on a moving platform returns almost the same
-image for seconds at a time, which is the same argument `tools/sweep.py` makes for splitting the simulated
+image for seconds at a time, which is the same argument `ml/tools/sweep.py` makes for splitting the simulated
 sweep by scenario and never by ping.
 
 So sessions are *derived*. Frames are grouped by single-linkage on the cosine similarity of 32x32
@@ -40,7 +40,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-WS = Path(__file__).resolve().parents[1]
+WS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(WS))
 from uw import config  # noqa: E402
 
@@ -193,7 +193,7 @@ def build(name: str, pattern: str, share: float, note: str, threshold: float, di
 
 
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(prog="python -m uw py tools/real_holdout.py",
+    ap = argparse.ArgumentParser(prog="python -m uw py physics/tools/real_holdout.py",
                                  description=__doc__.splitlines()[0])
     ap.add_argument("--threshold", type=float, default=0.95,
                     help="group frames more similar than this; it is also the bound on cross-split "

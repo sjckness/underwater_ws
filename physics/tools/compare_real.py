@@ -1,6 +1,6 @@
 """Compare sonar recordings, real or simulated, on what M2 checks.
 
-    python -m uw py tools/compare_real.py DATASET [DATASET ...] [--frames 50] [--out output/compare_real]
+    python -m uw py physics/tools/compare_real.py DATASET [DATASET ...] [--frames 50] [--out output/compare_real]
 
 A DATASET is one of:
   uw    a directory written by `python -m uw sonar-only` (sonar/<seq>.npz: polar_db, range_m, bearing_deg),
@@ -24,7 +24,7 @@ which no real recording is: a published image has the maker's TVG and display ga
 recoverable. So `tvg` and `img` put our own gain chain back on before comparing anything that depends on
 level -- without that, the level-vs-range row compares a physical quantity against a displayed one.
 
---split restricts the real corpora to one half of the leak-free split that tools/real_holdout.py wrote.
+--split restricts the real corpora to one half of the leak-free split that physics/tools/real_holdout.py wrote.
 Calibrate on `calibrate`; read `holdout` once, at the end.
 Per dataset, averaged over the frames: background speckle (Rayleigh check, K shape), the brightest target's width
 and sidelobe level, blind zone and ring-down near the sonar, the level-vs-range (TVG) profile. JSON + PNG.
@@ -40,9 +40,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-WS = Path(__file__).resolve().parents[1]
+WS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(WS))
-from uw import config, sonar_stats  # noqa: E402
+from uw import config  # noqa: E402
+from physics import sonar_stats  # noqa: E402
 
 
 IMAGE_SUFFIXES = (".bmp", ".png", ".jpg", ".jpeg")
@@ -54,13 +55,13 @@ UW_CHANNELS = ("db", "tvg", "img")
 def uw_gain(path: Path) -> dict:
     """The gain chain that turns the simulation's physical dB into the sensor units a real recording is in.
 
-    `uw/sonar.py`'s display_kernel computes `level + k log10(R) + 2 alpha R - nf_db` and maps the result
+    `physics/sonar.py`'s display_kernel computes `level + k log10(R) + 2 alpha R - nf_db` and maps the result
     through `sonar.display_db` into 8 bits, while the stored `polar_db` stays absolute dB re 1 uPa. A real
     8-bit recording has the maker's equivalent of that chain already applied and not recoverable, which is
     why the previous comparison read -158.9 dB/decade for the sim against +23.7 for UATD: it compared a
     physical level against a displayed one. Reapplying our own chain is what makes the two comparable.
 
-    Read from the per-ping JSON, which `uw/recorder.py` writes for exactly this reason ("without which the
+    Read from the per-ping JSON, which `sim/recorder.py` writes for exactly this reason ("without which the
     8-bit polar image is not invertible"), and fall back to the dataset's own resolved config for the fields
     that datasets written before that export predate.
     """
@@ -77,7 +78,7 @@ def uw_gain(path: Path) -> dict:
     if out["display_db"] is None:
         out["display_db"] = cfg.get("sonar", {}).get("display_db")
     if out["absorption_db_per_m"] is None and cfg:
-        from uw import water as wat
+        from physics import water as wat
         md = config.sonar_mode(cfg)
         w = cfg["water"]
         out["absorption_db_per_m"] = wat.absorption_db_per_m(
@@ -259,7 +260,7 @@ def only(files, keep):
 
 
 def split_files(holdout: Path, dataset: Path, half: str) -> set:
-    """The resolved paths of one half of one corpus, from the manifest `tools/real_holdout.py` wrote.
+    """The resolved paths of one half of one corpus, from the manifest `physics/tools/real_holdout.py` wrote.
 
     The split is read, never recomputed here: the grouping that makes it leak-free lives in that tool, and a
     second opinion about which frames belong together would quietly undo the guarantee. A corpus that the
@@ -281,7 +282,7 @@ def split_files(holdout: Path, dataset: Path, half: str) -> set:
             raise SystemExit(f"{dataset}: corpus '{name}' has no frames in the '{half}' half "
                              f"(its holdout share is {d['counts'].get('holdout', 0)}/{d['frames']})")
         return under
-    raise SystemExit(f"{dataset}: not covered by {holdout}; add it to tools/real_holdout.py and rebuild")
+    raise SystemExit(f"{dataset}: not covered by {holdout}; add it to physics/tools/real_holdout.py and rebuild")
 
 
 def uatd_at_range(path: Path, r_max: float, tol: float = 0.5) -> set:
@@ -478,7 +479,7 @@ def main():
                          "meant to be read once, at the end; everything before that runs on 'calibrate'")
     ap.add_argument("--holdout", type=Path,
                     default=Path(config.WS) / "output" / "compare_real" / "holdout.json",
-                    help="the split manifest written by tools/real_holdout.py (default: %(default)s)")
+                    help="the split manifest written by physics/tools/real_holdout.py (default: %(default)s)")
     ap.add_argument("--out", type=Path, default=Path(config.WS) / "output" / "compare_real")
     args = ap.parse_args()
     n = len(args.datasets)

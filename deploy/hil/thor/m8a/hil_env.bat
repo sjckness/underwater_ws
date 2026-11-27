@@ -8,7 +8,7 @@ set "BRIDGE=%ISAAC_ENV%\Lib\site-packages\isaacsim\exts\isaacsim.ros2.bridge"
 set "HIL_DIR=%~dp0"
 
 rem Il bridge di Isaac 5.1 su Windows ha le librerie interne di una sola distribuzione (di norma humble).
-rem uw/ros_bridge.py usa jazzy come predefinito: qui lo impostiamo in base a cio' che esiste davvero.
+rem sim/ros_bridge.py usa jazzy come predefinito: qui lo impostiamo in base a cio' che esiste davvero.
 set "ROS_DISTRO="
 if exist "%BRIDGE%\humble\lib" set "ROS_DISTRO=humble"
 if not defined ROS_DISTRO if exist "%BRIDGE%\jazzy\lib" set "ROS_DISTRO=jazzy"

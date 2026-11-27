@@ -2,17 +2,17 @@
 #
 # It runs on thor and orin (arm64) and on linus (amd64); ros:jazzy-ros-base is multi-arch, so this one file
 # builds natively on each. It carries no project code: the workspace is bind-mounted at the same path as on the
-# host (docker/compose.stack.yaml), so ros/sonar_relay/run.sh, ros/link_monitor/run.sh and ros/pose_cmd/run.sh
+# host (deploy/docker/compose.stack.yaml), so ros/src/sonar_relay/run.sh, ros/src/link_monitor/run.sh and ros/src/pose_cmd/run.sh
 # work inside it unchanged, exactly as they do on linus today.
 #
 # Build (natively, on the machine that will run it — much faster than cross-building):
-#     docker build -t uw_stack:jazzy -f docker/stack/Dockerfile docker/stack
+#     docker build -t uw_stack:jazzy -f deploy/docker/Dockerfile.stack deploy/docker
 # Cross-build from linus for a Jetson, if ever needed (needs the arm64 binfmt handler, which this box does not
 # have today: `docker run --privileged --rm tonistiigi/binfmt --install arm64` installs it):
-#     docker buildx build --platform linux/arm64 -t uw_stack:jazzy -f docker/stack/Dockerfile --load docker/stack
+#     docker buildx build --platform linux/arm64 -t uw_stack:jazzy -f deploy/docker/Dockerfile.stack --load deploy/docker
 FROM ros:jazzy-ros-base
 
-# marine_acoustic_msgs is what ros/sonar_relay publishes and what the detector consumes; it is the one message
+# marine_acoustic_msgs is what ros/src/sonar_relay publishes and what the detector consumes; it is the one message
 # package the sim's bundled rclpy does NOT have, which is why the relay is a separate node on the sim host
 # (docs/topic_map.md §8 item 2). rosbag2 is the detector and evaluation bags; iproute2 and ethtool are for the
 # link checks of docs/bridge_setup.md §2 check 3, which have to run where the NIC is.
@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # simplejpeg (libturbojpeg) to DECODE the sim's jpeg CompressedImage. Note which side needs what: the encoder
-# belongs to the publisher, which is the Isaac container (uw/ros_bridge.py installs it into UW_PYDEPS on first
+# belongs to the publisher, which is the Isaac container (sim/ros_bridge.py installs it into UW_PYDEPS on first
 # use); this image needs the decoder, for the detector and for any republisher. A cp312 aarch64 wheel exists, so
 # the Jetson build compiles nothing (checked 2026-10-29). --break-system-packages: Ubuntu 24.04 is PEP 668.
 RUN python3 -m pip install --no-cache-dir --break-system-packages simplejpeg==1.9.0

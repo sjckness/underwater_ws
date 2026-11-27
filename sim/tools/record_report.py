@@ -1,7 +1,7 @@
-"""Report of recording runs (tools/record.py): <root>/report.md plus one contact sheet PNG per run.
+"""Report of recording runs (sim/tools/record.py): <root>/report.md plus one contact sheet PNG per run.
 
-    python tools/record_report.py                         # every run under output/records
-    python tools/record_report.py --runs a_circle a_updown
+    python sim/tools/record_report.py                         # every run under output/records
+    python sim/tools/record_report.py --runs a_circle a_updown
 
 Per run: exit code (exit_code.txt, written by output/hil/record_all.bat) and the loop's exit_reason, frame counts
 (sonar, left, right, ground truth), timestamp drift left/right (same seq) and camera/sonar (nearest ping), RTF and GPU
@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-WS = Path(__file__).resolve().parents[1]
+WS = Path(__file__).resolve().parents[2]
 
 
 def stamps(manifest: dict, sensor: str) -> dict:
@@ -107,7 +107,7 @@ def main() -> int:
     args = ap.parse_args()
     root = Path(args.root)
     runs = [root / r for r in args.runs] if args.runs else sorted(p.parent for p in root.glob("*/run.json"))
-    if not args.no_videos:                     # tools/record_video.py: camera, sonar fan, combined (10 fps)
+    if not args.no_videos:                     # sim/tools/record_video.py: camera, sonar fan, combined (10 fps)
         import sys
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         from record_video import make_videos

@@ -1,6 +1,6 @@
 """Build a YOLO-seg dataset through Ultralytics' own loader, with no model and no training.
 
-    <venv-with-ultralytics>/bin/python -I tools/verify_yolo_ultralytics.py DIR/data.yaml
+    <venv-with-ultralytics>/bin/python -I ml/tools/verify_yolo_ultralytics.py DIR/data.yaml
 
 Needs ultralytics, which the repo's own interpreter does not have; on linus use
 /home/andreas/dev_ws/kumi_stack/.venv. This is the exact code path `yolo segment train` takes to read a

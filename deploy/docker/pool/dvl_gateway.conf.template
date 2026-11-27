@@ -1,4 +1,4 @@
-# What BlueOS's Water Linked DVL extension sees as "the vehicle" (docker/pool/compose.yaml, service dvl-gateway).
+# What BlueOS's Water Linked DVL extension sees as "the vehicle" (deploy/docker/pool/compose.yaml, service dvl-gateway).
 # On a real BlueROV2 the extension reaches BlueOS's nginx as host.docker.internal; here this server stands in, so
 # that the extension runs unmodified next to a BlueOS without a docker socket (no extensions of its own):
 #   /mavlink2rest/            -> BlueOS's mavlink2rest (the extension's VISION_POSITION_DELTA, PARAM_SET, ...)

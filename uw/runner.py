@@ -62,13 +62,13 @@ def main(argv: list[str]) -> int:
         if cmd == "test":
             return run_test(args)
         if cmd == "sonar-only":
-            from . import sonar_only
+            from sim import sonar_only
             return sonar_only.main(args)
         if cmd == "sim":
-            from . import main as sim_main
+            from sim import main as sim_main
             return sim_main.main(args)
         if cmd == "pool":
-            from . import pool
+            from sim import pool
             return pool.main(args)
     except KeyboardInterrupt:
         print("uw: interrupted", file=sys.stderr)

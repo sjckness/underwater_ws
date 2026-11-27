@@ -1,5 +1,5 @@
 """`python -m uw`: the entry point. Runs a command in the Isaac Sim container (Linux) or with a local Python (Windows
-venv, native Isaac), as config/runtime.yaml says.
+venv, native Isaac), as uw/runtime.yaml says.
 
     python -m uw py SCRIPT [args]        also py -m MODULE, py -c CODE
     python -m uw test [pytest args]
@@ -38,9 +38,12 @@ BOOT = ('source "$0/setup_python_env.sh"; '
 
 
 def runtime() -> dict:
-    """config/runtime.yaml, with config/runtime.local.yaml merged over it; UW_RUNTIME and UW_PYTHON override."""
-    rt = yaml.safe_load((WS / "config" / "runtime.yaml").read_text())
-    local = WS / "config" / "runtime.local.yaml"
+    """uw/runtime.yaml, with uw/runtime.local.yaml merged over it; UW_RUNTIME and UW_PYTHON override."""
+    rt = yaml.safe_load((WS / "uw" / "runtime.yaml").read_text())
+    local = WS / "uw" / "runtime.local.yaml"
+    if (WS / "config" / "runtime.local.yaml").is_file() and not local.is_file():
+        print("uw: config/runtime.local.yaml is not read any more: move it to uw/runtime.local.yaml "
+              "(docs/MIGRATION.md)", file=sys.stderr)
     if local.is_file():
         rt = merge(rt, yaml.safe_load(local.read_text()) or {})
     rt["mode"] = os.environ.get("UW_RUNTIME", rt["mode"])
@@ -57,10 +60,10 @@ def git_version() -> str:
     """The repository's version, resolved here on the host and passed to the target as ``UW_GIT_VERSION``.
 
     The Isaac container mounts `.git` but ships no git binary, so a ping generated inside it cannot work this
-    out for itself and would record its provenance as "unknown". `uw.recorder.git_version` prefers the
+    out for itself and would record its provenance as "unknown". `sim.recorder.git_version` prefers the
     variable this sets.
     """
-    from .recorder import git_version as resolve
+    from sim.recorder import git_version as resolve
     return resolve()
 
 

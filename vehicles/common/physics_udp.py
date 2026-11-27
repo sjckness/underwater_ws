@@ -1,16 +1,16 @@
 """The ROV physics server for ArduSub SITL's JSON backend (M8a step 3), and ``ArduSubPose`` (sonar.pose_source ardusub).
 
-SITL is the client, this module the server (docker/ardusub_sitl/README.md, the format of tools/stub_physics.py):
+SITL is the client, this module the server (deploy/docker/ardusub_sitl/README.md, the format of sim/tools/stub_physics.py):
   SITL -> sim   servo packet to UDP 127.0.0.1:<sim.physics_port>, little endian: uint16 magic, uint16 frame_rate,
                 uint32 frame_count, uint16 pwm[16] (magic 18458) or pwm[32] (magic 29569)
   sim -> SITL   one reply per servo packet, to the packet's source: "\\n{json}\\n" with the stub's exact layout
 
-The thread integrates the Fossen model of uw.rov.dynamics (imported, not rewritten) with the vehicle file named by
+The thread integrates the Fossen model of vehicles.common.dynamics (imported, not rewritten) with the vehicle file named by
 vehicle.params, one or more fixed steps of 1/integrator.rate_hz (400 Hz, docs/ros_hil.md 3.2) per servo packet,
 decoupled from the ping. SITL is lockstep, so its clock is the timestamps sent here; they are paced against the
 wall clock at sim.physics_rtf (1.0 = real time, the pace the Isaac loop keeps with sim.realtime).
 
-Frames (docs/ros_hil.md 6.2, uw/rov/frames.py the only converter): the tank is ENU, the body FLU; SITL gets NED/FRD
+Frames (docs/ros_hil.md 6.2, vehicles/common/frames.py the only converter): the tank is ENU, the body FLU; SITL gets NED/FRD
 relative to the home point vehicle.home_tank (null: the start point) on the free surface.
 
 Only the body state is shared with the Isaac loop, behind a lock. ``ArduSubPose.at`` turns it into the sonar's
@@ -27,7 +27,7 @@ import time
 
 import numpy as np
 
-from .config import ConfigError, get
+from uw.config import ConfigError, get
 
 log = logging.getLogger("uw.physics")
 
@@ -43,7 +43,7 @@ def _v(a) -> str:
 
 
 def reply(t: float, gyro, accel, position, attitude, velocity) -> bytes:
-    """The JSON frame, in tools/stub_physics.py's layout (keys, order, separators)."""
+    """The JSON frame, in sim/tools/stub_physics.py's layout (keys, order, separators)."""
     return ('\n{"timestamp":%.6f,"imu":{"gyro":%s,"accel_body":%s},"position":%s,"attitude":%s,"velocity":%s}\n'
             % (t, _v(gyro), _v(accel), _v(position), _v(attitude), _v(velocity))).encode()
 
@@ -61,7 +61,7 @@ def parse_servo(data: bytes):
 
 class PhysicsServer:
     """The UDP server thread. ``start`` binds first, in the caller's thread, so a busy port is an immediate
-    ``ConfigError`` (typically tools/stub_physics.py still running), never a silently dead thread."""
+    ``ConfigError`` (typically sim/tools/stub_physics.py still running), never a silently dead thread."""
 
     # A step this far behind the wall clock re-anchors the pacing instead of letting SITL catch up at full speed
     # (a stall of the host would otherwise be followed by a burst of fast-forwarded physics).
@@ -69,7 +69,7 @@ class PhysicsServer:
 
     def __init__(self, vehicle, state, home_tank, water_level: float, port: int, bind: str = "127.0.0.1",
                  rtf: float = 1.0, on_step=None):
-        from .rov import frames
+        from . import frames
         self.frames, self.vehicle, self.state = frames, vehicle, state
         self.home_ned = frames.position_tank_to_ned(np.array([home_tank[0], home_tank[1], water_level]), water_level)
         self.water_level, self.port, self.bind_addr, self.rtf = float(water_level), int(port), bind, float(rtf)
@@ -98,7 +98,7 @@ class PhysicsServer:
             s.bind((self.bind_addr, self.port))
         except OSError as exc:
             s.close()
-            raise ConfigError(f"physics: UDP {self.bind_addr}:{self.port} is busy ({exc}). Is tools/stub_physics.py "
+            raise ConfigError(f"physics: UDP {self.bind_addr}:{self.port} is busy ({exc}). Is sim/tools/stub_physics.py "
                               "(or another sim) still running? Stop it, or set sim.physics_port.") from exc
         s.settimeout(0.2)
         self.sock, self.port = s, s.getsockname()[1]          # port 0 (tests): the one the OS picked
@@ -210,7 +210,7 @@ class PhysicsServer:
 
 def mount(cfg: dict):
     """The sonar in the body frame: (rotation sonar -> body FLU, position [m])."""
-    from .geometry import body_rotation, sonar_rotation
+    from physics.geometry import body_rotation, sonar_rotation
     rb = body_rotation(cfg)
     return rb.T @ sonar_rotation(cfg), -np.asarray(get(cfg, "vehicle.body.offset"), float)
 
@@ -219,9 +219,9 @@ def make_server(cfg: dict) -> PhysicsServer:
     """The server for ``cfg``: the vehicle file vehicle.params, the start pose = the body at the configured sonar
     pose, home vehicle.home_tank (null: the start point)."""
     from pathlib import Path
-    from .config import WS
-    from .geometry import body_rotation
-    from .rov import dynamics, frames
+    from uw.config import WS
+    from physics.geometry import body_rotation
+    from . import dynamics, frames
     port = get(cfg, "sim.physics_port")
     if port is None:
         raise ConfigError("sonar.pose_source ardusub needs sim.physics_port (e.g. --set sim.physics_port=9002)")
@@ -252,8 +252,8 @@ class ArduSubPose:
         self.r_mount, self.p_mount = mount(cfg)
 
     def at(self, t: float):
-        from .geometry import rpy_deg_of
-        from .pose import Pose
+        from physics.geometry import rpy_deg_of
+        from sim.pose import Pose
         if self.server.error is not None:
             raise RuntimeError(f"physics thread died: {self.server.error!r}") from self.server.error
         p, rb = self.server.body_pose()
@@ -265,7 +265,7 @@ class ArduSubPose:
     def body_at(self, t: float):
         """(position in the tank [m], body FLU -> tank ENU rotation) of the vehicle body, not the sonar.
 
-        The same shape as ``uw.pose.ScriptPose.body_at``, so a sensor mounted on the body (the DVL) can
+        The same shape as ``sim.pose.ScriptPose.body_at``, so a sensor mounted on the body (the DVL) can
         ask any pose source the same question.
         """
         if self.server.error is not None:

@@ -1,6 +1,6 @@
-"""Statistics and a sanity check of a sweep dataset (tools/sweep.py), host-side (numpy, matplotlib).
+"""Statistics and a sanity check of a sweep dataset (ml/tools/sweep.py), host-side (numpy, matplotlib).
 
-    python3 tools/dataset_stats.py ROOT [--examples 20] [--image-checks 600] [--seed 0]
+    python3 ml/tools/dataset_stats.py ROOT [--examples 20] [--image-checks 600] [--seed 0]
 
 Writes ROOT/stats/: report.md, stats.json, overview.png (class balance, flow histograms, pose coverage, label sizes,
 generation times) and examples.png (random pings as fans, labels outlined: mask_geom cyan, mask_direct orange).
@@ -21,9 +21,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-WS = Path(__file__).resolve().parents[1]
+WS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(WS))
-from uw.sinks import read_png  # noqa: E402
+from sim.sinks import read_png  # noqa: E402
 
 
 def fan(polar: np.ndarray, range_m: np.ndarray, bearing_deg: np.ndarray, width: int = 400) -> tuple:

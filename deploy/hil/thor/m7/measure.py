@@ -2,7 +2,7 @@
 """M7 acceptance: per-topic rate / gaps / bandwidth for the sensors-only HIL leg, plus /clock RTF.
 
 Run in a shell where `source ~/hil_env.sh` was done:
-    python3 hil/thor/m7/measure.py --duration 120 --warmup 5   # writes results/measure.json next to this script
+    python3 deploy/hil/thor/m7/measure.py --duration 120 --warmup 5   # writes results/measure.json next to this script
 
 Everything "wall" is the Thor's local CLOCK_MONOTONIC (never compared with the sim PC's clock).
 Everything "sim" comes from header stamps or /clock as produced by Isaac.

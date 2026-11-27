@@ -1,6 +1,6 @@
 """Avvia `uw sim` come fa il launcher nativo, ma senza perdere gli errori.
 
-Perche': uw/main.py chiude l'app Kit in un `finally`; se run() solleva un'eccezione durante il setup, la chiusura
+Perche': sim/main.py chiude l'app Kit in un `finally`; se run() solleva un'eccezione durante il setup, la chiusura
 puo' terminare il processo prima che Python stampi il traceback. Qui:
   - il traceback viene stampato subito;
   - i log INFO di uw.* (setup, running, stopped) vanno in console (Kit mostra solo i Warning);
@@ -21,10 +21,11 @@ import sys
 import traceback
 from pathlib import Path
 
-WS = Path(__file__).resolve().parents[1]
+WS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(WS))
 
-from uw import launcher, main as sim_main, runner  # noqa: E402
+from uw import launcher, runner  # noqa: E402
+from sim import main as sim_main  # noqa: E402
 
 # Stesso ambiente che launcher.run_native() passa al processo figlio.
 rt = launcher.runtime()
