@@ -226,18 +226,27 @@ def _tank(stage, cfg: dict, texture_dir: Path) -> None:
         k += 1
 
     looks = {}                                                    # role -> material, made on first use
+    objects = {s.name: pl for pl, s in pool_geometry.placed_objects(cfg)}
     for solid in pool_geometry.solids(cfg):                       # the ladder and the props: the DVL's beams see
-        if solid.role not in looks:                               #   the same list (uw.pool_geometry.PoolBottom)
+        path = f"{POOL}/{solid.name}"                             #   the same list (uw.pool_geometry.PoolBottom)
+        if solid.name in objects and _object_asset(stage, path, objects[solid.name]):
+            continue                                              # a COCO object with its 3-D model
+        if solid.role not in looks:
             looks[solid.role] = _prop_look(stage, solid.role, texture_dir)
-        path = f"{POOL}/{solid.name}"
         if isinstance(solid, pool_geometry.Box):
-            prim = _box(stage, path, solid.center, solid.size)
+            prim = _box(stage, path, solid.center, solid.size, _rot_z(math.radians(solid.yaw_deg)))
+        elif isinstance(solid, pool_geometry.Sphere):
+            prim = UsdGeom.Sphere.Define(stage, path)
+            prim.CreateRadiusAttr(float(solid.radius))
+            UsdGeom.Xformable(prim).AddTranslateOp().Set(Gf.Vec3d(*map(float, solid.center)))
         elif isinstance(solid, pool_geometry.Cylinder):
             prim = _cylinder(stage, path, solid.center, solid.radius, solid.length, axis=solid.axis)
         else:
             c = np.asarray(solid.corners, float)
             prim = _quad(stage, path, c, float(np.linalg.norm(c[1] - c[0])))
         _bind(prim, looks[solid.role])
+        if solid.name in objects:                                 # the stand-in still carries the class label
+            label(prim.GetPrim(), objects[solid.name]["coco"])
 
     if get(cfg, "water.surface"):
         water = _mdl_material(stage, f"{LOOKS}/water_surface", "OmniGlass.mdl", "OmniGlass",
@@ -247,6 +256,45 @@ def _tank(stage, cfg: dict, texture_dir: Path) -> None:
         surf = _quad(stage, f"{POOL}/water_surface", [(0, 0, wl), (L, 0, wl), (L, W, wl), (0, W, wl)])
         UsdGeom.PrimvarsAPI(surf).CreatePrimvar("doNotCastShadows", Sdf.ValueTypeNames.Bool).Set(True)
         _bind(surf, water)
+
+
+PROPS_DIR = Path(WS) / "assets" / "props"           # tools/fetch_props.py: <id>/<id>.usd, metres, Z up, origin at the
+                                                    #   bottom centre, the object's length along +x
+
+
+def object_asset_path(oid: str) -> Path:
+    return PROPS_DIR / oid / f"{oid}.usd"
+
+
+def _object_asset(stage, path: str, pl: dict) -> bool:
+    """Reference the object's fetched model at its placement (False when it has not been fetched: the caller then
+    draws the stand-in solid)."""
+    asset = object_asset_path(pl["id"])
+    if not asset.is_file():
+        return False
+    x = UsdGeom.Xform.Define(stage, path)
+    x.GetPrim().GetReferences().AddReference(str(asset))
+    xf = UsdGeom.Xformable(x)
+    xf.AddTranslateOp().Set(Gf.Vec3d(*map(float, pl["xyz"])))
+    xf.AddRotateZOp().Set(float(pl["yaw_deg"]))
+    label(x.GetPrim(), pl["coco"])
+    return True
+
+
+def label(prim, coco_class: str) -> None:
+    """The semantic class label (the COCO name), for Replicator's 2-D boxes and segmentation: UsdSemantics'
+    LabelsAPI (Isaac Sim 5), else the older Semantics schema. Spaces become underscores ("sports_ball"):
+    Replicator splits a label at spaces."""
+    coco_class = coco_class.replace(" ", "_")
+    try:
+        from pxr import UsdSemantics
+        api = UsdSemantics.LabelsAPI.Apply(prim, "class")
+        api.CreateLabelsAttr().Set([coco_class])
+    except ImportError:
+        from pxr import Semantics
+        sem = Semantics.SemanticsAPI.Apply(prim, "Semantics")
+        sem.CreateSemanticTypeAttr().Set("class")
+        sem.CreateSemanticDataAttr().Set(coco_class)
 
 
 def _prop_look(stage, role: str, texture_dir: Path):

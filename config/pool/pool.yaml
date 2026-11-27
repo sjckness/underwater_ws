@@ -28,6 +28,19 @@ pool:
     - {name: block, kind: box, at: [0.44, 0.24], z: 0.10, size: [0.4, 0.2, 0.2], role: block}      # concrete
     - {name: pipe, kind: cylinder, at: [0.56, 0.26], z: 0.15, radius: 0.15, length: 1.5, axis: X, role: pipe}
     - {name: board, kind: board, at: [0.50, 0.40], size: 0.6, role: board}   # a checkerboard 8.5 m ahead of the start
+  objects_catalog: config/pool/objects.yaml   # the COCO objects: class, size, material, 3-D model (tools/fetch_props.py)
+  objects:                        # placed objects: {id, at: [fx, fy] fractions of L and W, yaw_deg, z (of the bottom,
+                                  #   above the floor), name}; the catalogue's size is also the DVL's solid. Without the
+                                  #   fetched model (tools/fetch_props.py), a stand-in box or sphere of that size.
+                                  #   Here: within 3-15 m of the start, in front of it
+    - {id: ball, at: [0.48, 0.18]}
+    - {id: bottle, at: [0.53, 0.20], yaw_deg: 40}
+    - {id: chair, at: [0.42, 0.32], yaw_deg: 200}
+    - {id: daypack, at: [0.47, 0.48], yaw_deg: 30}
+    - {id: suitcase, at: [0.58, 0.38], yaw_deg: -20}
+    - {id: bicycle, at: [0.63, 0.50], yaw_deg: 70}
+    - {id: canoe, at: [0.38, 0.56], yaw_deg: 15}
+    - {id: diver, at: [0.54, 0.64], z: 0.5, yaw_deg: 110}     # swimming half a metre above the floor
 
 water:
   temperature_c: 27.0            # an indoor pool. Sets the speed of sound the DVL sees (uw/water.py). GUESS
@@ -121,7 +134,11 @@ acoustics:                        # what the DVL's beams hit (uw/pool_geometry.p
     steel:    {Z: 45.0, lambert_db: -35.0, rms_slope: 0.03}   # the ladder
     pipe:     {Z: 30.0, lambert_db: -35.0, rms_slope: 0.05}   # coated steel
     board:    {Z: 3.0,  lambert_db: -30.0, rms_slope: 0.10}   # a plastic marker board
-  roles: {floor: tiles, wall: tiles, ladder: steel, block: concrete, pipe: pipe, board: board}
+    plastic:  {Z: 2.5,  lambert_db: -30.0, rms_slope: 0.08}   # the COCO objects (config/pool/objects.yaml): chair,
+    neoprene: {Z: 1.6,  lambert_db: -25.0, rms_slope: 0.20}   #   boat, bottles, ball; a wetsuit; a bicycle's steel
+    fabric:   {Z: 1.7,  lambert_db: -24.0, rms_slope: 0.25}   #   is "steel". Wet fabric is nearly water: weak echo
+  roles: {floor: tiles, wall: tiles, ladder: steel, block: concrete, pipe: pipe, board: board, plastic: plastic,
+          neoprene: neoprene, fabric: fabric, steel: steel}
 
 dvl:                              # Water Linked DVL A50 under the Heavy: the model of config/tank.yaml (uw/rov/dvl.py,
                                   #   docs/dvl.md) cast at the pool (uw/pool_geometry.py), and the device's network side

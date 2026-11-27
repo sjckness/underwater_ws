@@ -29,6 +29,15 @@ class Box:
     center: tuple
     size: tuple
     role: str
+    yaw_deg: float = 0.0    # about z through the centre: the size is along the box's own axes
+
+
+@dataclass(frozen=True)
+class Sphere:
+    name: str
+    center: tuple
+    radius: float
+    role: str
 
 
 @dataclass(frozen=True)
@@ -62,6 +71,62 @@ def solids(cfg: dict) -> list:
             out.append(Cylinder(f"ladder/rung_{r}", (x0 + 0.25, y0, wl - 1.4 + 0.3 * r), 0.015, 0.5, "X", "ladder"))
     for prop in get(cfg, "pool.props") or ():                   # on the floor
         out.append(_prop(prop, L, W))
+    out.extend(s for _, s in placed_objects(cfg))
+    return out
+
+
+# ------------------------------------------------------------------------------- the COCO objects (M12 P4)
+
+def object_catalog(cfg: dict) -> dict:
+    """config/pool/objects.yaml (``pool.objects_catalog``): id -> what the object is (COCO class, real size,
+    acoustic material, DVL shape) and where its 3-D model comes from (tools/fetch_props.py)."""
+    import yaml
+    from pathlib import Path
+    from .config import WS, ConfigError
+    path = Path(WS) / str(get(cfg, "pool.objects_catalog"))
+    if not path.is_file():
+        raise ConfigError(f"pool.objects_catalog: {path} not found")
+    cat = (yaml.safe_load(path.read_text()) or {}).get("objects") or {}
+    for oid, o in cat.items():
+        for key in ("coco", "size_m", "material", "shape"):
+            if key not in o:
+                raise ConfigError(f"{path.name}: object {oid!r} has no {key!r}")
+        if o["shape"] not in ("box", "sphere"):
+            raise ConfigError(f"{path.name}: object {oid!r}: shape must be box | sphere, got {o['shape']!r}")
+    return cat
+
+
+def placed_objects(cfg: dict) -> list:
+    """``pool.objects`` resolved: (placement dict with ``id``, ``name``, ``xyz`` [m] of the bottom centre and
+    ``yaw_deg``, the DVL solid). ``at`` is [x, y] as fractions of L and W like the props; ``z`` the height of the
+    object's bottom above the floor (default 0: lying on it); ``yaw_deg`` about z."""
+    from .config import ConfigError
+    placed = get(cfg, "pool.objects") or ()
+    if not placed:
+        return []
+    L, W, _ = (float(v) for v in get(cfg, "pool.size"))
+    cat = object_catalog(cfg)
+    out = []
+    seen = set()
+    for i, pl in enumerate(placed):
+        oid = pl.get("id")
+        if oid not in cat:
+            raise ConfigError(f"pool.objects[{i}]: unknown id {oid!r} (catalogue: {sorted(cat)})")
+        o = cat[oid]
+        name = str(pl.get("name", oid))
+        if name in seen:
+            raise ConfigError(f"pool.objects[{i}]: the name {name!r} is used twice (give a `name`)")
+        seen.add(name)
+        x, y = float(pl["at"][0]) * L, float(pl["at"][1]) * W
+        z0 = float(pl.get("z", 0.0))
+        yaw = float(pl.get("yaw_deg", 0.0))
+        size = tuple(float(v) for v in o["size_m"])
+        if o["shape"] == "sphere":
+            solid = Sphere(f"objects/{name}", (x, y, z0 + size[2] / 2), size[2] / 2, str(o["material"]))
+        else:
+            solid = Box(f"objects/{name}", (x, y, z0 + size[2] / 2), size, str(o["material"]), yaw)
+        out.append(({"id": oid, "name": name, "coco": str(o["coco"]), "xyz": (x, y, z0), "yaw_deg": yaw,
+                     "size_m": size}, solid))
     return out
 
 
@@ -96,6 +161,36 @@ def ceiling_grid(cfg: dict) -> tuple[int, int]:
 
 
 # ----------------------------------------------------------------------------------------- ray casting
+
+def _ray_box_yawed(o, d, center, size, yaw_deg):
+    """``_ray_box`` for a box turned by ``yaw_deg`` about z: the ray goes into the box's frame and the normal
+    comes back out."""
+    c = np.asarray(center, float)
+    h = np.asarray(size, float) / 2
+    if yaw_deg == 0.0:
+        return _ray_box(o, d, c - h, c + h)
+    a = math.radians(yaw_deg)
+    ca, sa = math.cos(a), math.sin(a)
+    rot = np.array([[ca, -sa, 0.0], [sa, ca, 0.0], [0.0, 0.0, 1.0]])     # box -> pool
+    t, n = _ray_box(rot.T @ (np.asarray(o, float) - c), rot.T @ d, -h, h)
+    return t, (None if n is None else rot @ n)
+
+
+def _ray_sphere(o, d, c, radius):
+    """First hit of a ray (unit ``d``) on a sphere from outside: (t, outward normal) or (inf, None)."""
+    oc = np.asarray(o, float) - np.asarray(c, float)
+    b = float(oc @ d)
+    cc = float(oc @ oc) - radius * radius
+    if cc <= 0.0:
+        return math.inf, None                                     # starting inside
+    disc = b * b - cc
+    if disc < 0.0:
+        return math.inf, None
+    t = -b - math.sqrt(disc)
+    if t <= _EPS:
+        return math.inf, None
+    return t, (oc + t * d) / radius
+
 
 def _ray_box(o, d, lo, hi):
     """Entry distance and outward normal of a ray into an axis-aligned box (inf if missed or starting inside)."""
@@ -227,8 +322,9 @@ class PoolBottom:
             best, normal, role = self._shell(o, d)
             for s in self.solids:
                 if isinstance(s, Box):
-                    c, h = np.asarray(s.center, float), np.asarray(s.size, float) / 2
-                    t, nn = _ray_box(o, d, c - h, c + h)
+                    t, nn = _ray_box_yawed(o, d, s.center, s.size, s.yaw_deg)
+                elif isinstance(s, Sphere):
+                    t, nn = _ray_sphere(o, d, s.center, s.radius)
                 elif isinstance(s, Cylinder):
                     t, nn = _ray_cylinder(o, d, s.center, s.radius, s.length, s.axis)
                 else:

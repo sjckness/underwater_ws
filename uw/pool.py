@@ -27,6 +27,8 @@ from .config import WS, get
 log = logging.getLogger("uw.pool")
 CAMERA_WARMUP_RENDERS = 10
 SNAPSHOT_DIR = Path(WS) / "output" / "pool" / "snapshots"
+VIEWS_DIR = Path(WS) / "output" / "pool" / "views"
+VIEW_SETTLE_RENDERS = 12                  # renders per view before the frame is kept: DLSS and the denoiser settle
 
 
 def tilt_of_pwm(cfg: dict, pwm: float) -> float:
@@ -54,6 +56,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                     help="with --gui, the viewport's camera: behind the ROV (default), the ROV's own (raw render, "
                          "no water), or Isaac's free perspective camera")
     ap.add_argument("--stats-file", default="", help="write run statistics (JSON) here on exit")
+    ap.add_argument("--views", metavar="NAME", default="",
+                    help="no physics, no stream: look at every COCO object (pool.objects) from --view-dist metres and "
+                         "--view-az directions, and write the frames, the water applied, with Replicator's 2-D boxes "
+                         f"to {VIEWS_DIR}/NAME (for tools/eval_views.py)")
+    ap.add_argument("--view-dist", type=float, nargs="+", default=[2.0, 3.0, 4.0, 6.0, 8.0], metavar="M")
+    ap.add_argument("--view-az", type=int, default=4, help="directions around each object (default %(default)s)")
+    ap.add_argument("--view-height", type=float, default=1.0,
+                    help="camera height above the object's top [m], negative for below it (default %(default)s; "
+                         "never under 0.35 m from the floor)")
+    ap.add_argument("--view-lights", type=float, default=0.0, metavar="F",
+                    help="the ROV's Lumens at this fraction of full power during the views (default off)")
     config.add_args(ap.add_argument)
     return ap.parse_args(argv)
 
@@ -62,6 +75,8 @@ def main(argv: list[str]) -> int:
     args = parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     cfg = config.from_args(args, config.POOL_CONFIG)
+    if args.views:
+        return main_views(cfg, args)
     from .rov.physics_proc import PhysicsProcess
     physics = PhysicsProcess(cfg).start()            # first: SITL can lock on while Kit boots, a busy port fails fast
     log.info("physics process up on UDP %s:%d; %s", get(cfg, "physics.bind"), physics.port,
@@ -84,6 +99,111 @@ def main(argv: list[str]) -> int:
         physics.close()
         if app is not None:
             app.close()
+
+
+def main_views(cfg: dict, args) -> int:
+    from .app import create_app
+    w, h = (int(v) for v in get(cfg, "camera.resolution"))
+    app = create_app(gui=False, width=w, height=h, refraction_bounces=int(get(cfg, "render.refraction_bounces")),
+                     dlss=bool(get(cfg, "render.dlss")), translucency=bool(get(cfg, "render.translucency")),
+                     reflections=bool(get(cfg, "render.reflections")))
+    try:
+        return run_views(app, cfg, args)
+    finally:
+        app.close()
+
+
+def view_poses(cfg: dict, dists, n_az: int, height: float):
+    """For every placed object: camera poses at ``dists`` metres (horizontal, to its centre) from ``n_az``
+    directions, ``height`` above its top, aimed at its centre. Yields (object placement, distance, azimuth [deg],
+    body position, body FLU -> ENU rotation, tilt [deg]); poses outside the pool or under the floor are skipped."""
+    import math
+    from . import pool_geometry
+    L, W, _ = (float(v) for v in get(cfg, "pool.size"))
+    wl = float(get(cfg, "pool.water_level"))
+    cam_off = np.asarray(get(cfg, "vehicle.camera.position_body"), float)
+    for pl, solid in pool_geometry.placed_objects(cfg):
+        cx, cy, z0 = pl["xyz"]
+        top = z0 + pl["size_m"][2]
+        zc = max(top + float(height), 0.35)          # the ROV's camera is ~0.2 m above its skids
+        centre_z = z0 + pl["size_m"][2] / 2
+        for d in dists:
+            for k in range(int(n_az)):
+                az = pl["yaw_deg"] + 360.0 * k / int(n_az) + 30.0     # off the object's own axes
+                a = math.radians(az)
+                cam = np.array([cx + d * math.cos(a), cy + d * math.sin(a), zc])
+                if not (0.4 < cam[0] < L - 0.4 and 0.4 < cam[1] < W - 0.4 and 0.3 < cam[2] < wl - 0.3):
+                    continue
+                yaw = math.atan2(cy - cam[1], cx - cam[0])
+                rot = np.array([[math.cos(yaw), -math.sin(yaw), 0.0], [math.sin(yaw), math.cos(yaw), 0.0],
+                                [0.0, 0.0, 1.0]])
+                body = cam - rot @ cam_off
+                tilt = math.degrees(math.atan2(centre_z - cam[2], float(d)))
+                yield pl, float(d), float(az % 360.0), body, rot, float(np.clip(tilt, -45.0, 45.0))
+
+
+def run_views(app, cfg: dict, args) -> int:
+    import omni.usd
+
+    from . import camera_uw, pool_scene
+    from .sinks import write_png
+
+    import omni.timeline
+    stage = omni.usd.get_context().get_stage()
+    info = pool_scene.build(stage, cfg)
+    timeline = omni.timeline.get_timeline_interface()     # as run(): the annotators deliver only while it plays
+    timeline.play()
+    timeline.commit()
+    app.update()
+    import omni.replicator.core as rep
+    rp = rep.create.render_product(info.camera, info.camera_resolution, name="uw_pool_views")
+    rgb_annot, _ = _annotator(rep, "rgb")
+    dist_annot, _ = _annotator(rep, "distance_to_camera")
+    box_annot = rep.AnnotatorRegistry.get_annotator("bounding_box_2d_tight",
+                                                    init_params={"semanticTypes": ["class"]})
+    for a in (rgb_annot, dist_annot, box_annot):
+        a.attach([rp])
+    post = camera_uw.WaterPost(cfg)
+    pool_scene.set_lights(stage, info, float(args.view_lights))
+    out = VIEWS_DIR / args.views
+    out.mkdir(parents=True, exist_ok=True)
+    index = {"config": {"pool": get(cfg, "pool.size"), "turbidity_per_m": float(get(cfg, "water.turbidity_per_m")),
+                        "lights": float(args.view_lights), "view_height_m": float(args.view_height),
+                        "visibility_m": camera_uw.visibility_m(cfg), "resolution": list(info.camera_resolution)},
+             "views": []}
+    n = 0
+    for pl, d, az, body, rot, tilt in view_poses(cfg, args.view_dist, args.view_az, args.view_height):
+        pool_scene.set_vehicle(stage, body, rot)
+        pool_scene.set_tilt(stage, tilt)
+        for _ in range(VIEW_SETTLE_RENDERS):
+            app.update()
+        rgb, dist = rgb_annot.get_data(), dist_annot.get_data()
+        if not getattr(rgb, "size", 0) or not getattr(dist, "size", 0):
+            log.warning("views: no image for %s at %.1f m", pl["name"], d)
+            continue
+        frame = post(rgb, dist)
+        name = f"{n:04d}_{pl['name']}_{d:.0f}m_{az:03.0f}.png"
+        write_png(out / name, frame)
+        boxes = box_annot.get_data()
+        labels = {int(k): (v.get("class", "") if isinstance(v, dict) else str(v))
+                  for k, v in (boxes.get("info", {}).get("idToLabels", {}) or {}).items()}
+        gt = []
+        for row in boxes.get("data", []):
+            cls = labels.get(int(row["semanticId"]), "")
+            if not cls:
+                continue
+            gt.append({"coco": cls, "box": [float(row["x_min"]), float(row["y_min"]), float(row["x_max"]),
+                                             float(row["y_max"])], "occlusion": float(row["occlusionRatio"])})
+        index["views"].append({"file": name, "object": pl["name"], "coco": pl["coco"], "distance_m": d,
+                               "azimuth_deg": az, "tilt_deg": tilt, "gt": gt})
+        n += 1
+        if n % 20 == 0:
+            log.info("views: %d frames", n)
+    timeline.stop()
+    (out / "index.json").write_text(json.dumps(index, indent=1))
+    log.info("views: %d frames and their boxes in %s (water: turbidity %.2f /m, visibility %.1f m)", n, out,
+             index["config"]["turbidity_per_m"], index["config"]["visibility_m"])
+    return 0
 
 
 def _annotator(rep, name: str):

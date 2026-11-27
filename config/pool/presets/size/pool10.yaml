@@ -9,6 +9,15 @@ pool:
     - {name: block, kind: box, at: [0.30, 0.60], z: 0.10, size: [0.4, 0.2, 0.2], role: block}
     - {name: pipe, kind: cylinder, at: [0.65, 0.65], z: 0.15, radius: 0.15, length: 1.5, axis: X, role: pipe}
     - {name: board, kind: board, at: [0.50, 0.85], size: 0.6, role: board}
+  objects:
+    - {id: ball, at: [0.42, 0.35]}
+    - {id: bottle, at: [0.58, 0.38], yaw_deg: 40}
+    - {id: chair, at: [0.20, 0.45], yaw_deg: 200}
+    - {id: backpack, at: [0.40, 0.72], yaw_deg: 30}
+    - {id: suitcase, at: [0.80, 0.45], yaw_deg: -20}
+    - {id: bicycle, at: [0.82, 0.80], yaw_deg: 70}
+    - {id: canoe, at: [0.25, 0.88], yaw_deg: 15}
+    - {id: diver, at: [0.65, 0.48], z: 0.5, yaw_deg: 110}
 vehicle:
   start: [5.0, 1.5, 4.88, 90.0]   # floating near the y = 0 wall, facing the far one
 camera:

@@ -89,8 +89,10 @@ def test_the_ladder_is_there(bottom):
 
 def test_the_solids_follow_the_switches(cfg):
     kinds = {type(s) for s in solids(cfg)}
-    assert kinds == {Box, Cylinder, Quad}
-    off = config.load(config.POOL_CONFIG, presets=["pool10"], overrides=["pool.props=false", "pool.ladder=false"])
+    from uw.pool_geometry import Sphere
+    assert kinds == {Box, Cylinder, Quad, Sphere}
+    off = config.load(config.POOL_CONFIG, presets=["pool10"],
+                      overrides=["pool.props=false", "pool.ladder=false", "pool.objects=[]"])
     assert solids(off) == []
     t, _, role = hit(PoolBottom(off), (3.0, 6.0, 1.0), DOWN)
     assert role == "floor" and t == pytest.approx(1.0)
@@ -141,3 +143,73 @@ def test_a_bad_prop_is_a_config_error(cfg):
     with pytest.raises(config.ConfigError, match="pool.props"):
         solids(bad)
 
+
+# ------------------------------------------------------------------ turned boxes and spheres (M12 P4 objects)
+
+def _with(cfg, solid):
+    import copy
+    from uw import pool_geometry
+    c = copy.deepcopy(cfg)
+    c["pool"]["props"], c["pool"]["ladder"] = [], False
+    b = PoolBottom(c)
+    b.solids = [solid]
+    b.role_material[solid.role] = "concrete"
+    return b, pool_geometry
+
+
+def test_a_box_turned_about_z_is_hit_on_its_own_faces(cfg):
+    from uw.pool_geometry import Box as B
+    b, _ = _with(cfg, B("obj", (5.0, 5.0, 0.5), (2.0, 0.4, 1.0), "thing", yaw_deg=90.0))
+    # turned by 90 deg the long side runs along y: a beam down at (5, 5.9) hits it, one at (5.9, 5) does not
+    t, n, role = hit(b, (5.0, 5.9, 2.0), DOWN)
+    assert role == "thing" and t == pytest.approx(1.0) and np.allclose(n, [0, 0, 1])
+    t, _, role = hit(b, (5.9, 5.0, 2.0), DOWN)
+    assert role == "floor"
+    t, n, role = hit(b, (3.0, 5.0, 0.5), (1.0, 0.0, 0.0))          # from the side: the turned box is 0.4 deep in x
+    assert role == "thing" and t == pytest.approx(2.0 - 0.2) and np.allclose(n, [-1, 0, 0], atol=1e-12)
+    b45, _ = _with(cfg, B("obj", (5.0, 5.0, 0.5), (1.0, 1.0, 1.0), "thing", yaw_deg=45.0))
+    t, n, role = hit(b45, (3.0, 5.0, 0.5), (1.0, 0.0, 0.0))        # the corner comes first: at 5 - sqrt(2)/2
+    assert role == "thing" and t == pytest.approx(2.0 - math.sqrt(0.5)) and abs(n[1]) == pytest.approx(math.sqrt(0.5))
+
+
+def test_a_sphere_is_hit_on_its_surface(cfg):
+    from uw.pool_geometry import Sphere
+    b, _ = _with(cfg, Sphere("ball", (5.0, 5.0, 0.11), 0.11, "thing"))
+    t, n, role = hit(b, (5.0, 5.0, 1.0), DOWN)
+    assert role == "thing" and t == pytest.approx(1.0 - 0.22) and np.allclose(n, [0, 0, 1])
+    t, n, role = hit(b, (5.11 * 0 + 5.0 + 0.11 * math.sin(0.5), 5.0, 1.0), DOWN)
+    assert role == "thing" and n[2] == pytest.approx(math.cos(0.5))
+    t, _, role = hit(b, (5.2, 5.0, 1.0), DOWN)
+    assert role == "floor"
+
+
+# ------------------------------------------------------------------------------- COCO objects (M12 P4)
+
+def test_placed_objects_are_dvl_solids_with_their_class():
+    from uw.pool_geometry import Sphere, object_catalog, placed_objects
+    cfg = config.load(config.POOL_CONFIG, presets=["pool10"], overrides=[
+        "pool.objects=[{id: chair, at: [0.2, 0.3], yaw_deg: 30}, {id: ball, at: [0.7, 0.2]},"
+        " {id: chair, name: chair_2, at: [0.25, 0.35]}]"])
+    cat = object_catalog(cfg)
+    assert {"person", "boat", "bicycle", "chair", "bottle", "suitcase", "backpack", "sports ball"} == \
+        {o["coco"] for o in cat.values()}
+    objs = placed_objects(cfg)
+    assert [pl["name"] for pl, _ in objs] == ["chair", "ball", "chair_2"]
+    chair, solid = objs[0]
+    assert chair["coco"] == "chair" and chair["xyz"] == pytest.approx((2.0, 3.0, 0.0))
+    h = cat["chair"]["size_m"][2]
+    assert solid.size == tuple(cat["chair"]["size_m"]) and solid.yaw_deg == 30.0 and solid.center[2] == pytest.approx(h / 2)
+    assert isinstance(objs[1][1], Sphere) and objs[1][1].radius == pytest.approx(0.11)
+    b = PoolBottom(cfg)
+    t, _, role = hit(b, (2.0, 3.0, 2.0), DOWN)
+    assert role == "plastic" and t == pytest.approx(2.0 - h)
+    t, _, role = hit(b, (7.0, 2.0, 2.0), DOWN)
+    assert role == "plastic" and t == pytest.approx(2.0 - 0.22)
+
+
+def test_a_bad_object_placement_is_a_config_error():
+    with pytest.raises(config.ConfigError, match="unknown id"):
+        solids(config.load(config.POOL_CONFIG, overrides=["pool.objects=[{id: unicorn, at: [0.5, 0.5]}]"]))
+    with pytest.raises(config.ConfigError, match="twice"):
+        solids(config.load(config.POOL_CONFIG, overrides=[
+            "pool.objects=[{id: ball, at: [0.5, 0.5]}, {id: ball, at: [0.6, 0.5]}]"]))
